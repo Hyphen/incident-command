@@ -37,7 +37,15 @@ export function setRequestHeaders(init: Record<string, string>) {
 	requestHeaders = new Headers(init);
 }
 
+/** The path that the mocked `usePathname` returns. */
+export let pathname = "/manage";
+
+export function setPathname(value: string) {
+	pathname = value;
+}
+
 export function resetNextState() {
 	cookieJar.store.clear();
 	requestHeaders = new Headers();
+	pathname = "/manage";
 }

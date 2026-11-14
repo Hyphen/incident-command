@@ -97,5 +97,5 @@ docker inspect --format '{{.State.Health.Status}}' incident-command   # healthy 
 ## Scaling
 
 - Instances keep no state on disk; run as many as you like behind a load balancer, all pointing at the same database. Never scale out with the in-memory store: each instance would have its own data.
-- Each instance has its own in-process cache, so with several instances public reads can be up to `CACHE_TTL` (default `30s`) stale. Lower it if that matters. Sessions and API tokens are not cached.
+- Each instance has its own in-process cache, so with several instances public reads can be up to `CACHE_TTL` (default `30s`) stale. Lower it if that matters. Each instance keeps a portal session in memory for `SESSION_CACHE_TTL` (default `30s`). API tokens are not cached.
 - If the database goes offline, each instance keeps serving its last known data and `/healthz` reports `"status":"degraded"` with a 200, so the container stays healthy. It returns 503 only when the app cannot start.

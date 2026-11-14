@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import {
+	approveDraftAction,
+	discardDraftAction,
+	saveDraftAction,
+} from "@/app/manage/actions";
 import { ConfirmButton } from "@/components/manage/confirm-button";
 import {
 	ImpactSelect,
@@ -10,7 +15,7 @@ import {
 	StatusSelect,
 	WindowFields,
 } from "@/components/manage/incident-fields";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { buttonClass, Card, Field, inputClass } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { LocalTime } from "@/components/time";
@@ -30,11 +35,6 @@ import type {
 	Service,
 } from "@/lib/domain/types";
 import { draftPath } from "@/lib/services/drafts";
-import {
-	approveDraftAction,
-	discardDraftAction,
-	saveDraftAction,
-} from "../../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Notification draft" };
@@ -218,8 +218,7 @@ export default async function DraftPage({ params, searchParams }: Props) {
 	if (!draft) {
 		notFound();
 	}
-	const [settings, catalog, incident] = await Promise.all([
-		services.settings.get(),
+	const [catalog, incident] = await Promise.all([
 		services.catalog.list(),
 		draft.incidentId ? services.incidents.find(draft.incidentId) : undefined,
 	]);
@@ -227,10 +226,7 @@ export default async function DraftPage({ params, searchParams }: Props) {
 	const canReview = pending && hasRole(member.role, "editor");
 	const missing = draft.action === "update" && !incident;
 	return (
-		<ManageShell
-			member={member}
-			siteName={settings.siteName}
-			active="drafts"
+		<ManagePage
 			title={draft.content.title ?? incident?.title ?? "Deleted incident"}
 			flash={flash}
 			health={app.store.health}
@@ -269,6 +265,6 @@ export default async function DraftPage({ params, searchParams }: Props) {
 					</ConfirmButton>
 				</form>
 			)}
-		</ManageShell>
+		</ManagePage>
 	);
 }

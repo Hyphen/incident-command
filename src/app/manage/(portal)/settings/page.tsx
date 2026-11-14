@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import { updateGeneralSettingsAction } from "@/app/manage/actions";
 import { SettingsTabs } from "@/components/manage/settings-tabs";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import {
 	buttonClass,
 	Card,
@@ -10,7 +11,6 @@ import {
 } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
-import { updateGeneralSettingsAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Settings" };
@@ -21,17 +21,10 @@ export default async function SettingsPage({
 	searchParams: Promise<FlashParams>;
 }) {
 	const flash = await searchParams;
-	const { member, services, app } = await requireMember("admin");
+	const { services, app } = await requireMember("admin");
 	const settings = await services.settings.get();
 	return (
-		<ManageShell
-			member={member}
-			siteName={settings.siteName}
-			active="settings"
-			title="Settings"
-			flash={flash}
-			health={app.store.health}
-		>
+		<ManagePage title="Settings" flash={flash} health={app.store.health}>
 			<SettingsTabs active="general" />
 			<form action={updateGeneralSettingsAction} className="space-y-6">
 				<Card title="Status page">
@@ -105,6 +98,6 @@ export default async function SettingsPage({
 					Save settings
 				</SubmitButton>
 			</form>
-		</ManageShell>
+		</ManagePage>
 	);
 }

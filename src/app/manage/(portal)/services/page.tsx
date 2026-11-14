@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
+import {
+	createServiceAction,
+	deleteServiceAction,
+	setServiceStatusAction,
+	updateServiceAction,
+} from "@/app/manage/actions";
 import { ConfirmButton } from "@/components/manage/confirm-button";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import {
 	buttonClass,
 	Card,
@@ -15,12 +21,6 @@ import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
 import { hasRole, SERVICE_STATUS_LABELS } from "@/lib/domain/status";
 import { SERVICE_STATUSES } from "@/lib/domain/types";
-import {
-	createServiceAction,
-	deleteServiceAction,
-	setServiceStatusAction,
-	updateServiceAction,
-} from "../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Services" };
@@ -32,20 +32,10 @@ export default async function ServicesPage({
 }) {
 	const flash = await searchParams;
 	const { member, services, app } = await requireMember();
-	const [settings, catalog] = await Promise.all([
-		services.settings.get(),
-		services.catalog.list(),
-	]);
+	const catalog = await services.catalog.list();
 	const canEdit = hasRole(member.role, "editor");
 	return (
-		<ManageShell
-			member={member}
-			siteName={settings.siteName}
-			active="services"
-			title="Services"
-			flash={flash}
-			health={app.store.health}
-		>
+		<ManagePage title="Services" flash={flash} health={app.store.health}>
 			<Card
 				title="All services"
 				description="Services appear on the status page in this order, grouped by group name."
@@ -213,6 +203,6 @@ export default async function ServicesPage({
 					</form>
 				</Card>
 			)}
-		</ManageShell>
+		</ManagePage>
 	);
 }

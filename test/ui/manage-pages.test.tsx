@@ -1,21 +1,23 @@
 import { render, screen, within } from "@testing-library/react";
-import AccountPage from "@/app/manage/account/page";
-import AgentsPage from "@/app/manage/agents/page";
-import DraftPage from "@/app/manage/drafts/[id]/page";
-import DraftsPage from "@/app/manage/drafts/page";
-import IncidentPage from "@/app/manage/incidents/[id]/page";
-import NewIncidentPage from "@/app/manage/incidents/new/page";
-import IncidentsPage from "@/app/manage/incidents/page";
+import AccountPage from "@/app/manage/(portal)/account/page";
+import AgentsPage from "@/app/manage/(portal)/agents/page";
+import DraftPage from "@/app/manage/(portal)/drafts/[id]/page";
+import DraftsPage from "@/app/manage/(portal)/drafts/page";
+import IncidentPage from "@/app/manage/(portal)/incidents/[id]/page";
+import NewIncidentPage from "@/app/manage/(portal)/incidents/new/page";
+import IncidentsPage from "@/app/manage/(portal)/incidents/page";
+import PortalLayout from "@/app/manage/(portal)/layout";
+import PortalLoading from "@/app/manage/(portal)/loading";
+import MembersPage from "@/app/manage/(portal)/members/page";
+import DashboardPage from "@/app/manage/(portal)/page";
+import ServicesPage from "@/app/manage/(portal)/services/page";
+import BrandingPage from "@/app/manage/(portal)/settings/branding/page";
+import NotificationsSettingsPage from "@/app/manage/(portal)/settings/notifications/page";
+import SettingsPage from "@/app/manage/(portal)/settings/page";
+import SubscribersPage from "@/app/manage/(portal)/subscribers/page";
 import InvitePage from "@/app/manage/invite/page";
 import LoginPage from "@/app/manage/login/page";
-import MembersPage from "@/app/manage/members/page";
-import DashboardPage from "@/app/manage/page";
-import ServicesPage from "@/app/manage/services/page";
-import BrandingPage from "@/app/manage/settings/branding/page";
-import NotificationsSettingsPage from "@/app/manage/settings/notifications/page";
-import SettingsPage from "@/app/manage/settings/page";
 import SetupPage from "@/app/manage/setup/page";
-import SubscribersPage from "@/app/manage/subscribers/page";
 import type { Actor } from "@/lib/domain/types";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import {
@@ -27,7 +29,7 @@ import {
 	setupApp,
 	signIn,
 } from "./app";
-import { setRequestHeaders } from "./next-state";
+import { setPathname, setRequestHeaders } from "./next-state";
 
 const flash = (value: Record<string, string> = {}) => ({
 	searchParams: params(flashQueryParams(value)),
@@ -146,6 +148,66 @@ describe("login and setup", () => {
 	});
 });
 
+describe("portal layout", () => {
+	const page = <p>Page content</p>;
+
+	it("shows the sections for the role and marks the section of the path", async () => {
+		const { app, services } = await setupApp();
+		await services.settings.update(SYSTEM_ACTOR, { siteName: "Acme Status" });
+		const { member } = await signIn(app, "editor");
+		render(await PortalLayout({ children: page }));
+		const nav = within(screen.getByRole("navigation", { name: "Manage" }));
+		expect(nav.getByRole("link", { name: "Overview" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		expect(nav.getByRole("link", { name: "Incidents" })).not.toHaveAttribute(
+			"aria-current",
+		);
+		expect(
+			nav.queryByRole("link", { name: "Members" }),
+		).not.toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "Acme Status" })).toHaveAttribute(
+			"href",
+			"/manage",
+		);
+		expect(screen.getByText(member.name)).toBeInTheDocument();
+		expect(screen.getByText(`${member.email} · Editor`)).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "Sign out" }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("main")).toHaveTextContent("Page content");
+	});
+
+	it("keeps a section marked on the pages below it", async () => {
+		const { app } = await setupApp();
+		await signIn(app, "admin");
+		setPathname("/manage/incidents/inc_1");
+		render(await PortalLayout({ children: page }));
+		const nav = within(screen.getByRole("navigation", { name: "Manage" }));
+		expect(nav.getByRole("link", { name: "Incidents" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		expect(nav.getByRole("link", { name: "Overview" })).not.toHaveAttribute(
+			"aria-current",
+		);
+		expect(nav.getByRole("link", { name: "Members" })).toBeInTheDocument();
+	});
+
+	it("shows only the page to a visitor who is not signed in", async () => {
+		await setupApp();
+		render(await PortalLayout({ children: page }));
+		expect(screen.getByText("Page content")).toBeInTheDocument();
+		expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+	});
+
+	it("shows a placeholder while a page loads", () => {
+		render(<PortalLoading />);
+		expect(screen.getByRole("status")).toHaveTextContent("Loading…");
+	});
+});
+
 describe("dashboard", () => {
 	it("summarizes open incidents for editors", async () => {
 		const { app, services } = await setupApp();
@@ -168,16 +230,9 @@ describe("dashboard", () => {
 			screen.getByRole("link", { name: "API errors" }),
 		).toBeInTheDocument();
 		expect(screen.getByText("Major outage")).toBeInTheDocument();
-		expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute(
-			"aria-current",
-			"page",
-		);
-		expect(
-			screen.queryByRole("link", { name: "Members" }),
-		).not.toBeInTheDocument();
 	});
 
-	it("shows an empty state, admin navigation and store outages", async () => {
+	it("shows an empty state and store outages", async () => {
 		const { app } = await setupApp();
 		await signIn(app, "admin");
 		vi.spyOn(app.store, "health", "get").mockReturnValue({
@@ -187,7 +242,6 @@ describe("dashboard", () => {
 		});
 		render(await DashboardPage(flash()));
 		expect(screen.getByText("Nothing open. All quiet.")).toBeInTheDocument();
-		expect(screen.getByRole("link", { name: "Members" })).toBeInTheDocument();
 		expect(screen.getByRole("alert")).toHaveTextContent(
 			"The database is unreachable (connection refused)",
 		);
@@ -422,10 +476,6 @@ describe("notification draft pages", () => {
 
 		render(await DraftsPage(flash({ notice: "draft_discarded" })));
 		expect(screen.getByRole("status")).toHaveTextContent("Draft discarded");
-		expect(screen.getByRole("link", { name: "Drafts" })).toHaveAttribute(
-			"aria-current",
-			"page",
-		);
 		expect(screen.getByRole("link", { name: "API errors" })).toHaveAttribute(
 			"href",
 			`/manage/drafts/${created.id}`,

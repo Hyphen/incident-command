@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { NotificationChannelCard } from "@/components/manage/notification-channel";
 import { SettingsTabs } from "@/components/manage/settings-tabs";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { requireMember } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -13,21 +13,11 @@ export default async function NotificationsSettingsPage({
 	searchParams: Promise<FlashParams>;
 }) {
 	const flash = await searchParams;
-	const { member, actor, services, app } = await requireMember("admin");
-	const [settings, channels] = await Promise.all([
-		services.settings.get(),
-		services.notificationSettings.list(actor),
-	]);
+	const { actor, services, app } = await requireMember("admin");
+	const channels = await services.notificationSettings.list(actor);
 	const canStoreSecrets = services.notificationSettings.canStoreSecrets;
 	return (
-		<ManageShell
-			member={member}
-			siteName={settings.siteName}
-			active="settings"
-			title="Settings"
-			flash={flash}
-			health={app.store.health}
-		>
+		<ManagePage title="Settings" flash={flash} health={app.store.health}>
 			<SettingsTabs active="notifications" />
 			<p className="text-sm text-muted">
 				Subscribers get notifications through{" "}
@@ -61,6 +51,6 @@ export default async function NotificationsSettingsPage({
 					canStoreSecrets={canStoreSecrets}
 				/>
 			))}
-		</ManageShell>
+		</ManagePage>
 	);
 }

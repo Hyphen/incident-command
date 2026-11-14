@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { createIncidentAction } from "@/app/manage/actions";
 import {
 	ImpactSelect,
 	ServicePicker,
@@ -6,7 +7,7 @@ import {
 	StatusSelect,
 	WindowFields,
 } from "@/components/manage/incident-fields";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import {
 	buttonClass,
 	Card,
@@ -17,7 +18,6 @@ import {
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
 import type { IncidentKind } from "@/lib/domain/types";
-import { createIncidentAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "New incident" };
@@ -30,17 +30,11 @@ export default async function NewIncidentPage({
 	const { kind: rawKind, ...flash } = await searchParams;
 	const kind: IncidentKind =
 		rawKind === "maintenance" ? "maintenance" : "incident";
-	const { member, services, app } = await requireMember("editor");
-	const [settings, catalog] = await Promise.all([
-		services.settings.get(),
-		services.catalog.list(),
-	]);
+	const { services, app } = await requireMember("editor");
+	const catalog = await services.catalog.list();
 	const isIncident = kind === "incident";
 	return (
-		<ManageShell
-			member={member}
-			siteName={settings.siteName}
-			active="incidents"
+		<ManagePage
 			title={isIncident ? "Declare an incident" : "Schedule maintenance"}
 			flash={flash}
 			health={app.store.health}
@@ -89,6 +83,6 @@ export default async function NewIncidentPage({
 					</SubmitButton>
 				</form>
 			</Card>
-		</ManageShell>
+		</ManagePage>
 	);
 }

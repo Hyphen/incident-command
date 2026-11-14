@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { ButtonLink, Card, EmptyState } from "@/components/manage/ui";
 import { EventStatusBadge } from "@/components/status/badges";
 import { LocalTime } from "@/components/time";
@@ -59,16 +59,12 @@ export default async function IncidentsPage({
 }) {
 	const flash = await searchParams;
 	const { member, services, app } = await requireMember();
-	const [settings, open, closed] = await Promise.all([
-		services.settings.get(),
+	const [open, closed] = await Promise.all([
 		services.incidents.list({ open: true }),
 		services.incidents.list({ open: false, limit: 50 }),
 	]);
 	return (
-		<ManageShell
-			member={member}
-			siteName={settings.siteName}
-			active="incidents"
+		<ManagePage
 			title="Incidents"
 			flash={flash}
 			health={app.store.health}
@@ -97,6 +93,6 @@ export default async function IncidentsPage({
 			<Card title="Resolved" description="The 50 most recent.">
 				<IncidentTable incidents={closed} empty="Nothing resolved yet." />
 			</Card>
-		</ManageShell>
+		</ManagePage>
 	);
 }

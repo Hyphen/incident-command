@@ -189,7 +189,7 @@ Do not set the email secrets. Workers do not send subscriber notifications.
 
 ## Notes and scaling
 
-- Workers run many isolates across Cloudflare's network. Each isolate has its own in-process cache, so reads can be up to `CACHE_TTL` (default `30s`) stale between isolates. Sessions and API tokens are not cached, so sign-outs and token revocations apply immediately.
+- Workers run many isolates across Cloudflare's network. Each isolate has its own in-process cache, so reads can be up to `CACHE_TTL` (default `30s`) stale between isolates. Each isolate also keeps a portal session in memory for `SESSION_CACHE_TTL` (default `30s`), so most page views open no database connection. A sign-out can take that time to apply to page views on a different isolate. A change to data always reads the session from the database. API tokens are not cached, so a token revocation applies immediately.
 - Isolates are short-lived, so serving last known data during a database outage only lasts as long as an isolate does.
 - `global_fetch_strictly_public` blocks requests to private and internal addresses, so webhook subscribers must use public URLs.
 - Webhooks use `fetch`. The email providers (SendGrid via airhorn's Twilio provider, SES via the AWS SDK) have not been verified on Workers; test them in a preview first.

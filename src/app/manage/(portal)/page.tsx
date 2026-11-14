@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { ButtonLink, Card, EmptyState } from "@/components/manage/ui";
 import { EventStatusBadge, StatusBadge } from "@/components/status/badges";
 import { LocalTime } from "@/components/time";
@@ -28,10 +28,7 @@ export default async function DashboardPage({
 		(service) => service.status !== "operational",
 	);
 	return (
-		<ManageShell
-			member={member}
-			siteName={summary.settings.siteName}
-			active="dashboard"
+		<ManagePage
 			title="Overview"
 			flash={flash}
 			health={app.store.health}
@@ -109,6 +106,6 @@ export default async function DashboardPage({
 					</ul>
 				)}
 			</Card>
-		</ManageShell>
+		</ManagePage>
 	);
 }

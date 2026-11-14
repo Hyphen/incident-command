@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { deleteSubscriberAction } from "@/app/manage/actions";
 import { AddSubscriberForm } from "@/components/manage/add-subscriber-form";
 import { ConfirmButton } from "@/components/manage/confirm-button";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { Card, EmptyState } from "@/components/manage/ui";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
 import type { SubscriberType } from "@/lib/domain/types";
 import { CHANNELS } from "@/lib/notifications/catalog";
-import { deleteSubscriberAction } from "../actions";
 
 const TYPE_LABELS: Record<SubscriberType, string> = {
 	webhook: "Webhook",
@@ -25,9 +25,8 @@ export default async function SubscribersPage({
 	searchParams: Promise<FlashParams>;
 }) {
 	const flash = await searchParams;
-	const { member, actor, services, app } = await requireMember("admin");
-	const [settings, subscribers, available] = await Promise.all([
-		services.settings.get(),
+	const { actor, services, app } = await requireMember("admin");
+	const [subscribers, available] = await Promise.all([
 		services.subscribers.list(actor),
 		services.notificationSettings.availability(),
 	]);
@@ -35,14 +34,7 @@ export default async function SubscribersPage({
 		(type) => !available[type],
 	);
 	return (
-		<ManageShell
-			member={member}
-			siteName={settings.siteName}
-			active="subscribers"
-			title="Subscribers"
-			flash={flash}
-			health={app.store.health}
-		>
+		<ManagePage title="Subscribers" flash={flash} health={app.store.health}>
 			{unavailable.length > 0 && (
 				<p className="rounded-lg border border-border bg-surface-muted px-4 py-3 text-sm text-muted">
 					These channels cannot send now:{" "}
@@ -96,6 +88,6 @@ export default async function SubscribersPage({
 					</ul>
 				)}
 			</Card>
-		</ManageShell>
+		</ManagePage>
 	);
 }

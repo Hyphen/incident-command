@@ -197,6 +197,6 @@ curl https://<host>/api/v1/status
 ## Scaling
 
 - App Runner scales on concurrent requests (default auto scaling configuration); ECS scales with `--desired-count` or Service Auto Scaling.
-- Each instance has its own in-process cache, so with several instances public reads can be up to `CACHE_TTL` (default `30s`) stale. Sessions and API tokens are not cached.
+- Each instance has its own in-process cache, so with several instances public reads can be up to `CACHE_TTL` (default `30s`) stale. Each instance keeps a portal session in memory for `SESSION_CACHE_TTL` (default `30s`). API tokens are not cached.
 - Each instance keeps its own Postgres connection pool; size the RDS instance's connection limit accordingly.
 - `/healthz` stays at 200 (`"status":"degraded"`) when the database goes down after boot, so App Runner and ECS keep instances that are still serving cached data. It returns 503 only when the app cannot start, for example when the database is unreachable at boot.

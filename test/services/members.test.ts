@@ -366,6 +366,68 @@ describe("MemberService and SessionService", () => {
 		).resolves.toBeUndefined();
 	});
 
+	describe("session cache", () => {
+		async function signedIn(role: Role = "editor") {
+			const member = await join(ADMIN, `${role}@acme.dev`, "Mo", role);
+			const { token, session } = await t.services.sessions.create(member.id);
+			return { member, token, session };
+		}
+
+		it("serves a resolved session from memory until the TTL passes", async () => {
+			const { member, token, session } = await signedIn();
+			const first = await t.services.sessions.resolve(token);
+			expect(first?.member).toEqual(member);
+			expect(first?.member).not.toHaveProperty("passwordHash");
+			// A caller cannot change the cached result.
+			(first as { member: { role: Role } }).member.role = "admin";
+			// A different instance ends the session. This instance does not know.
+			await t.store.delete("sessions", session.id);
+			t.clock.advance(29_000);
+			await expect(t.services.sessions.resolve(token)).resolves.toMatchObject({
+				member: { id: member.id, role: "editor" },
+			});
+			t.clock.advance(1_000);
+			await expect(t.services.sessions.resolve(token)).resolves.toBeUndefined();
+		});
+
+		it("reads the database for a consistent lookup", async () => {
+			const { token, session } = await signedIn();
+			await t.services.sessions.resolve(token);
+			await t.store.delete("sessions", session.id);
+			await expect(
+				t.services.sessions.resolve(token, { consistent: true }),
+			).resolves.toBeUndefined();
+			// The consistent lookup also removes the result from memory.
+			await expect(t.services.sessions.resolve(token)).resolves.toBeUndefined();
+		});
+
+		it("always reads the database when SESSION_CACHE_TTL is 0", async () => {
+			t = createTestContext({ env: { SESSION_CACHE_TTL: "0" } });
+			const { token, session } = await signedIn();
+			await expect(t.services.sessions.resolve(token)).resolves.toBeDefined();
+			await t.store.delete("sessions", session.id);
+			await expect(t.services.sessions.resolve(token)).resolves.toBeUndefined();
+		});
+
+		it("applies a member change immediately on the same instance", async () => {
+			const { member, token } = await signedIn();
+			await t.services.sessions.resolve(token);
+			await t.services.members.update(ADMIN, member.id, { role: "viewer" });
+			await expect(t.services.sessions.resolve(token)).resolves.toMatchObject({
+				member: { role: "viewer" },
+			});
+		});
+
+		it("does not keep a session after it expires", async () => {
+			t = createTestContext({ env: { SESSION_TTL: "10s" } });
+			const { token } = await signedIn();
+			await expect(t.services.sessions.resolve(token)).resolves.toBeDefined();
+			t.clock.advance(10_000);
+			await expect(t.services.sessions.resolve(token)).resolves.toBeUndefined();
+			expect(await t.store.count("sessions")).toBe(0);
+		});
+	});
+
 	it("maps members to public views and actors", () => {
 		const member = {
 			id: "m",
