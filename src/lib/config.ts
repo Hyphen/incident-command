@@ -12,9 +12,8 @@ export interface Config {
 		databaseName?: string;
 		tablePrefix: string;
 		/**
-		 * Keep a connection pool (default). Disabled on Cloudflare Workers, where
-		 * a socket cannot outlive the request that opened it. Postgres and
-		 * MongoDB then connect for each operation.
+		 * Keep a connection pool (default). When it is `false`, Postgres and
+		 * MongoDB connect for each operation.
 		 */
 		pool: boolean;
 	};
@@ -45,11 +44,6 @@ export interface Config {
 	encryption: { key?: string; previousKeys: string[] };
 	/** Seed demo services and incidents into an empty store on boot. */
 	seedDemo: boolean;
-}
-
-/** True when running inside Cloudflare Workers (e.g. via OpenNext). */
-export function isCloudflareWorkers(): boolean {
-	return globalThis.navigator?.userAgent === "Cloudflare-Workers";
 }
 
 /** Drops empty and whitespace-only values so `FOO=` behaves like an unset variable. */
@@ -180,9 +174,7 @@ export function loadConfig(
 			url: env.DATABASE_URI,
 			databaseName: env.DATABASE_NAME,
 			tablePrefix: env.DATABASE_TABLE_PREFIX ?? "ic_",
-			pool: env.DATABASE_POOL
-				? env.DATABASE_POOL === "true"
-				: !isCloudflareWorkers(),
+			pool: env.DATABASE_POOL !== "false",
 		},
 		cache: {
 			ttl: env.CACHE_TTL,

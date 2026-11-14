@@ -51,7 +51,7 @@ docker compose up --build
 | Platform                     | Guide                                                |
 | ---------------------------- | ---------------------------------------------------- |
 | Any container host / VPS     | [deploy/docker](deploy/docker/README.md)             |
-| Cloudflare Workers           | [deploy/cloudflare](deploy/cloudflare/README.md)     |
+| Cloudflare Containers        | [deploy/cloudflare](deploy/cloudflare/README.md)     |
 | DigitalOcean App Platform    | [deploy/digitalocean](deploy/digitalocean/README.md) |
 | Google Cloud Run             | [deploy/gcp](deploy/gcp/README.md)                   |
 | AWS App Runner / ECS Fargate | [deploy/aws](deploy/aws/README.md)                   |
@@ -112,7 +112,7 @@ pnpm dev          # start the dev server
 pnpm test         # lint (biome) + vitest with coverage
 pnpm typecheck    # tsc
 pnpm build        # production build (standalone output)
-pnpm cf:preview   # build and run on Cloudflare workerd locally
+pnpm cf:dev       # run the Cloudflare Worker and container locally (Docker)
 ```
 
 The test suite enforces **100% line, branch, function and statement coverage** of `src/`. Postgres adapter tests run against a real in-process Postgres ([PGlite](https://pglite.dev)) and Mongo tests against [mongodb-memory-server](https://github.com/typegoose/mongodb-memory-server), so no external services are needed. The MCP server is tested end to end with the official MCP client.

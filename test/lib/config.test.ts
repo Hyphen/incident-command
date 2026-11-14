@@ -178,14 +178,9 @@ describe("parseDuration", () => {
 });
 
 describe("connection pooling", () => {
-	it("pools by default, honors DATABASE_POOL and disables pooling on Workers", async () => {
-		const { isCloudflareWorkers } = await import("@/lib/config");
-		expect(isCloudflareWorkers()).toBe(false);
+	it("pools by default and honors DATABASE_POOL", () => {
+		expect(loadConfig({}).store.pool).toBe(true);
 		expect(loadConfig({ DATABASE_POOL: "false" }).store.pool).toBe(false);
-		vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
-		expect(isCloudflareWorkers()).toBe(true);
-		expect(loadConfig({}).store.pool).toBe(false);
 		expect(loadConfig({ DATABASE_POOL: "true" }).store.pool).toBe(true);
-		vi.unstubAllGlobals();
 	});
 });

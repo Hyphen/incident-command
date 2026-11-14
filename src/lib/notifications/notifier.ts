@@ -59,8 +59,7 @@ export interface AirhornNotifierOptions {
 	onError?: (error: Error) => void;
 	/**
 	 * Creates the airhorn instance of a channel. The default loads airhorn and
-	 * the provider SDKs on first use, which keeps them out of startup on
-	 * runtimes such as Cloudflare Workers.
+	 * the provider SDKs on first use, which keeps them out of startup.
 	 */
 	createAirhorn?: (
 		channel: DeliveryChannel,

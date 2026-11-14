@@ -1,26 +1,41 @@
-# Deploy to Cloudflare Workers
+# Deploy to Cloudflare (Worker and Container)
 
-Runs the Next.js app on Workers through [OpenNext](https://opennext.js.org/cloudflare). Config files: [`wrangler.jsonc`](../../wrangler.jsonc) and [`open-next.config.ts`](../../open-next.config.ts) at the repo root. The Worker entry is [`cloudflare-worker.ts`](../../cloudflare-worker.ts). It wraps the Worker that OpenNext builds.
+The app runs on [Cloudflare Containers](https://developers.cloudflare.com/containers/). The container runs the image from the [`Dockerfile`](../../Dockerfile), which is the same Next.js server as on other container hosts. A Worker in front of the container gets each request and sends it to the container.
 
-> **Verified locally in workerd** (`pnpm cf:preview`): the status page, portal, JSON API and MCP server all work. Two things differ from container hosts:
->
-> - **No connection pool.** Workers cannot share a socket between requests, so the app detects Workers and disables connection pooling automatically (override with `DATABASE_POOL`). Postgres opens a connection for each query. Put [Hyperdrive](https://developers.cloudflare.com/hyperdrive/) in front of Postgres so those connections are cheap. MongoDB opens one TLS connection for each request and uses it for all of the operations of that request, because Hyperdrive does not support MongoDB.
-> - **Subscriber notifications are not sent.** airhorn renders templates with `ejs` (through `ecto`), which needs `new Function()`, and Workers forbid code generation from strings. airhorn is loaded lazily, so this only affects notifications: incidents are still created and the failure is logged. Use a container host if you need email or webhook notifications.
+| File                                                                 | Content                                                         |
+| -------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [`wrangler.jsonc`](../../wrangler.jsonc)                             | The Worker, the container, the Durable Object and the vars.     |
+| [`cloudflare-worker.ts`](../../cloudflare-worker.ts)                 | The Worker entry. It exports the `AppContainer` Durable Object. |
+| [`src/lib/cloudflare-worker.ts`](../../src/lib/cloudflare-worker.ts) | The logic of the Worker and the Durable Object.                 |
+| [`scripts/wrangler-docker.sh`](../../scripts/wrangler-docker.sh)     | Gives `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` to the image build.  |
 
-## What works on Workers
+## How it works
 
-| Store                                                                    | Supported         | Notes                                                                          |
-| ------------------------------------------------------------------------ | ----------------- | ------------------------------------------------------------------------------ |
-| Postgres via [Hyperdrive](https://developers.cloudflare.com/hyperdrive/) | Yes (recommended) | Pools connections close to your database.                                      |
-| Postgres, direct                                                         | Yes               | `DATABASE_URI` secret; the database must accept connections from the internet. |
-| MongoDB (Atlas or self-hosted)                                           | Yes               | `DATABASE_URI` secret; one connection per request, so each page is slower.     |
-| Memory                                                                   | Previews only     | Each isolate has its own copy; data disappears when the isolate is recycled.   |
+```
+ browsers, agents ─▶ Worker ─▶ AppContainer Durable Object ─▶ container (Next.js on port 3000)
+                    (picks an     (starts the container,          │
+                     instance)     sends each request)            ▼
+                                                        Postgres or MongoDB, email, webhooks
+```
+
+1. The Worker picks an instance from the client address. Each client address always uses the same instance, so a client reads its own changes from the cache of that instance.
+2. The `AppContainer` Durable Object of the instance starts the container on the first request. The container gets each var and each secret of the Worker as an environment variable, except the `CONTAINER_*` vars.
+3. The Durable Object waits until the server answers on `/healthz`. Then it sends the request to the server. It sets `x-forwarded-host`, `x-forwarded-proto` and `x-forwarded-for`. Next.js compares the `Origin` of a server action with `x-forwarded-host`.
+4. When no request comes for approximately `CONTAINER_SLEEP_AFTER` (default `30m`), Cloudflare stops the container. The next request starts it again. This start takes some seconds.
+5. A deploy restarts the Durable Object. If the deploy changed the image, a var or a secret, the Durable Object replaces the container on the next request. The new container gets the new image and the new values. A build without the Docker layer cache, as in CI, gives a new image. So the first request after such a deploy starts a new container.
+
+The container is a Node.js server, so these items work as on other container hosts:
+
+- Subscriber notifications: webhooks, email and text messages.
+- A database connection pool in each container.
+- The cache of each container keeps the last known data while the database is offline.
 
 ## Prerequisites
 
-- A Cloudflare account on the Workers Paid plan: the built Worker is about 4.8 MiB gzipped, over the Free plan's 3 MiB limit (Paid allows 10 MiB).
-- Node 24 and pnpm (`corepack enable`), dependencies installed: `pnpm install`.
-- A Postgres database reachable from the internet (Neon, Supabase, RDS, Cloud SQL, and so on), or a MongoDB database such as Atlas.
+- A Cloudflare account on the Workers Paid plan. Containers need this plan.
+- Docker, or a Docker-compatible engine, that runs on the computer that deploys. `wrangler deploy` builds the image for `linux/amd64` and pushes it to the Cloudflare registry.
+- Node 24 and pnpm (`corepack enable`), with the dependencies installed: `pnpm install`.
+- A Postgres database (Neon, Supabase, RDS, Cloud SQL, and so on) or a MongoDB database (for example Atlas). The database must accept connections from the internet, because the addresses of the containers are not fixed. Use TLS and a strong password.
 
 ## Steps
 
@@ -30,40 +45,21 @@ Runs the Next.js app on Workers through [OpenNext](https://opennext.js.org/cloud
 npx wrangler login
 ```
 
-In `wrangler.jsonc`, set `name` and the `vars` (at least `SITE_URL`, the public URL of the status page).
+In `wrangler.jsonc`, set `name` and the `vars`. Set at least `SITE_URL`, the public URL of the status page.
 
-### 2. Connect Postgres
-
-**Option A: Hyperdrive (recommended)**
-
-```bash
-npx wrangler hyperdrive create incident-command \
-  --connection-string="postgres://USER:PASSWORD@HOST:5432/incident_command"
-```
-
-Uncomment the `hyperdrive` block in `wrangler.jsonc` and paste the returned `id`.
-
-The app reads its connection string from `DATABASE_URI`. Hyperdrive gives its connection string on the binding (`env.HYPERDRIVE.connectionString`), and OpenNext copies only string variables into `process.env`. The Worker entry, `cloudflare-worker.ts`, copies the connection string of the binding into `DATABASE_URI`. Do not also set a `DATABASE_URI` secret.
-
-**Option B: direct connection**
+### 2. Connect the database
 
 ```bash
 npx wrangler secret put DATABASE_URI   # postgres://USER:PASSWORD@HOST:5432/incident_command
 ```
 
-See [TLS for Postgres](../../docs/deployment.md#tls-for-postgres) for `sslmode` settings.
+For MongoDB, use the `mongodb+srv://` connection string. See [TLS for Postgres](../../docs/deployment.md#tls-for-postgres) for the `sslmode` settings.
 
-**Option C: MongoDB**
-
-```bash
-npx wrangler secret put DATABASE_URI   # mongodb+srv://USER:PASSWORD@cluster.mongodb.net/incident_command
-```
-
-The Worker opens one connection for each request and closes it after the response is sent. Workers do not let a socket outlive the request that opened it, so the driver cannot keep a pool between requests. Allow connections from the internet in the Atlas network access list.
+[Hyperdrive](https://developers.cloudflare.com/hyperdrive/) is not used. A container cannot use a Hyperdrive binding, so the app connects to the database directly and keeps a connection pool.
 
 ### 3. Set secrets
 
-Each command prompts for the value. Set only the ones you use.
+Each command prompts for the value. Set only the secrets that you use.
 
 ```bash
 npx wrangler secret put SETUP_TOKEN      # required to create the first admin at /manage/setup
@@ -77,33 +73,49 @@ Non-secret settings (`SITE_URL`, `SITE_NAME`, `CACHE_TTL`, `EMAIL_FROM`, …) go
 
 ### 4. Deploy
 
-```bash
-pnpm cf:deploy
-```
-
-The Worker is served at `https://incident-command.<your-subdomain>.workers.dev`. To use your own domain, add it under **Workers & Pages → your Worker → Settings → Domains & Routes**, then update `SITE_URL`.
-
-## Local preview
+Start Docker. Then build the image, push it and deploy the Worker:
 
 ```bash
-pnpm cf:preview
+NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<key> pnpm cf:deploy
 ```
 
-Runs the production build in workerd locally. Put local secrets in `.dev.vars` (git-ignored), for example `SETUP_TOKEN=...`. With Hyperdrive, `localConnectionString` in `wrangler.jsonc` is used instead of the remote database.
+See [Keep the server action ids between deploys](#keep-the-server-action-ids-between-deploys) for the key.
+
+The Worker is served at `https://incident-command.<your-subdomain>.workers.dev`. After the first deploy, wait some minutes before you send requests: Cloudflare must prepare the image first. To use your own domain, add it under **Workers & Pages → your Worker → Settings → Domains & Routes**, then update `SITE_URL`.
+
+## Container settings
+
+These vars configure the Worker. The container does not get them.
+
+| Var                       | Default | Description                                                                                                                                                          |
+| ------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CONTAINER_INSTANCES`     | `1`     | The number of containers. Each client address uses one of them. Use more than one only with Postgres or MongoDB.                                                     |
+| `CONTAINER_INSTANCE_TYPE` | `basic` | The size of each container: `lite` (1/16 vCPU, 256 MiB), `basic` (1/4 vCPU, 1 GiB), `standard-1`, `standard-2`, `standard-3` or `standard-4`.                        |
+| `CONTAINER_SLEEP_AFTER`   | `30m`   | An idle container stops after approximately this time. Use `ms`, `s`, `m` or `h`. The maximum is `6h`. A longer time gives fewer slow first requests and costs more. |
+
+Cloudflare bills a container while it runs. See [Containers pricing](https://developers.cloudflare.com/containers/platform/pricing/).
+
+## Local development
+
+```bash
+pnpm cf:dev
+```
+
+This command runs the Worker in workerd and the container in your local Docker engine. Put local secrets in `.dev.vars` (git-ignored), for example `SETUP_TOKEN=...`. Press `r` to build the image again after a change to the app. For quick changes to the app, `pnpm dev` is faster.
 
 ## Required environment variables
 
-| Variable       | Where                         | Notes                                                  |
-| -------------- | ----------------------------- | ------------------------------------------------------ |
-| `SITE_URL`     | `vars`                        | Public URL, used in notification links.                |
-| `DATABASE_URI` | secret, or Hyperdrive binding | Without it the per-isolate memory store is used.       |
-| `SETUP_TOKEN`  | secret                        | Required to create the first admin at `/manage/setup`. |
+| Variable       | Where  | Notes                                                                                  |
+| -------------- | ------ | -------------------------------------------------------------------------------------- |
+| `SITE_URL`     | `vars` | Public URL, used in notification links.                                                |
+| `DATABASE_URI` | secret | Without it, each container uses its own memory store and loses its data when it stops. |
+| `SETUP_TOKEN`  | secret | Required to create the first admin at `/manage/setup`.                                 |
 
 Full list: [docs/deployment.md](../../docs/deployment.md#environment-variables).
 
 ## First admin
 
-Open `https://<host>/manage/setup` and create the admin. Set `SETUP_TOKEN` first. Without it, whoever reaches the page first becomes admin.
+Open `https://<host>/manage/setup` and create the admin. Set `SETUP_TOKEN` first. Without it, the first visitor of the page becomes admin.
 
 ## Verify
 
@@ -113,11 +125,13 @@ curl https://incident-command.<your-subdomain>.workers.dev/healthz
 curl https://incident-command.<your-subdomain>.workers.dev/api/v1/status
 ```
 
+When the container does not answer in 60 seconds, the Worker answers `503` with `retry-after: 10`. The Workers Logs show the reason. The logs of the container are in the Containers dashboard.
+
 ## Keep the server action ids between deploys
 
-Next.js salts the id of each server action with `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`. Without that variable, `next build` makes a new key, and each deploy changes every id. A portal page that a browser loaded before the deploy then sends ids that the new Worker does not know. Next.js logs `Failed to find Server Action`, answers 409, and the portal shows "This page is out of date" until the user reloads the page.
+Next.js salts the id of each server action with `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`. Without that variable, `next build` makes a new key, and each deploy changes every id. A portal page that a browser loaded before the deploy then sends ids that the new container does not know. Next.js logs `Failed to find Server Action`, answers 409, and the portal shows "This page is out of date" until the user loads the page again.
 
-Make one key and set it for each build:
+Make one key and set it for each deploy:
 
 ```bash
 openssl rand -base64 32
@@ -127,17 +141,18 @@ openssl rand -base64 32
 NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<key> pnpm cf:deploy
 ```
 
-Keep the key secret. Next.js also encrypts the closure variables of server actions with it.
+Wrangler gives only the `build_vars` of `wrangler.jsonc` to `docker build`, and that file is not secret. `pnpm cf:deploy` sets `WRANGLER_DOCKER_BIN` to [`scripts/wrangler-docker.sh`](../../scripts/wrangler-docker.sh). That script adds the key from the environment as a build argument. The key is not in the command line, in a file of the repository or in the image history. But `next build` writes the key into the server action manifest, so the key is in the files of the image. This is the same on each container host.
+
+Keep the key and the image secret. Next.js also encrypts the closure variables of server actions with the key.
 
 ## Development Worker (GitHub Actions)
 
-The [`deploy-development`](../../.github/workflows/deploy-development.yml) workflow deploys the `incident-command-development` Worker to <https://dev.incident-command.org>. It runs on each push to `main`. You can also start it manually from the Actions tab. The job uses the `development` GitHub environment. The Worker settings are in the `env.development` block of [`wrangler.jsonc`](../../wrangler.jsonc).
+The [`deploy-development`](../../.github/workflows/deploy-development.yml) workflow deploys the `incident-command-development` Worker and its container to <https://dev.incident-command.org>. It runs on each push to `main`. You can also start it manually from the Actions tab. The job uses the `development` GitHub environment. The settings are in the `env.development` block of [`wrangler.jsonc`](../../wrangler.jsonc).
 
 The workflow does these steps:
 
 1. It installs the dependencies through Socket Firewall.
-2. It runs `opennextjs-cloudflare build --env development` with the `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` secret in the environment.
-3. It runs `wrangler deploy --env development`. Wrangler finds the OpenNext project and runs `opennextjs-cloudflare deploy`, which then runs `wrangler deploy`.
+2. It runs `pnpm cf:deploy --env development` with the `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` secret in the environment. Wrangler builds the image with the Docker engine of the runner, pushes it and deploys the Worker.
 
 The `development` environment in `wrangler.jsonc` sets these items:
 
@@ -146,13 +161,14 @@ The `development` environment in `wrangler.jsonc` sets these items:
 - Workers Logs keeps all `console` output and all invocation logs (`head_sampling_rate: 1`).
 - `SITE_URL` is `https://dev.incident-command.org`.
 
-An environment does not inherit `vars` or bindings such as `hyperdrive`. To use Hyperdrive for this Worker, add a `hyperdrive` block inside `env.development`.
+An environment does not inherit `vars`, `containers` or `durable_objects`. The `env.development` block repeats them.
 
 ### One-time setup
 
 1. Add the `incident-command.org` zone to the Cloudflare account that hosts the Worker. Wrangler creates the DNS record and the certificate for `dev.incident-command.org`. If a CNAME record for that hostname exists, delete it first.
 2. Create a Cloudflare API token. Use the "Edit Cloudflare Workers" template, and limit it to the account and the `incident-command.org` zone. The token must have these permissions:
    - Account > Workers Scripts > Edit
+   - Account > the Containers permission with edit access. Wrangler calls this scope `containers:write` ("Manage Workers Containers").
    - Zone > Workers Routes > Edit, for `incident-command.org`
 3. In the GitHub repository, open **Settings > Environments** and create the `development` environment. You can add a deployment branch rule that allows only `main`.
 4. Add these environment secrets to `development`:
@@ -177,19 +193,30 @@ npx wrangler secret put DATABASE_URI --env development
 npx wrangler secret put SETUP_TOKEN --env development
 ```
 
-If the Worker does not exist yet, wrangler asks to create it.
+If the Worker does not exist yet, wrangler asks to create it. A new secret makes a new version of the Worker. The container gets the new value on the next request.
 
-| Secret           | Needed | Notes                                                                                                                                                |
-| ---------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URI`   | Yes    | Postgres or MongoDB connection string. Without it, each isolate uses its own memory store and loses its data. Do not set it when you use Hyperdrive. |
-| `SETUP_TOKEN`    | Yes    | Protects `/manage/setup`. Without it, the first visitor becomes admin.                                                                               |
-| `WEBHOOK_SECRET` | No     | Signs webhook payloads. Workers do not send notifications now, so this secret has no effect.                                                         |
+| Secret             | Needed | Notes                                                                                                                  |
+| ------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URI`     | Yes    | Postgres or MongoDB connection string. Without it, the container uses a memory store and loses its data when it stops. |
+| `SETUP_TOKEN`      | Yes    | Protects `/manage/setup`. Without it, the first visitor becomes admin.                                                 |
+| `ENCRYPTION_KEY`   | No     | Encrypts the provider credentials that admins save in the portal.                                                      |
+| `WEBHOOK_SECRET`   | No     | Signs webhook payloads.                                                                                                |
+| `SENDGRID_API_KEY` | No     | Email through SendGrid, when the email channel has no providers in the portal.                                         |
 
-Do not set the email secrets. Workers do not send subscriber notifications.
+### Move from the OpenNext Worker
+
+Earlier versions ran the app in the Worker through OpenNext. To move a Worker that you deployed that way:
+
+1. Remove a `hyperdrive` block from `wrangler.jsonc`. Set the `DATABASE_URI` secret to the direct connection string of the database.
+2. Keep the other secrets. The container gets them.
+3. Deploy with `pnpm cf:deploy`. The first deploy creates the `AppContainer` Durable Object and the container application.
+4. Delete the `.open-next` directory, if you have one.
 
 ## Notes and scaling
 
-- Workers run many isolates across Cloudflare's network. Each isolate has its own in-process cache, so reads can be up to `CACHE_TTL` (default `30s`) stale between isolates. Each isolate also keeps a portal session in memory for `SESSION_CACHE_TTL` (default `30s`), so most page views open no database connection. A sign-out can take that time to apply to page views on a different isolate. A change to data always reads the session from the database. API tokens are not cached, so a token revocation applies immediately.
-- Isolates are short-lived, so serving last known data during a database outage only lasts as long as an isolate does.
-- `global_fetch_strictly_public` blocks requests to private and internal addresses, so webhook subscribers must use public URLs.
-- Webhooks use `fetch`. The email providers (SendGrid via airhorn's Twilio provider, SES via the AWS SDK) have not been verified on Workers; test them in a preview first.
+- Each container has its own in-process cache. With more than one container, a client on a different address can see data that is up to `CACHE_TTL` (default `30s`) old. Each container also keeps a portal session in memory for `SESSION_CACHE_TTL` (default `30s`). See [Health checks, caching and scaling](../../docs/deployment.md#health-checks-caching-and-scaling).
+- Never use the memory store with more than one container. The memory store loses its data when the container stops, so use it only for previews.
+- Each container keeps its own database connection pool. Size `CONTAINER_INSTANCES` against the connection limit of the database.
+- The container serves the static files (`/_next/static/*` and `public/`) too. No edge cache is in front of them, so a cold start also delays these files.
+- The container can connect to any public host. Webhook subscribers must use URLs that the container can reach.
+- `docker build` installs the dependencies in the image from the frozen lockfile, with the policies of `pnpm-workspace.yaml`.

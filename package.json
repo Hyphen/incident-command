@@ -24,10 +24,9 @@
 		"test": "pnpm lint && vitest run --coverage",
 		"test:ci": "pnpm lint:ci && pnpm typecheck && vitest run --coverage",
 		"test:watch": "vitest",
-		"cf:build": "opennextjs-cloudflare build",
-		"cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-		"cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-		"clean": "rm -rf .next .open-next coverage node_modules"
+		"cf:dev": "WRANGLER_DOCKER_BIN=./scripts/wrangler-docker.sh wrangler dev",
+		"cf:deploy": "WRANGLER_DOCKER_BIN=./scripts/wrangler-docker.sh wrangler deploy",
+		"clean": "rm -rf .next .wrangler coverage node_modules"
 	},
 	"dependencies": {
 		"@airhornjs/aws": "^7.2.0",
@@ -45,7 +44,6 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.6.3",
 		"@electric-sql/pglite": "^0.5.12",
-		"@opennextjs/cloudflare": "^1.20.13",
 		"@tailwindcss/postcss": "^4.3.3",
 		"@testing-library/dom": "^10.4.2",
 		"@testing-library/jest-dom": "^7.0.1",

@@ -1,51 +1,77 @@
-// Cloudflare Workers config for Incident Command (built with OpenNext).
-//   pnpm cf:preview   build and run locally in workerd
-//   pnpm cf:deploy    build and deploy
+// Cloudflare config for Incident Command: a Worker in front of a container.
+// The container runs the image from the Dockerfile (the Next.js server).
+//   pnpm cf:dev      run the Worker and the container locally (needs Docker)
+//   pnpm cf:deploy   build the image, push it and deploy (needs Docker)
 // Guide: deploy/cloudflare/README.md
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "incident-command",
-	// cloudflare-worker.ts wraps .open-next/worker.js. It gives each request one
-	// database connection and reads the Hyperdrive binding, if there is one.
+	// cloudflare-worker.ts sends each request to the AppContainer Durable
+	// Object. The Durable Object starts the container and sends the request on.
 	"main": "cloudflare-worker.ts",
 	"compatibility_date": "2026-11-01",
-	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-	"assets": {
-		"directory": ".open-next/assets",
-		"binding": "ASSETS"
-	},
 	"observability": {
 		"enabled": true
 	},
-	// Postgres through Hyperdrive (recommended). Create the config with
-	//   npx wrangler hyperdrive create incident-command --connection-string="postgres://USER:PASSWORD@HOST:5432/DB"
-	// then uncomment and paste the returned id. `localConnectionString` is used
-	// by `pnpm cf:preview`. cloudflare-worker.ts gives the connection string of
-	// the binding to the app as DATABASE_URI. See deploy/cloudflare/README.md.
-	// "hyperdrive": [
-	// 	{
-	// 		"binding": "HYPERDRIVE",
-	// 		"id": "<HYPERDRIVE_ID>",
-	// 		"localConnectionString": "postgres://incident:incident@localhost:5432/incident_command"
-	// 	}
-	// ],
-	// Non-secret configuration. Set secrets with `npx wrangler secret put NAME`
+	// With the durable_object scheduling policy, the Durable Object starts the
+	// container with the "base" image. After a deploy, the Durable Object
+	// replaces a container that runs an earlier image.
+	"containers": [
+		{
+			"class_name": "AppContainer",
+			"scheduling_policy": "durable_object",
+			"images": {
+				"base": {
+					"dockerfile": "./Dockerfile"
+				}
+			},
+			"observability": {
+				"logs": {
+					"enabled": true
+				}
+			}
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "APP_CONTAINER",
+				"class_name": "AppContainer"
+			}
+		]
+	},
+	"exports": {
+		"AppContainer": {
+			"type": "durable-object",
+			"storage": "sqlite"
+		}
+	},
+	// Non-secret configuration. The container gets each var and each secret
+	// as an environment variable, except the CONTAINER_* vars, which configure
+	// the Worker. Set secrets with `npx wrangler secret put NAME`
 	// (DATABASE_URI, SETUP_TOKEN, ENCRYPTION_KEY, WEBHOOK_SECRET,
 	// email provider keys).
 	"vars": {
 		"SITE_URL": "https://status.example.com",
 		"SITE_NAME": "Status",
 		"CACHE_TTL": "30s",
-		"SESSION_TTL": "7d"
+		"SESSION_TTL": "7d",
+		// The number of containers. Each client address uses one of them.
+		"CONTAINER_INSTANCES": "1",
+		// lite, basic (1/4 vCPU, 1 GiB), standard-1, standard-2, standard-3 or standard-4.
+		"CONTAINER_INSTANCE_TYPE": "basic",
+		// An idle container stops after this time (at most 6h). The next request
+		// starts it again.
+		"CONTAINER_SLEEP_AFTER": "30m"
 	},
 	"env": {
 		// Development Worker at https://dev.incident-command.org.
 		// .github/workflows/deploy-development.yml deploys it on each push to main.
-		// Manual deploy:
-		//   pnpm exec opennextjs-cloudflare build --env development
-		//   pnpm exec wrangler deploy --env development
+		// Manual deploy (needs Docker):
+		//   pnpm cf:deploy --env development
 		// Set its secrets with `npx wrangler secret put NAME --env development`.
-		// An environment does not inherit "vars" or bindings such as "hyperdrive".
+		// An environment does not inherit "vars", "containers" or
+		// "durable_objects", so this block repeats them.
 		"development": {
 			"name": "incident-command-development",
 			// The Worker gets only the custom domain. The incident-command.org
@@ -67,11 +93,38 @@
 					"head_sampling_rate": 1
 				}
 			},
+			"containers": [
+				{
+					"class_name": "AppContainer",
+					"scheduling_policy": "durable_object",
+					"images": {
+						"base": {
+							"dockerfile": "./Dockerfile"
+						}
+					},
+					"observability": {
+						"logs": {
+							"enabled": true
+						}
+					}
+				}
+			],
+			"durable_objects": {
+				"bindings": [
+					{
+						"name": "APP_CONTAINER",
+						"class_name": "AppContainer"
+					}
+				]
+			},
 			"vars": {
 				"SITE_URL": "https://dev.incident-command.org",
 				"SITE_NAME": "Incident Command",
 				"CACHE_TTL": "30s",
-				"SESSION_TTL": "7d"
+				"SESSION_TTL": "7d",
+				"CONTAINER_INSTANCES": "1",
+				"CONTAINER_INSTANCE_TYPE": "basic",
+				"CONTAINER_SLEEP_AFTER": "30m"
 			}
 		}
 	}
