@@ -31,17 +31,16 @@ export interface PostgresStoreOptions {
 	/** Prefix for every table name. Defaults to `ic_`. */
 	tablePrefix?: string;
 	/**
-	 * Keep a connection pool (default `true`). Set to `false` to open a fresh
-	 * connection per query, which Cloudflare Workers (with Hyperdrive) require
-	 * because connections cannot be shared between requests.
+	 * Keep a connection pool (default `true`). Set to `false` to open a new
+	 * connection for each query, for example behind a proxy such as
+	 * PgBouncer.
 	 */
 	pool?: boolean;
 }
 
 /**
  * A client that opens a new connection for every query and closes it after.
- * Meant for runtimes such as Cloudflare Workers, where a pooling proxy like
- * Hyperdrive makes connecting cheap and sockets cannot outlive a request.
+ * Use it when a proxy (for example PgBouncer) makes each connection cheap.
  */
 export class PerQueryClient implements SqlClient {
 	private readonly connectionString?: string;
