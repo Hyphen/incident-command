@@ -148,7 +148,7 @@ vite.config.ts.timestamp-*
 # Turbo Repo
 .turbo
 
-# Cloudflare (OpenNext / Wrangler)
+# Cloudflare (Wrangler; .open-next is the output of the old OpenNext build)
 .open-next
 .wrangler
 .dev.vars

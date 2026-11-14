@@ -64,7 +64,7 @@ export interface WorkerEnv {
 	APP_CONTAINER: ContainerNamespace;
 	/** The number of container instances (default 1). */
 	CONTAINER_INSTANCES?: string;
-	/** `lite`, `basic` (default), `standard-1`, `standard-2`, `standard-3` or `standard-4`. */
+	/** `lite`, `basic` (default), `standard-1`, `standard-2`, `standard-3` or `standard-4`. Other values use `basic`. */
 	CONTAINER_INSTANCE_TYPE?: string;
 	/** An idle container stops after this time: `30s`, `30m` or `2h` (default `30m`, at most `6h`). */
 	CONTAINER_SLEEP_AFTER?: string;
@@ -89,9 +89,26 @@ const MAX_SLEEP_AFTER_MS = 6 * 60 * 60_000;
 const READY_TIMEOUT_MS = 60_000;
 const PROBE_TIMEOUT_MS = 5_000;
 const PROBE_INTERVAL_MS = 250;
+/** How many times a request starts a container that stops before its server answers. */
+const MAX_STARTS = 3;
 const UNITS = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 } as const;
 /** The storage key of the fingerprint of the container that runs. */
 const CONFIG_KEY = "container-config";
+
+/**
+ * The instance types that `CONTAINER_INSTANCE_TYPE` accepts. `dev` and
+ * `standard` are the old names of `lite` and `standard-1`.
+ */
+const INSTANCE_TYPES = new Map<string, InstanceType>([
+	["lite", "lite"],
+	["dev", "lite"],
+	["basic", BASIC_INSTANCE],
+	["standard", "standard-1"],
+	["standard-1", "standard-1"],
+	["standard-2", "standard-2"],
+	["standard-3", "standard-3"],
+	["standard-4", "standard-4"],
+]);
 
 /** Parses `500ms`, `30s`, `30m`, `2h` or plain milliseconds. */
 function parseDuration(value: string | undefined): number | undefined {
@@ -107,10 +124,10 @@ function parseDuration(value: string | undefined): number | undefined {
 /** Reads the `CONTAINER_*` vars. Invalid values use the defaults. */
 function containerSettings(env: WorkerEnv): ContainerSettings {
 	const instances = Number.parseInt(env.CONTAINER_INSTANCES ?? "", 10);
-	const type = env.CONTAINER_INSTANCE_TYPE?.trim();
+	const type = env.CONTAINER_INSTANCE_TYPE?.trim() ?? "";
 	return {
 		instances: Number.isNaN(instances) ? 1 : Math.max(instances, 1),
-		instance: !type || type === "basic" ? BASIC_INSTANCE : type,
+		instance: INSTANCE_TYPES.get(type) ?? BASIC_INSTANCE,
 		sleepAfterMs: Math.min(
 			parseDuration(env.CONTAINER_SLEEP_AFTER) ?? DEFAULT_SLEEP_AFTER_MS,
 			MAX_SLEEP_AFTER_MS,
@@ -154,26 +171,43 @@ function instanceName(request: Request, instances: number): string {
 }
 
 /** The Worker: sends each request to the Durable Object of its instance. */
-export function routeRequest(
+export async function routeRequest(
 	request: Request,
 	env: WorkerEnv,
 ): Promise<Response> {
 	const { instances } = containerSettings(env);
-	return env.APP_CONTAINER.getByName(instanceName(request, instances)).fetch(
-		request,
-	);
+	try {
+		return await env.APP_CONTAINER.getByName(
+			instanceName(request, instances),
+		).fetch(request);
+	} catch (error) {
+		// For example, a deploy resets the Durable Object during the request.
+		console.error("The Durable Object did not answer.", error);
+		return unavailable();
+	}
 }
+
+/** Proxy headers from the client. The proxy removes them. */
+const CLIENT_PROXY_HEADERS = [
+	"host",
+	"forwarded",
+	"x-forwarded-port",
+	"x-real-ip",
+];
 
 /**
  * Makes the request for the server in the container. Next.js compares the
  * `Origin` of a server action with `x-forwarded-host`, so that header must
- * keep the public host. The proxy sets the `x-forwarded-*` headers, so a
- * client cannot set them.
+ * keep the public host. The proxy sets `x-forwarded-host`,
+ * `x-forwarded-proto` and `x-forwarded-for`, and removes other proxy headers,
+ * so a client cannot set them.
  */
 function containerRequest(request: Request): Request {
 	const url = new URL(request.url);
 	const headers = new Headers(request.headers);
-	headers.delete("host");
+	for (const name of CLIENT_PROXY_HEADERS) {
+		headers.delete(name);
+	}
 	headers.set("x-forwarded-host", url.host);
 	headers.set("x-forwarded-proto", url.protocol.slice(0, -1));
 	const client = request.headers.get("cf-connecting-ip");
@@ -222,18 +256,24 @@ function sleep(ms: number): Promise<void> {
 /**
  * Waits until the server answers on `/healthz`. Each answer, also a 503,
  * shows that the server listens. A 503 from the app goes to the client.
+ * Returns false when the container stops first.
  */
-async function waitForServer(container: WorkerContainer): Promise<void> {
+async function waitForServer(
+	container: WorkerContainer,
+	deadline: number,
+): Promise<boolean> {
 	const port = container.getTcpPort(CONTAINER_PORT);
-	const deadline = Date.now() + READY_TIMEOUT_MS;
 	let lastError: unknown;
 	while (Date.now() < deadline) {
+		if (!container.running) {
+			return false;
+		}
 		try {
 			const response = await port.fetch("http://container/healthz", {
 				signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
 			});
 			await response.body?.cancel();
-			return;
+			return true;
 		} catch (error) {
 			lastError = error;
 		}
@@ -275,21 +315,28 @@ export class ContainerProxy {
 	}
 
 	async fetch(request: Request): Promise<Response> {
-		try {
-			await this.ensureReady();
-		} catch (error) {
-			console.error("The container is not ready.", error);
-			return unavailable();
-		}
-		try {
-			return await this.state.container
-				.getTcpPort(CONTAINER_PORT)
-				.fetch(containerRequest(request));
-		} catch (error) {
-			// The container stopped. The next request starts it again.
-			this.ready = false;
-			console.error("The request to the container failed.", error);
-			return unavailable();
+		// A GET or a HEAD has no body, so the proxy can send it again.
+		const attempts =
+			request.method === "GET" || request.method === "HEAD" ? 2 : 1;
+		for (let attempt = 1; ; attempt++) {
+			try {
+				await this.ensureReady();
+			} catch (error) {
+				console.error("The container is not ready.", error);
+				return unavailable();
+			}
+			try {
+				return await this.state.container
+					.getTcpPort(CONTAINER_PORT)
+					.fetch(containerRequest(request));
+			} catch (error) {
+				// The container can be stopped. Check it again before the next request.
+				this.ready = false;
+				console.error("The request to the container failed.", error);
+				if (attempt === attempts) {
+					return unavailable();
+				}
+			}
 		}
 	}
 
@@ -318,23 +365,37 @@ export class ContainerProxy {
 			console.log(
 				"A deploy changed the image or the settings. The container starts again.",
 			);
-			// destroy() kills the process, so monitor() can reject. That is not an error.
+			// The docs say that monitor() resolves after destroy() without a
+			// reason. In wrangler dev, destroy() kills the process and monitor()
+			// rejects. Both are a planned stop, not an error.
 			this.watched.planned = true;
 			await container.destroy();
 		}
-		if (!container.running) {
-			container.start({
-				image,
-				instance,
-				// The app connects to the database, email providers and webhooks.
-				enableInternet: true,
-				env,
-			});
-			this.watch();
-			await storage.put(CONFIG_KEY, config);
+		const deadline = Date.now() + READY_TIMEOUT_MS;
+		// A container can be unavailable for a short time after destroy(), and
+		// the app can stop while it starts. Then start the container again.
+		for (let attempt = 1; ; attempt++) {
+			if (!container.running) {
+				container.start({
+					image,
+					instance,
+					// The app connects to the database, email providers and webhooks.
+					enableInternet: true,
+					env,
+				});
+				this.watch();
+				await storage.put(CONFIG_KEY, config);
+			}
+			await container.setInactivityTimeout(this.settings.sleepAfterMs);
+			if (await waitForServer(container, deadline)) {
+				break;
+			}
+			if (attempt === MAX_STARTS) {
+				throw new Error(
+					`The container stopped ${MAX_STARTS} times before the server answered.`,
+				);
+			}
 		}
-		await container.setInactivityTimeout(this.settings.sleepAfterMs);
-		await waitForServer(container);
 		this.ready = true;
 	}
 

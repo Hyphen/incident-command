@@ -6,7 +6,9 @@
 # script adds the NEXT_SERVER_ACTIONS_ENCRYPTION_KEY build argument from the
 # environment. Docker reads the value from the environment, so the key is not
 # in the command line or in a file. The Dockerfile uses the key only in its
-# build stage, so the key is not in the history of the final image.
+# build stage, so the key is not in the history of the final image. But
+# `next build` writes the key into the server action manifest, so the key is
+# in the files of the image.
 #
 # Set DOCKER to use a different Docker-compatible command (default: docker).
 set -eu

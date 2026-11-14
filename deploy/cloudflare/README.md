@@ -21,8 +21,8 @@ The app runs on [Cloudflare Containers](https://developers.cloudflare.com/contai
 1. The Worker picks an instance from the client address. Each client address always uses the same instance, so a client reads its own changes from the cache of that instance.
 2. The `AppContainer` Durable Object of the instance starts the container on the first request. The container gets each var and each secret of the Worker as an environment variable, except the `CONTAINER_*` vars.
 3. The Durable Object waits until the server answers on `/healthz`. Then it sends the request to the server. It sets `x-forwarded-host`, `x-forwarded-proto` and `x-forwarded-for`. Next.js compares the `Origin` of a server action with `x-forwarded-host`.
-4. When no request comes for `CONTAINER_SLEEP_AFTER` (default `30m`), Cloudflare stops the container. The next request starts it again. This start takes some seconds.
-5. A deploy restarts the Durable Object. If the deploy changed the image, a var or a secret, the Durable Object replaces the container on the next request. The new container gets the new image and the new values.
+4. When no request comes for approximately `CONTAINER_SLEEP_AFTER` (default `30m`), Cloudflare stops the container. The next request starts it again. This start takes some seconds.
+5. A deploy restarts the Durable Object. If the deploy changed the image, a var or a secret, the Durable Object replaces the container on the next request. The new container gets the new image and the new values. A build without the Docker layer cache, as in CI, gives a new image. So the first request after such a deploy starts a new container.
 
 The container is a Node.js server, so these items work as on other container hosts:
 
@@ -87,11 +87,11 @@ The Worker is served at `https://incident-command.<your-subdomain>.workers.dev`.
 
 These vars configure the Worker. The container does not get them.
 
-| Var                       | Default | Description                                                                                                                                            |
-| ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CONTAINER_INSTANCES`     | `1`     | The number of containers. Each client address uses one of them. Use more than one only with Postgres or MongoDB.                                       |
-| `CONTAINER_INSTANCE_TYPE` | `basic` | The size of each container: `lite` (1/16 vCPU, 256 MiB), `basic` (1/4 vCPU, 1 GiB), `standard-1`, `standard-2`, `standard-3` or `standard-4`.          |
-| `CONTAINER_SLEEP_AFTER`   | `30m`   | An idle container stops after this time. Use `ms`, `s`, `m` or `h`. The maximum is `6h`. A longer time gives fewer slow first requests and costs more. |
+| Var                       | Default | Description                                                                                                                                                          |
+| ------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CONTAINER_INSTANCES`     | `1`     | The number of containers. Each client address uses one of them. Use more than one only with Postgres or MongoDB.                                                     |
+| `CONTAINER_INSTANCE_TYPE` | `basic` | The size of each container: `lite` (1/16 vCPU, 256 MiB), `basic` (1/4 vCPU, 1 GiB), `standard-1`, `standard-2`, `standard-3` or `standard-4`.                        |
+| `CONTAINER_SLEEP_AFTER`   | `30m`   | An idle container stops after approximately this time. Use `ms`, `s`, `m` or `h`. The maximum is `6h`. A longer time gives fewer slow first requests and costs more. |
 
 Cloudflare bills a container while it runs. See [Containers pricing](https://developers.cloudflare.com/containers/platform/pricing/).
 
@@ -141,9 +141,9 @@ openssl rand -base64 32
 NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<key> pnpm cf:deploy
 ```
 
-Wrangler gives only the `build_vars` of `wrangler.jsonc` to `docker build`, and that file is not secret. `pnpm cf:deploy` sets `WRANGLER_DOCKER_BIN` to [`scripts/wrangler-docker.sh`](../../scripts/wrangler-docker.sh). That script adds the key from the environment as a build argument. The Dockerfile uses the key only in its build stage.
+Wrangler gives only the `build_vars` of `wrangler.jsonc` to `docker build`, and that file is not secret. `pnpm cf:deploy` sets `WRANGLER_DOCKER_BIN` to [`scripts/wrangler-docker.sh`](../../scripts/wrangler-docker.sh). That script adds the key from the environment as a build argument. The key is not in the command line, in a file of the repository or in the image history. But `next build` writes the key into the server action manifest, so the key is in the files of the image. This is the same on each container host.
 
-Keep the key secret. Next.js also encrypts the closure variables of server actions with it.
+Keep the key and the image secret. Next.js also encrypts the closure variables of server actions with the key.
 
 ## Development Worker (GitHub Actions)
 
@@ -217,5 +217,6 @@ Earlier versions ran the app in the Worker through OpenNext. To move a Worker th
 - Each container has its own in-process cache. With more than one container, a client on a different address can see data that is up to `CACHE_TTL` (default `30s`) old. Each container also keeps a portal session in memory for `SESSION_CACHE_TTL` (default `30s`). See [Health checks, caching and scaling](../../docs/deployment.md#health-checks-caching-and-scaling).
 - Never use the memory store with more than one container. The memory store loses its data when the container stops, so use it only for previews.
 - Each container keeps its own database connection pool. Size `CONTAINER_INSTANCES` against the connection limit of the database.
+- The container serves the static files (`/_next/static/*` and `public/`) too. No edge cache is in front of them, so a cold start also delays these files.
 - The container can connect to any public host. Webhook subscribers must use URLs that the container can reach.
 - `docker build` installs the dependencies in the image from the frozen lockfile, with the policies of `pnpm-workspace.yaml`.

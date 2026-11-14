@@ -143,6 +143,7 @@ describe("ContainerProxy", () => {
 				origin: "https://status.test",
 				"cf-connecting-ip": "203.0.113.7",
 				"x-forwarded-host": "attacker.test",
+				host: "attacker.test",
 			},
 		});
 		const [saved, home] = await Promise.all([
@@ -177,6 +178,7 @@ describe("ContainerProxy", () => {
 		);
 		expect(forwarded?.url).toBe("http://container/manage/incidents");
 		expect(forwarded?.redirect).toBe("manual");
+		expect(forwarded?.headers.get("host")).toBeNull();
 		expect(Object.fromEntries(forwarded?.headers ?? [])).toMatchObject({
 			origin: "https://status.test",
 			"x-forwarded-host": "status.test",
@@ -184,13 +186,32 @@ describe("ContainerProxy", () => {
 			"x-forwarded-for": "203.0.113.7",
 		});
 
-		// A ready container gets the next request without a new check.
-		await proxy.fetch(page("/history"));
+		// A ready container gets the next request without a new check. Proxy
+		// headers from a client without an address do not reach the app.
+		await proxy.fetch(
+			new Request("https://status.test/history", {
+				headers: {
+					"x-forwarded-for": "198.51.100.66",
+					"x-forwarded-proto": "http",
+					"x-forwarded-port": "8443",
+					"x-real-ip": "198.51.100.66",
+					forwarded: "for=198.51.100.66",
+				},
+			}),
+		);
 		expect(container.start).toHaveBeenCalledTimes(1);
 		expect(probes(container.requests)).toHaveLength(1);
 		const last = container.requests.at(-1);
 		expect(last?.url).toBe("http://container/history");
-		expect(last?.headers.has("x-forwarded-for")).toBe(false);
+		expect(last?.headers.get("x-forwarded-proto")).toBe("https");
+		for (const name of [
+			"x-forwarded-for",
+			"x-forwarded-port",
+			"x-real-ip",
+			"forwarded",
+		]) {
+			expect(last?.headers.has(name)).toBe(false);
+		}
 	});
 
 	it.each<{
@@ -238,6 +259,28 @@ describe("ContainerProxy", () => {
 		},
 		{
 			vars: { CONTAINER_SLEEP_AFTER: "soon" },
+			instance: BASIC,
+			sleepAfterMs: 1_800_000,
+		},
+		// The old names of the named types.
+		{
+			vars: { CONTAINER_INSTANCE_TYPE: "dev" },
+			instance: "lite",
+			sleepAfterMs: 1_800_000,
+		},
+		{
+			vars: { CONTAINER_INSTANCE_TYPE: "standard" },
+			instance: "standard-1",
+			sleepAfterMs: 1_800_000,
+		},
+		// An unknown type would make each start fail, so it uses the default.
+		{
+			vars: { CONTAINER_INSTANCE_TYPE: "huge" },
+			instance: BASIC,
+			sleepAfterMs: 1_800_000,
+		},
+		{
+			vars: { CONTAINER_INSTANCE_TYPE: "constructor" },
 			instance: BASIC,
 			sleepAfterMs: 1_800_000,
 		},
@@ -378,30 +421,83 @@ describe("ContainerProxy", () => {
 		},
 	);
 
-	it("answers 503 when a request to the container fails, and checks the server again", async () => {
-		const error = vi.spyOn(console, "error").mockImplementation(() => {});
-		const container = fakeContainer();
-		const proxy = new ContainerProxy(fakeState(container), workerEnv());
-		await proxy.fetch(page());
+	it.each([
+		{ method: "GET", retried: true },
+		{ method: "HEAD", retried: true },
+		{ method: "POST", retried: false },
+	])(
+		"after a failed request to the container, checks the server again and sends a $method again: $retried",
+		async ({ method, retried }) => {
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			const container = fakeContainer();
+			const proxy = new ContainerProxy(fakeState(container), workerEnv());
+			await proxy.fetch(page());
 
-		container.server = (request) => {
-			if (request.url === "http://container/healthz") {
-				return new Response("ok");
+			let failures = 1;
+			container.server = (request) => {
+				if (request.url !== "http://container/healthz" && failures-- > 0) {
+					throw new Error("Network connection lost.");
+				}
+				return new Response(request.method === "HEAD" ? null : "page");
+			};
+			const response = await proxy.fetch(
+				new Request("https://status.test/subscribe", {
+					method,
+					body: method === "POST" ? "email=a@example.test" : undefined,
+				}),
+			);
+			expect(error).toHaveBeenCalledWith(
+				"The request to the container failed.",
+				expect.any(Error),
+			);
+			expect(response.status).toBe(retried ? 200 : 503);
+			expect(probes(container.requests)).toHaveLength(retried ? 2 : 1);
+
+			// The next request checks the server again when the last one failed.
+			await expect((await proxy.fetch(page())).text()).resolves.toBe("page");
+			expect(probes(container.requests)).toHaveLength(2);
+			expect(container.start).toHaveBeenCalledTimes(1);
+		},
+	);
+
+	it.each([
+		{ stops: 1, status: 200, starts: 2 },
+		{ stops: 3, status: 503, starts: 3 },
+	])(
+		"starts the container again when it stops before the server answers ($stops times)",
+		async ({ stops, status, starts }) => {
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			const container = fakeContainer();
+			const state = fakeState(container);
+			let crashes = stops;
+			container.server = (request) => {
+				if (request.url === "http://container/healthz" && crashes-- > 0) {
+					// The app exits while it starts, for example with a bad setting.
+					container.stop(new Error("exit"));
+					throw new Error("Container is not listening to port 3000");
+				}
+				return new Response("page");
+			};
+			const proxy = new ContainerProxy(state, workerEnv());
+
+			const response = await proxy.fetch(page());
+			expect(response.status).toBe(status);
+			expect(container.start).toHaveBeenCalledTimes(starts);
+			expect(error).toHaveBeenCalledWith(
+				"The container stopped with an error.",
+				expect.any(Error),
+			);
+			if (status === 503) {
+				expect(error).toHaveBeenCalledWith(
+					"The container is not ready.",
+					expect.objectContaining({
+						message:
+							"The container stopped 3 times before the server answered.",
+					}),
+				);
 			}
-			throw new Error("Network connection lost.");
-		};
-		const failed = await proxy.fetch(page());
-		expect(failed.status).toBe(503);
-		expect(error).toHaveBeenCalledWith(
-			"The request to the container failed.",
-			expect.any(Error),
-		);
-
-		container.server = () => new Response("page");
-		await proxy.fetch(page());
-		expect(probes(container.requests)).toHaveLength(2);
-		expect(container.start).toHaveBeenCalledTimes(1);
-	});
+		},
+	);
 });
 
 describe("routeRequest", () => {
@@ -439,6 +535,28 @@ describe("routeRequest", () => {
 		}
 		expect([...names].every((name) => /^app-[0-3]$/.test(name))).toBe(true);
 		expect(names.size).toBeGreaterThan(1);
+	});
+
+	it("answers 503 when the Durable Object fails", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const reset = new Error(
+			"Durable Object reset because its code was updated.",
+		);
+		const env = workerEnv();
+		env.APP_CONTAINER = {
+			getByName: () => ({
+				fetch: async () => {
+					throw reset;
+				},
+			}),
+		};
+		const response = await routeRequest(from("203.0.113.7"), env);
+		expect(response.status).toBe(503);
+		expect(response.headers.get("retry-after")).toBe("10");
+		expect(error).toHaveBeenCalledWith(
+			"The Durable Object did not answer.",
+			reset,
+		);
 	});
 
 	it("uses one instance when CONTAINER_INSTANCES is not a positive number", async () => {
