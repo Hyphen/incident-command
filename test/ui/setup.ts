@@ -21,6 +21,7 @@ vi.mock("next/navigation", async (importOriginal) => {
 		notFound: () => {
 			throw new state.NotFound();
 		},
+		usePathname: () => state.pathname,
 	};
 });
 

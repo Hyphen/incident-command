@@ -2,6 +2,7 @@ import {
 	flash,
 	getMemberContext,
 	requireMember,
+	requireMemberForAction,
 	SESSION_COOKIE,
 	secureCookies,
 	startSession,
@@ -126,6 +127,18 @@ describe("auth helpers", () => {
 
 		await startSession(app, member.id);
 		expect(cookieJar.get(SESSION_COOKIE)).toMatchObject({ secure: true });
+	});
+
+	it("reads the session from the database for an action", async () => {
+		const { app } = await setupApp();
+		await signIn(app, "editor");
+		await expect(requireMemberForAction("editor")).resolves.toBeDefined();
+		// A different instance ends the session. This instance has it in memory.
+		const [session] = await app.store.find("sessions");
+		await app.store.delete("sessions", session?.id ?? "");
+		await expect(requireMember()).resolves.toBeDefined();
+		expect(await redirectOf(requireMemberForAction())).toBe("/manage/login");
+		expect(await redirectOf(requireMember())).toBe("/manage/login");
 	});
 });
 

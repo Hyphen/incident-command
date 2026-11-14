@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { Card, EmptyState } from "@/components/manage/ui";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
@@ -72,9 +72,8 @@ export default async function DraftsPage({
 	searchParams: Promise<FlashParams>;
 }) {
 	const flash = await searchParams;
-	const { member, services, app } = await requireMember();
-	const [settings, pending, reviewed] = await Promise.all([
-		services.settings.get(),
+	const { services, app } = await requireMember();
+	const [pending, reviewed] = await Promise.all([
 		services.drafts.list({ pending: true }),
 		services.drafts.list({ pending: false, limit: 50 }),
 	]);
@@ -83,10 +82,7 @@ export default async function DraftsPage({
 		withTitles(services, reviewed),
 	]);
 	return (
-		<ManageShell
-			member={member}
-			siteName={settings.siteName}
-			active="drafts"
+		<ManagePage
 			title="Notification drafts"
 			flash={flash}
 			health={app.store.health}
@@ -100,6 +96,6 @@ export default async function DraftsPage({
 			<Card title="Reviewed" description="The 50 most recent.">
 				<DraftList items={reviewedItems} empty="No reviewed drafts yet." />
 			</Card>
-		</ManageShell>
+		</ManagePage>
 	);
 }

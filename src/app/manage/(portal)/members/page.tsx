@@ -1,8 +1,15 @@
 import type { Metadata } from "next";
+import {
+	deleteMemberAction,
+	inviteMemberAction,
+	renewInviteLinkAction,
+	revokeInviteAction,
+	updateMemberAction,
+} from "@/app/manage/actions";
 import { ConfirmButton } from "@/components/manage/confirm-button";
 import { CopyInviteLinkButton } from "@/components/manage/copy-invite-link-button";
 import { InviteMemberForm } from "@/components/manage/invite-member-form";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { buttonClass, Card, Select } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { LocalTime } from "@/components/time";
@@ -10,13 +17,6 @@ import { requireMember } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/domain/status";
 import { ROLES } from "@/lib/domain/types";
 import { INVITE_TTL_DAYS } from "@/lib/services/members";
-import {
-	deleteMemberAction,
-	inviteMemberAction,
-	renewInviteLinkAction,
-	revokeInviteAction,
-	updateMemberAction,
-} from "../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Members" };
@@ -31,21 +31,13 @@ export default async function MembersPage({
 }) {
 	const flash = await searchParams;
 	const { member, actor, services, app } = await requireMember("admin");
-	const [settings, members, invites] = await Promise.all([
-		services.settings.get(),
+	const [members, invites] = await Promise.all([
 		services.members.list(actor),
 		services.members.listInvites(actor),
 	]);
 	const now = new Date().toISOString();
 	return (
-		<ManageShell
-			member={member}
-			siteName={settings.siteName}
-			active="members"
-			title="Members"
-			flash={flash}
-			health={app.store.health}
-		>
+		<ManagePage title="Members" flash={flash} health={app.store.health}>
 			<Card title="Team" description={ROLE_HELP}>
 				<ul className="divide-y divide-border">
 					{members.map((person) => (
@@ -157,6 +149,6 @@ export default async function MembersPage({
 			>
 				<InviteMemberForm action={inviteMemberAction} />
 			</Card>
-		</ManageShell>
+		</ManagePage>
 	);
 }

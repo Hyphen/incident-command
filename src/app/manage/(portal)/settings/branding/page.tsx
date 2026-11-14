@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
+import { updateBrandingAction } from "@/app/manage/actions";
 import { SettingsTabs } from "@/components/manage/settings-tabs";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { buttonClass, Card, Field, inputClass } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
 import { THEMES } from "@/lib/theme";
-import { updateBrandingAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Branding" };
@@ -16,17 +16,10 @@ export default async function BrandingPage({
 	searchParams: Promise<FlashParams>;
 }) {
 	const flash = await searchParams;
-	const { member, services, app } = await requireMember("admin");
+	const { services, app } = await requireMember("admin");
 	const settings = await services.settings.get();
 	return (
-		<ManageShell
-			member={member}
-			siteName={settings.siteName}
-			active="settings"
-			title="Settings"
-			flash={flash}
-			health={app.store.health}
-		>
+		<ManagePage title="Settings" flash={flash} health={app.store.health}>
 			<SettingsTabs active="branding" />
 			<form action={updateBrandingAction} className="space-y-6">
 				<Card
@@ -128,6 +121,6 @@ export default async function BrandingPage({
 					Save branding
 				</SubmitButton>
 			</form>
-		</ManageShell>
+		</ManagePage>
 	);
 }

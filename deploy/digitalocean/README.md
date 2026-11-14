@@ -51,6 +51,6 @@ curl https://<app-url>/api/v1/status
 
 ## Scaling
 
-- Raise `instance_count` (or enable autoscaling on a dedicated instance size). Each instance has its own in-process cache, so with several instances public reads can be up to `CACHE_TTL` (default `30s`) stale. Sessions and API tokens are not cached.
+- Raise `instance_count` (or enable autoscaling on a dedicated instance size). Each instance has its own in-process cache, so with several instances public reads can be up to `CACHE_TTL` (default `30s`) stale. Each instance keeps a portal session in memory for `SESSION_CACHE_TTL` (default `30s`). API tokens are not cached.
 - The health check reports `degraded` with a 200 when the database goes down after boot, so App Platform keeps the instance (and the cached data it serves) running. It returns 503 only when the app cannot start, for example when the database is unreachable at boot.
 - The dev database is for getting started. For production, use a managed Postgres cluster (see the comment in `app.yaml`) with daily backups.

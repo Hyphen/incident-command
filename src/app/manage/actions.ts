@@ -7,7 +7,7 @@ import {
 	endSession,
 	flash,
 	loginPath,
-	requireMember,
+	requireMemberForAction,
 	returnPath,
 	startSession,
 } from "@/lib/auth";
@@ -106,7 +106,7 @@ export async function acceptInviteAction(form: FormData): Promise<void> {
 }
 
 export async function changePasswordAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember();
+	const { actor, services } = await requireMemberForAction();
 	await attempt("/manage/account", () =>
 		services.members.changePassword(
 			actor,
@@ -120,7 +120,7 @@ export async function changePasswordAction(form: FormData): Promise<void> {
 // ---- incidents ------------------------------------------------------------------
 
 export async function createIncidentAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("editor");
+	const { actor, services } = await requireMemberForAction("editor");
 	const kind = (text(form, "kind") || "incident") as IncidentKind;
 	const incident = await attempt(`/manage/incidents/new?kind=${kind}`, () =>
 		services.incidents.create(actor, {
@@ -147,7 +147,7 @@ export async function createIncidentAction(form: FormData): Promise<void> {
 }
 
 export async function postIncidentUpdateAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("editor");
+	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
 	await attempt(`/manage/incidents/${id}`, () =>
 		services.incidents.postUpdate(actor, id, {
@@ -163,7 +163,7 @@ export async function postIncidentUpdateAction(form: FormData): Promise<void> {
 }
 
 export async function editIncidentAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("editor");
+	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
 	await attempt(`/manage/incidents/${id}`, () =>
 		services.incidents.edit(actor, id, {
@@ -178,7 +178,7 @@ export async function editIncidentAction(form: FormData): Promise<void> {
 }
 
 export async function deleteIncidentAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("editor");
+	const { actor, services } = await requireMemberForAction("editor");
 	await attempt("/manage/incidents", () =>
 		services.incidents.delete(actor, text(form, "id")),
 	);
@@ -202,7 +202,7 @@ function draftContent(form: FormData) {
 }
 
 export async function saveDraftAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("editor");
+	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
 	await attempt(draftPath(id), () =>
 		services.drafts.update(actor, id, draftContent(form)),
@@ -211,7 +211,7 @@ export async function saveDraftAction(form: FormData): Promise<void> {
 }
 
 export async function approveDraftAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("editor");
+	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
 	const { incident } = await attempt(draftPath(id), () =>
 		services.drafts.approve(actor, id, draftContent(form)),
@@ -220,7 +220,7 @@ export async function approveDraftAction(form: FormData): Promise<void> {
 }
 
 export async function discardDraftAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("editor");
+	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
 	await attempt(draftPath(id), () => services.drafts.discard(actor, id));
 	redirect(flash("/manage/drafts", "draft_discarded"));
@@ -229,7 +229,7 @@ export async function discardDraftAction(form: FormData): Promise<void> {
 // ---- services -------------------------------------------------------------------
 
 export async function createServiceAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("editor");
+	const { actor, services } = await requireMemberForAction("editor");
 	await attempt("/manage/services", () =>
 		services.catalog.create(actor, {
 			name: text(form, "name"),
@@ -242,7 +242,7 @@ export async function createServiceAction(form: FormData): Promise<void> {
 }
 
 export async function updateServiceAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("editor");
+	const { actor, services } = await requireMemberForAction("editor");
 	await attempt("/manage/services", () =>
 		services.catalog.update(actor, text(form, "id"), {
 			name: text(form, "name"),
@@ -256,7 +256,7 @@ export async function updateServiceAction(form: FormData): Promise<void> {
 }
 
 export async function setServiceStatusAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("editor");
+	const { actor, services } = await requireMemberForAction("editor");
 	await attempt("/manage/services", () =>
 		services.catalog.setStatus(
 			actor,
@@ -268,7 +268,7 @@ export async function setServiceStatusAction(form: FormData): Promise<void> {
 }
 
 export async function deleteServiceAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("editor");
+	const { actor, services } = await requireMemberForAction("editor");
 	await attempt("/manage/services", () =>
 		services.catalog.delete(actor, text(form, "id")),
 	);
@@ -288,7 +288,7 @@ export async function inviteMemberAction(
 	_previous: InviteMemberState,
 	form: FormData,
 ): Promise<InviteMemberState> {
-	const { actor, services, app } = await requireMember("admin");
+	const { actor, services, app } = await requireMemberForAction("admin");
 	return formState(async () => {
 		const { token, invite } = await services.members.invite(actor, {
 			email: text(form, "email"),
@@ -303,7 +303,7 @@ export async function inviteMemberAction(
 export async function renewInviteLinkAction(
 	id: string,
 ): Promise<{ url: string } | { error: string }> {
-	const { actor, services, app } = await requireMember("admin");
+	const { actor, services, app } = await requireMemberForAction("admin");
 	return formState(async () => {
 		const { token } = await services.members.renewInvite(actor, id);
 		return { url: await inviteUrl(app, token) };
@@ -317,7 +317,7 @@ async function inviteUrl(app: App, token: string): Promise<string> {
 }
 
 export async function revokeInviteAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt("/manage/members", () =>
 		services.members.revokeInvite(actor, text(form, "id")),
 	);
@@ -325,18 +325,20 @@ export async function revokeInviteAction(form: FormData): Promise<void> {
 }
 
 export async function updateMemberAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt("/manage/members", () =>
 		services.members.update(actor, text(form, "id"), {
 			role: nonEmpty(form, "role") as Role | undefined,
 			password: nonEmpty(form, "password"),
 		}),
 	);
+	// The portal layout shows the role of the member who is signed in.
+	revalidatePath("/manage", "layout");
 	redirect(flash("/manage/members", "member_updated"));
 }
 
 export async function deleteMemberAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt("/manage/members", () =>
 		services.members.delete(actor, text(form, "id")),
 	);
@@ -356,7 +358,7 @@ export async function createAgentAction(
 	_previous: CreateAgentState,
 	form: FormData,
 ): Promise<CreateAgentState> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	return formState(async () => {
 		const { token, agent } = await services.agents.create(actor, {
 			name: text(form, "name"),
@@ -370,7 +372,7 @@ export async function createAgentAction(
 }
 
 export async function revokeAgentAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt("/manage/agents", () =>
 		services.agents.revoke(actor, text(form, "id")),
 	);
@@ -378,7 +380,7 @@ export async function revokeAgentAction(form: FormData): Promise<void> {
 }
 
 export async function deleteAgentAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt("/manage/agents", () =>
 		services.agents.delete(actor, text(form, "id")),
 	);
@@ -388,7 +390,7 @@ export async function deleteAgentAction(form: FormData): Promise<void> {
 // ---- subscribers --------------------------------------------------------------------
 
 export async function addSubscriberAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	const target = text(form, "target");
 	await attempt("/manage/subscribers", () => {
 		switch (text(form, "type")) {
@@ -404,7 +406,7 @@ export async function addSubscriberAction(form: FormData): Promise<void> {
 }
 
 export async function deleteSubscriberAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt("/manage/subscribers", () =>
 		services.subscribers.remove(actor, text(form, "id")),
 	);
@@ -420,7 +422,7 @@ const NOTIFICATIONS_PATH = "/manage/settings/notifications";
 export async function updateGeneralSettingsAction(
 	form: FormData,
 ): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt(GENERAL_PATH, () =>
 		services.settings.update(actor, {
 			siteName: text(form, "siteName"),
@@ -431,11 +433,13 @@ export async function updateGeneralSettingsAction(
 			uptimeDays: integer(form, "uptimeDays"),
 		}),
 	);
+	// The root layout and the portal layout show the settings.
+	revalidatePath("/", "layout");
 	redirect(flash(GENERAL_PATH, "settings_saved"));
 }
 
 export async function updateBrandingAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt(BRANDING_PATH, () =>
 		services.settings.update(actor, {
 			theme: text(form, "theme"),
@@ -445,6 +449,8 @@ export async function updateBrandingAction(form: FormData): Promise<void> {
 			customCss: optionalText(form, "customCss"),
 		}),
 	);
+	// The root layout and the portal layout show the settings.
+	revalidatePath("/", "layout");
 	redirect(flash(BRANDING_PATH, "branding_saved"));
 }
 
@@ -458,7 +464,7 @@ function channelOf(form: FormData): NotificationChannel {
 export async function updateNotificationChannelAction(
 	form: FormData,
 ): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt(NOTIFICATIONS_PATH, () =>
 		services.notificationSettings.updateChannel(actor, channelOf(form), {
 			revision: integer(form, "revision"),
@@ -473,7 +479,7 @@ export async function updateNotificationChannelAction(
 export async function addNotificationProviderAction(
 	form: FormData,
 ): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt(NOTIFICATIONS_PATH, () =>
 		services.notificationSettings.addProvider(actor, channelOf(form), {
 			type: text(form, "type") as ProviderType,
@@ -488,7 +494,7 @@ export async function addNotificationProviderAction(
 export async function updateNotificationProviderAction(
 	form: FormData,
 ): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt(NOTIFICATIONS_PATH, () =>
 		services.notificationSettings.updateProvider(
 			actor,
@@ -509,7 +515,7 @@ export async function updateNotificationProviderAction(
 export async function moveNotificationProviderAction(
 	form: FormData,
 ): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt(NOTIFICATIONS_PATH, () =>
 		services.notificationSettings.moveProvider(
 			actor,
@@ -524,7 +530,7 @@ export async function moveNotificationProviderAction(
 export async function removeNotificationProviderAction(
 	form: FormData,
 ): Promise<void> {
-	const { actor, services } = await requireMember("admin");
+	const { actor, services } = await requireMemberForAction("admin");
 	await attempt(NOTIFICATIONS_PATH, () =>
 		services.notificationSettings.removeProvider(
 			actor,

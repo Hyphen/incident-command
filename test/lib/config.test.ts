@@ -15,7 +15,7 @@ describe("loadConfig", () => {
 				tablePrefix: "ic_",
 				pool: true,
 			},
-			cache: { ttl: 30_000, maxEntries: 5000 },
+			cache: { ttl: 30_000, maxEntries: 5000, sessionTtl: 30_000 },
 			siteUrl: undefined,
 			siteName: "Status",
 			sessionTtl: 7 * 86_400_000,
@@ -42,6 +42,7 @@ describe("loadConfig", () => {
 			DATABASE_TABLE_PREFIX: "sp_",
 			CACHE_TTL: "1m",
 			CACHE_MAX_ENTRIES: "100",
+			SESSION_CACHE_TTL: "0",
 			SITE_URL: "https://status.example.com/",
 			SITE_NAME: "Example",
 			SESSION_TTL: "12h",
@@ -62,7 +63,11 @@ describe("loadConfig", () => {
 			tablePrefix: "sp_",
 			pool: true,
 		});
-		expect(config.cache).toEqual({ ttl: 60_000, maxEntries: 100 });
+		expect(config.cache).toEqual({
+			ttl: 60_000,
+			maxEntries: 100,
+			sessionTtl: 0,
+		});
 		expect(config.siteUrl).toBe("https://status.example.com");
 		expect(config.sessionTtl).toBe(12 * 3_600_000);
 		expect(config.setupToken).toBe("setup");

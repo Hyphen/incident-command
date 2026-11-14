@@ -21,6 +21,11 @@ export interface Config {
 	cache: {
 		ttl: number;
 		maxEntries: number;
+		/**
+		 * How long an instance keeps a resolved portal session in memory
+		 * (`SESSION_CACHE_TTL`). `0` turns the session cache off.
+		 */
+		sessionTtl: number;
 	};
 	siteUrl?: string;
 	siteName: string;
@@ -101,6 +106,7 @@ const envSchema = z.object({
 	DATABASE_POOL: z.enum(["true", "false"]).optional(),
 	CACHE_TTL: duration("30s"),
 	CACHE_MAX_ENTRIES: z.coerce.number().int().positive().optional(),
+	SESSION_CACHE_TTL: duration("30s"),
 	SITE_URL: z.url().optional(),
 	SITE_NAME: optional,
 	SESSION_TTL: duration("7d"),
@@ -181,6 +187,7 @@ export function loadConfig(
 		cache: {
 			ttl: env.CACHE_TTL,
 			maxEntries: env.CACHE_MAX_ENTRIES ?? 5000,
+			sessionTtl: env.SESSION_CACHE_TTL,
 		},
 		siteUrl: env.SITE_URL?.replace(/\/+$/, ""),
 		siteName: env.SITE_NAME ?? "Status",

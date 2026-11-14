@@ -244,6 +244,9 @@ export class MemberService {
 		await this.ctx.store.update("members", next);
 		if (patch.password) {
 			await this.sessions.destroyForMember(id);
+		} else {
+			// The cached sessions hold the old name, email and role.
+			await this.sessions.invalidate();
 		}
 		return toPublicMember(next);
 	}

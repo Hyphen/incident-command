@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
+import {
+	createAgentAction,
+	deleteAgentAction,
+	revokeAgentAction,
+} from "@/app/manage/actions";
 import { ConfirmButton } from "@/components/manage/confirm-button";
 import { CreateAgentForm } from "@/components/manage/create-agent-form";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { buttonClass, Card, EmptyState } from "@/components/manage/ui";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/domain/status";
 import { publicOrigin } from "@/lib/manage/origin";
 import { isAgentActive } from "@/lib/services/agents";
-import {
-	createAgentAction,
-	deleteAgentAction,
-	revokeAgentAction,
-} from "../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Agents & MCP" };
@@ -23,7 +23,7 @@ export default async function AgentsPage({
 	searchParams: Promise<FlashParams>;
 }) {
 	const flash = await searchParams;
-	const { member, actor, services, app } = await requireMember("admin");
+	const { actor, services, app } = await requireMember("admin");
 	const [settings, agents] = await Promise.all([
 		services.settings.get(),
 		services.agents.list(actor),
@@ -45,14 +45,7 @@ export default async function AgentsPage({
 		2,
 	);
 	return (
-		<ManageShell
-			member={member}
-			siteName={settings.siteName}
-			active="agents"
-			title="Agents & MCP"
-			flash={flash}
-			health={app.store.health}
-		>
+		<ManagePage title="Agents & MCP" flash={flash} health={app.store.health}>
 			<Card
 				title="Connect an agent"
 				description="Agents use the MCP server to manage incidents, services and more."
@@ -148,6 +141,6 @@ export default async function AgentsPage({
 					</ul>
 				)}
 			</Card>
-		</ManageShell>
+		</ManagePage>
 	);
 }

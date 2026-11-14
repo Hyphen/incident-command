@@ -101,7 +101,7 @@ Ask your agent something like _"We're seeing API errors in us-east, declare a ma
 ```
 
 - **`src/lib/store`:** the `DocumentStore` interface (find/get/count/insert/update/delete with a small portable query language) and its adapters. A shared contract test suite (`test/store/contract.ts`) runs against every adapter, so a new adapter (SQLite, DynamoDB, Firestore, …) only has to pass it.
-- **`src/lib/store/cached.ts`:** wraps any adapter. Cached reads are fresh for `CACHE_TTL`; after that they are refreshed from the database, and if the database is unreachable the last known value is served instead of an error. Writes go straight to the database and mark cached reads stale without discarding them. Only public status data is cached; sessions, members and tokens always hit the database.
+- **`src/lib/store/cached.ts`:** wraps any adapter. Cached reads are fresh for `CACHE_TTL`; after that they are refreshed from the database, and if the database is unreachable the last known value is served instead of an error. Writes go straight to the database and mark cached reads stale without discarding them. Only public status data is cached here. The session service keeps a resolved portal session in memory for `SESSION_CACHE_TTL`; API tokens always hit the database.
 - **`src/lib/services`:** all business logic and authorization (`viewer` < `editor` < `admin`), shared by the portal, the MCP server and the public pages.
 - **`src/lib/notifications`:** one airhorn instance for each channel, with its providers and its send strategy (fail-over or round-robin): a signed webhook provider, SendGrid or SES (`@airhornjs/aws`) email, and Twilio (`@airhornjs/twilio`) or SNS (`@airhornjs/aws`) text messages.
 

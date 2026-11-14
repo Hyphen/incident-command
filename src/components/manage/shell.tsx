@@ -7,59 +7,19 @@ import type { PublicMember, Role } from "@/lib/domain/types";
 import { resolveFlash } from "@/lib/flash";
 import type { StoreHealth } from "@/lib/store/cached";
 import { SubmitButton } from "../submit-button";
+import { PortalNav } from "./portal-nav";
 import { Flash } from "./ui";
 
-export type NavKey =
-	| "dashboard"
-	| "incidents"
-	| "drafts"
-	| "services"
-	| "members"
-	| "agents"
-	| "subscribers"
-	| "settings"
-	| "account";
-
-export const NAV: { key: NavKey; label: string; href: string; role: Role }[] = [
-	{ key: "dashboard", label: "Overview", href: "/manage", role: "viewer" },
-	{
-		key: "incidents",
-		label: "Incidents",
-		href: "/manage/incidents",
-		role: "viewer",
-	},
-	{
-		key: "drafts",
-		label: "Drafts",
-		href: "/manage/drafts",
-		role: "viewer",
-	},
-	{
-		key: "services",
-		label: "Services",
-		href: "/manage/services",
-		role: "viewer",
-	},
-	{ key: "members", label: "Members", href: "/manage/members", role: "admin" },
-	{
-		key: "agents",
-		label: "Agents & MCP",
-		href: "/manage/agents",
-		role: "admin",
-	},
-	{
-		key: "subscribers",
-		label: "Subscribers",
-		href: "/manage/subscribers",
-		role: "admin",
-	},
-	{
-		key: "settings",
-		label: "Settings",
-		href: "/manage/settings",
-		role: "admin",
-	},
-	{ key: "account", label: "Account", href: "/manage/account", role: "viewer" },
+export const NAV: { label: string; href: string; role: Role }[] = [
+	{ label: "Overview", href: "/manage", role: "viewer" },
+	{ label: "Incidents", href: "/manage/incidents", role: "viewer" },
+	{ label: "Drafts", href: "/manage/drafts", role: "viewer" },
+	{ label: "Services", href: "/manage/services", role: "viewer" },
+	{ label: "Members", href: "/manage/members", role: "admin" },
+	{ label: "Agents & MCP", href: "/manage/agents", role: "admin" },
+	{ label: "Subscribers", href: "/manage/subscribers", role: "admin" },
+	{ label: "Settings", href: "/manage/settings", role: "admin" },
+	{ label: "Account", href: "/manage/account", role: "viewer" },
 ];
 
 export interface FlashParams {
@@ -67,23 +27,17 @@ export interface FlashParams {
 	error?: string;
 }
 
-export function ManageShell({
+/**
+ * The sidebar and the content area of the portal. The portal layout renders
+ * it one time, so it stays on the screen while a page loads.
+ */
+export function PortalFrame({
 	member,
 	siteName,
-	active,
-	title,
-	actions,
-	flash = {},
-	health,
 	children,
 }: {
 	member: PublicMember;
 	siteName: string;
-	active: NavKey;
-	title: string;
-	actions?: ReactNode;
-	flash?: FlashParams;
-	health?: StoreHealth;
 	children: ReactNode;
 }) {
 	return (
@@ -98,25 +52,11 @@ export function ManageShell({
 						<span className="min-w-0 break-words">{siteName}</span>
 					</Link>
 				</div>
-				<nav
-					className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:pb-0"
-					aria-label="Manage"
-				>
-					{NAV.filter((item) => hasRole(member.role, item.role)).map((item) => (
-						<Link
-							key={item.key}
-							href={item.href}
-							aria-current={item.key === active ? "page" : undefined}
-							className={`rounded-lg px-3 py-2 text-sm whitespace-nowrap ${
-								item.key === active
-									? "bg-surface-muted font-medium text-fg"
-									: "text-muted hover:bg-surface-muted hover:text-fg"
-							}`}
-						>
-							{item.label}
-						</Link>
-					))}
-				</nav>
+				<PortalNav
+					items={NAV.filter((item) => hasRole(member.role, item.role)).map(
+						({ label, href }) => ({ label, href }),
+					)}
+				/>
 				<div className="hidden border-t border-border px-5 py-4 text-sm lg:mt-6 lg:block">
 					<p className="truncate font-medium">{member.name}</p>
 					<p className="truncate text-xs text-muted">
@@ -135,22 +75,58 @@ export function ManageShell({
 				</div>
 			</aside>
 			<main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-8 lg:px-8">
-				<div className="flex flex-wrap items-center justify-between gap-3">
-					<h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-					{actions}
-				</div>
-				{health && !health.online && (
-					<p
-						role="alert"
-						className="rounded-lg border border-degraded/40 bg-degraded/10 px-4 py-3 text-sm"
-					>
-						The database is unreachable ({health.lastError}). The status page is
-						serving cached data and changes cannot be saved until it recovers.
-					</p>
-				)}
-				<Flash {...resolveFlash(flash)} />
 				{children}
 			</main>
+		</div>
+	);
+}
+
+/** The heading, the messages and the content of one portal page. */
+export function ManagePage({
+	title,
+	actions,
+	flash = {},
+	health,
+	children,
+}: {
+	title: string;
+	actions?: ReactNode;
+	flash?: FlashParams;
+	health?: StoreHealth;
+	children: ReactNode;
+}) {
+	return (
+		<>
+			<div className="flex flex-wrap items-center justify-between gap-3">
+				<h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+				{actions}
+			</div>
+			{health && !health.online && (
+				<p
+					role="alert"
+					className="rounded-lg border border-degraded/40 bg-degraded/10 px-4 py-3 text-sm"
+				>
+					The database is unreachable ({health.lastError}). The status page is
+					serving cached data and changes cannot be saved until it recovers.
+				</p>
+			)}
+			<Flash {...resolveFlash(flash)} />
+			{children}
+		</>
+	);
+}
+
+/**
+ * The placeholder that shows in the content area while a portal page loads.
+ * The browser gets it before the click, so a click shows it immediately.
+ */
+export function ManagePageSkeleton() {
+	return (
+		<div role="status" className="animate-pulse space-y-6">
+			<span className="sr-only">Loading…</span>
+			<div className="h-8 w-48 rounded-lg bg-surface-muted" />
+			<div className="h-28 rounded-card border border-border bg-surface" />
+			<div className="h-64 rounded-card border border-border bg-surface" />
 		</div>
 	);
 }

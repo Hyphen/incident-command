@@ -103,6 +103,6 @@ az containerapp logs show --name incident-command --resource-group $RG --follow
 ## Scaling
 
 - Container Apps scales to zero by default. `--min-replicas 1` avoids cold starts and keeps a warm in-process cache, which also keeps serving the last known data if the database goes offline.
-- Each replica has its own cache, so with several replicas public reads can be up to `CACHE_TTL` (default `30s`) stale. Sessions and API tokens are not cached.
+- Each replica has its own cache, so with several replicas public reads can be up to `CACHE_TTL` (default `30s`) stale. Each instance keeps a portal session in memory for `SESSION_CACHE_TTL` (default `30s`). API tokens are not cached.
 - Each replica keeps its own Postgres connection pool; size `--max-replicas` against the server's connection limit.
 - Default probes are TCP. An HTTP probe on `/healthz` is safe to add: it reports `degraded` with a 200 during a database outage, and 503 only when the app cannot start.

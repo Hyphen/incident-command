@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import {
 	acceptInviteAction,
 	addNotificationProviderAction,
@@ -681,12 +682,15 @@ describe("member actions", () => {
 			name: "Ed",
 			password: "password123",
 		});
+		vi.mocked(revalidatePath).mockClear();
 		expectSameFlash(
 			await redirectOf(
 				updateMemberAction(form({ id: ed.id, role: "viewer", password: "" })),
 			),
 			"/manage/members?notice=Member updated",
 		);
+		// The sidebar shows the role of the member who is signed in.
+		expect(revalidatePath).toHaveBeenCalledWith("/manage", "layout");
 		expect((await services.members.get(ed.id))?.role).toBe("viewer");
 		expectSameFlash(
 			await redirectOf(
@@ -814,6 +818,7 @@ describe("subscriber and settings actions", () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");
 		await services.settings.update(SYSTEM_ACTOR, { theme: "ocean" });
+		vi.mocked(revalidatePath).mockClear();
 		const url = await redirectOf(
 			updateGeneralSettingsAction(
 				form({
@@ -827,6 +832,8 @@ describe("subscriber and settings actions", () => {
 			),
 		);
 		expectSameFlash(url, "/manage/settings?notice=Settings saved");
+		// The sidebar and the page title show the new name without a reload.
+		expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
 		expect(await services.settings.get()).toMatchObject({
 			siteName: "Acme Status",
 			siteUrl: "https://status.acme.dev",
@@ -851,6 +858,7 @@ describe("subscriber and settings actions", () => {
 			allowSubscriptions: true,
 			uptimeDays: 30,
 		});
+		vi.mocked(revalidatePath).mockClear();
 		const url = await redirectOf(
 			updateBrandingAction(
 				form({
@@ -863,6 +871,8 @@ describe("subscriber and settings actions", () => {
 			),
 		);
 		expectSameFlash(url, "/manage/settings/branding?notice=Branding saved");
+		// The new theme applies without a reload.
+		expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
 		expect(await services.settings.get()).toMatchObject({
 			theme: "midnight",
 			brandColor: "#ff0066",

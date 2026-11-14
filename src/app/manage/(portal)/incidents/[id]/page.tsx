@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+	deleteIncidentAction,
+	editIncidentAction,
+	postIncidentUpdateAction,
+} from "@/app/manage/actions";
 import { ConfirmButton } from "@/components/manage/confirm-button";
 import {
 	ImpactSelect,
@@ -9,7 +14,7 @@ import {
 	StatusSelect,
 	WindowFields,
 } from "@/components/manage/incident-fields";
-import { type FlashParams, ManageShell } from "@/components/manage/shell";
+import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import {
 	buttonClass,
 	Card,
@@ -22,11 +27,6 @@ import { Timeline } from "@/components/status/timeline";
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
 import { hasRole } from "@/lib/domain/status";
-import {
-	deleteIncidentAction,
-	editIncidentAction,
-	postIncidentUpdateAction,
-} from "../../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Incident" };
@@ -46,17 +46,11 @@ export default async function ManageIncidentPage({
 	if (!incident) {
 		notFound();
 	}
-	const [settings, catalog] = await Promise.all([
-		services.settings.get(),
-		services.catalog.list(),
-	]);
+	const catalog = await services.catalog.list();
 	const canEdit = hasRole(member.role, "editor");
 	const isIncident = incident.kind === "incident";
 	return (
-		<ManageShell
-			member={member}
-			siteName={settings.siteName}
-			active="incidents"
+		<ManagePage
 			title={incident.title}
 			flash={flash}
 			health={app.store.health}
@@ -149,6 +143,6 @@ export default async function ManageIncidentPage({
 					</div>
 				)}
 			</div>
-		</ManageShell>
+		</ManagePage>
 	);
 }
