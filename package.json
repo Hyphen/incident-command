@@ -30,7 +30,6 @@
 	},
 	"dependencies": {
 		"@airhornjs/aws": "^7.2.0",
-		"@airhornjs/twilio": "^7.2.0",
 		"@modelcontextprotocol/sdk": "^1.32.2",
 		"airhorn": "^7.2.0",
 		"cacheable": "^2.5.0",

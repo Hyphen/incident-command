@@ -1,7 +1,7 @@
-import type {
-	AirhornProvider,
-	AirhornProviderMessage,
-	AirhornProviderSendResult,
+import {
+	type AirhornProvider,
+	type AirhornProviderMessage,
+	type AirhornProviderSendResult,
 	AirhornSendType,
 } from "airhorn";
 import { splitAddress } from "../domain/schemas";
@@ -25,7 +25,7 @@ function failure(error: Error, response: unknown): AirhornProviderSendResult {
  */
 export class SendGridProvider implements AirhornProvider {
 	readonly name = "sendgrid";
-	readonly capabilities = ["email" as AirhornSendType];
+	readonly capabilities = [AirhornSendType.Email];
 	private readonly options: SendGridProviderOptions;
 
 	constructor(options: SendGridProviderOptions) {

@@ -2,7 +2,6 @@ import type {
 	Airhorn,
 	AirhornProviderSendResult,
 	AirhornSendResult,
-	AirhornSendType,
 	AirhornTemplate,
 } from "airhorn";
 import type { Config } from "../config";
@@ -11,12 +10,12 @@ import type {
 	Settings,
 	Subscriber,
 } from "../domain/types";
+import { errorMessage } from "../errors";
 import {
 	canDeliver,
 	type DeliveryChannel,
 	type DeliveryChannels,
 } from "./delivery";
-import { createChannelAirhorn } from "./providers";
 import {
 	CONFIRM_TEMPLATE,
 	confirmUrl,
@@ -57,15 +56,14 @@ export interface AirhornNotifierOptions {
 	siteUrl?: string;
 	concurrency?: number;
 	onError?: (error: Error) => void;
-	/**
-	 * Creates the airhorn instance of a channel. The default loads airhorn and
-	 * the provider SDKs on first use, which keeps them out of startup.
-	 */
-	createAirhorn?: (
-		channel: DeliveryChannel,
-		onError: (error: Error) => void,
-	) => Promise<Airhorn>;
 }
+
+/**
+ * Loads airhorn, the provider SDKs and the providers on the first send. That
+ * load takes approximately 0.5 s and 70 MiB. The container starts again after
+ * each sleep, so a page request must not wait for it.
+ */
+const loadProviders = () => import("./providers");
 
 /**
  * Why a send failed. Fail-over lists an error for each provider. Round-robin
@@ -116,10 +114,9 @@ export class AirhornNotifier implements Notifier {
 	private readonly siteUrl?: string;
 	private readonly concurrency: number;
 	private readonly onError: (error: Error) => void;
-	private readonly create: NonNullable<AirhornNotifierOptions["createAirhorn"]>;
 	private readonly instances = new Map<
 		NotificationChannel,
-		{ version: string; airhorn: Promise<Airhorn> }
+		{ version: string; airhorn: Airhorn }
 	>();
 
 	constructor(options: AirhornNotifierOptions = {}) {
@@ -128,28 +125,18 @@ export class AirhornNotifier implements Notifier {
 		this.onError =
 			options.onError ??
 			((error) => console.error(`[notifications] ${error.message}`));
-		this.create = options.createAirhorn ?? createChannelAirhorn;
 	}
 
 	/** The airhorn instance of a channel. A new one replaces it when the settings change. */
-	airhorn(channel: DeliveryChannel): Promise<Airhorn> {
+	async airhorn(channel: DeliveryChannel): Promise<Airhorn> {
+		const { createChannelAirhorn } = await loadProviders();
 		const cached = this.instances.get(channel.channel);
 		if (cached?.version === channel.version) {
 			return cached.airhorn;
 		}
-		const entry = {
-			version: channel.version,
-			airhorn: this.create(channel, this.onError),
-		};
-		this.instances.set(channel.channel, entry);
-		// A failed load is not kept, so the next send tries again. A newer
-		// instance that replaced it meanwhile stays.
-		entry.airhorn.catch(() => {
-			if (this.instances.get(channel.channel) === entry) {
-				this.instances.delete(channel.channel);
-			}
-		});
-		return entry.airhorn;
+		const airhorn = createChannelAirhorn(channel, this.onError);
+		this.instances.set(channel.channel, { version: channel.version, airhorn });
+		return airhorn;
 	}
 
 	async notifyIncident(
@@ -211,6 +198,8 @@ export class AirhornNotifier implements Notifier {
 	/**
 	 * Sends one message. Extra `options` go to the provider; text messages
 	 * get none, because the SNS provider copies them into its request.
+	 * airhorn reports a failed send in its result. Only a failed load of the
+	 * providers throws, and it affects only this send.
 	 */
 	private async deliver(
 		channel: DeliveryChannel,
@@ -219,26 +208,32 @@ export class AirhornNotifier implements Notifier {
 		data: Record<string, unknown>,
 		options?: Record<string, unknown>,
 	): Promise<boolean> {
-		const type = channel.channel as AirhornSendType;
 		try {
+			const { SEND_TYPE } = await loadProviders();
 			const airhorn = await this.airhorn(channel);
-			const result = await airhorn.send(to, template, data, type, options);
+			const result = await airhorn.send(
+				to,
+				template,
+				data,
+				SEND_TYPE[channel.channel],
+				options,
+			);
 			if (!result.success) {
 				this.onError(
 					new Error(
-						`Failed to send ${type} to ${to}: ${failureReason(result)}`,
+						`Failed to send ${channel.channel} to ${to}: ${failureReason(result)}`,
 					),
 				);
 			}
 			return result.success;
 		} catch (error) {
-			this.onError(error instanceof Error ? error : new Error(String(error)));
+			this.onError(new Error(errorMessage(error), { cause: error }));
 			return false;
 		}
 	}
 }
 
-/** Creates the notifier. airhorn itself loads when the first notification is sent. */
+/** Creates the notifier. airhorn loads when the first notification is sent. */
 export function createNotifier(
 	config: Pick<Config, "siteUrl">,
 ): AirhornNotifier {

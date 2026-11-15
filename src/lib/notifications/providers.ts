@@ -1,15 +1,31 @@
-import type {
+import { AirhornAws } from "@airhornjs/aws";
+import {
 	Airhorn,
-	AirhornProvider,
-	AirhornProviderMessage,
-	AirhornProviderSendResult,
+	type AirhornProvider,
+	type AirhornProviderMessage,
+	type AirhornProviderSendResult,
+	AirhornSendStrategy,
 	AirhornSendType,
 } from "airhorn";
 import { isPhoneNumber } from "../domain/schemas";
+import type { DeliveryStrategy, NotificationChannel } from "../domain/types";
 import { errorMessage } from "../errors";
 import type { DeliveryChannel, ResolvedProvider } from "./delivery";
 import { SendGridProvider } from "./sendgrid";
+import { TwilioProvider } from "./twilio";
 import { WebhookProvider } from "./webhook";
+
+/** The airhorn send type of each channel. */
+export const SEND_TYPE: Record<NotificationChannel, AirhornSendType> = {
+	webhook: AirhornSendType.Webhook,
+	email: AirhornSendType.Email,
+	sms: AirhornSendType.SMS,
+};
+
+const STRATEGY: Record<DeliveryStrategy, AirhornSendStrategy> = {
+	active_passive: AirhornSendStrategy.FailOver,
+	load_balanced: AirhornSendStrategy.RoundRobin,
+};
 
 /**
  * Wraps a provider of a channel. The airhorn name becomes the name that the
@@ -91,10 +107,8 @@ function awsCredentials(provider: ResolvedProvider) {
 	};
 }
 
-/** Builds the airhorn provider for a provider config. SDKs load on first use. */
-export async function createProvider(
-	provider: ResolvedProvider,
-): Promise<AirhornProvider> {
+/** Builds the airhorn provider for a provider config. */
+export function createProvider(provider: ResolvedProvider): AirhornProvider {
 	switch (provider.type) {
 		case "webhook": {
 			const seconds = Number(provider.options.timeoutSeconds);
@@ -107,70 +121,60 @@ export async function createProvider(
 			return new SendGridProvider({
 				apiKey: provider.secrets.apiKey as string,
 			});
-		case "ses": {
-			const { AirhornAws } = await import("@airhornjs/aws");
+		case "ses":
 			return new AirhornAws({
 				...awsCredentials(provider),
-				capabilities: ["email" as AirhornSendType],
+				capabilities: [AirhornSendType.Email],
 			});
-		}
-		case "sns": {
-			const { AirhornAws } = await import("@airhornjs/aws");
+		case "sns":
 			return new SnsProvider(
 				new AirhornAws({
 					...awsCredentials(provider),
-					capabilities: ["sms" as AirhornSendType],
+					capabilities: [AirhornSendType.SMS],
 				}),
 			);
-		}
-		case "twilio": {
-			const { AirhornTwilio } = await import("@airhornjs/twilio");
-			return new AirhornTwilio({
+		case "twilio":
+			return new TwilioProvider({
 				accountSid: provider.options.accountSid as string,
 				authToken: provider.secrets.authToken as string,
 			});
-		}
 	}
 }
-
-const STRATEGY = {
-	active_passive: "FailOver",
-	load_balanced: "RoundRobin",
-} as const;
 
 /**
  * Creates the airhorn instance of a channel. Each channel has its own
  * instance, so each has its own send strategy and round-robin position. A
- * provider that cannot be built is left out and reported.
+ * provider that cannot be built is left out and reported. The render cache is
+ * off: it has no size limit, and each email is different for each subscriber.
  */
-export async function createChannelAirhorn(
+export function createChannelAirhorn(
 	channel: DeliveryChannel,
 	onError: (error: Error) => void,
-): Promise<Airhorn> {
-	const type = channel.channel as AirhornSendType;
-	const [{ Airhorn }, ...built] = await Promise.all([
-		import("airhorn"),
-		...channel.providers.map(async (provider) => {
-			try {
-				return new ChannelProvider(
+): Airhorn {
+	const type = SEND_TYPE[channel.channel];
+	const providers = channel.providers.flatMap((provider) => {
+		try {
+			return [
+				new ChannelProvider(
 					provider.name,
 					type,
-					await createProvider(provider),
+					createProvider(provider),
 					provider.from,
-				);
-			} catch (error) {
-				onError(
-					new Error(
-						`Cannot use provider "${provider.name}": ${errorMessage(error)}`,
-					),
-				);
-				return undefined;
-			}
-		}),
-	]);
+				),
+			];
+		} catch (error) {
+			onError(
+				new Error(
+					`Cannot use provider "${provider.name}": ${errorMessage(error)}`,
+				),
+			);
+			return [];
+		}
+	});
 	return new Airhorn({
-		providers: built.filter((provider) => provider !== undefined),
+		providers,
+		cache: false,
 		useWebhookProvider: false,
-		sendStrategy: STRATEGY[channel.strategy] as Airhorn["sendStrategy"],
+		sendStrategy: STRATEGY[channel.strategy],
 	});
 }
