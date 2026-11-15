@@ -37,6 +37,7 @@ import {
 	requireRole,
 	type ServiceContext,
 } from "./context";
+import type { OAuthService } from "./oauth";
 import type { SessionService } from "./sessions";
 
 /** The number of days that an invite link stays valid. */
@@ -70,10 +71,16 @@ export function memberActor(member: Member | PublicMember): Actor {
 export class MemberService {
 	private readonly ctx: ServiceContext;
 	private readonly sessions: SessionService;
+	private readonly oauth: OAuthService;
 
-	constructor(ctx: ServiceContext, sessions: SessionService) {
+	constructor(
+		ctx: ServiceContext,
+		sessions: SessionService,
+		oauth: OAuthService,
+	) {
 		this.ctx = ctx;
 		this.sessions = sessions;
+		this.oauth = oauth;
 	}
 
 	async count(): Promise<number> {
@@ -244,6 +251,7 @@ export class MemberService {
 		await this.ctx.store.update("members", next);
 		if (patch.password) {
 			await this.sessions.destroyForMember(id);
+			await this.oauth.disconnectMember(id);
 		} else {
 			// The cached sessions hold the old name, email and role.
 			await this.sessions.invalidate();
@@ -277,6 +285,7 @@ export class MemberService {
 		}
 		await this.ctx.store.delete("members", id);
 		await this.sessions.destroyForMember(id);
+		await this.oauth.disconnectMember(id);
 	}
 
 	/** Verifies credentials. Resolves `undefined` for unknown emails or bad passwords. */

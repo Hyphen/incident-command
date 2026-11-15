@@ -1,7 +1,8 @@
 import { type App, createApp, setApp } from "@/lib/app";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { loadConfig } from "@/lib/config";
-import type { Role } from "@/lib/domain/types";
+import { pkceChallenge } from "@/lib/crypto";
+import type { Actor, Role } from "@/lib/domain/types";
 import { type FlashKind, readFlash } from "@/lib/flash";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import { memberActor } from "@/lib/services/members";
@@ -32,6 +33,41 @@ export async function signIn(app: App, role: Role = "admin") {
 	const { token } = await app.services.sessions.create(member.id);
 	cookieJar.set(SESSION_COOKIE, token);
 	return { member, actor: memberActor(member) };
+}
+
+export const AGENT_REDIRECT = "http://localhost:4567/callback";
+const AGENT_VERIFIER = "v".repeat(43);
+
+/** The query of an authorization request that an agent sends to the consent page. */
+export function authorizationQuery(clientId: string) {
+	return {
+		response_type: "code",
+		client_id: clientId,
+		redirect_uri: AGENT_REDIRECT,
+		code_challenge: pkceChallenge(AGENT_VERIFIER),
+		code_challenge_method: "S256",
+		state: "state-1",
+	};
+}
+
+/** Registers an agent and connects it with OAuth as the member. */
+export async function connectAgent(app: App, actor: Actor, name: string) {
+	const { client_id } = await app.services.oauth.register({
+		client_name: name,
+		redirect_uris: [AGENT_REDIRECT],
+	});
+	const url = await app.services.oauth.approve(
+		actor,
+		authorizationQuery(client_id),
+		"http://localhost/api/mcp",
+	);
+	return app.services.oauth.token({
+		grant_type: "authorization_code",
+		client_id,
+		code: new URL(url).searchParams.get("code") ?? "",
+		redirect_uri: AGENT_REDIRECT,
+		code_verifier: AGENT_VERIFIER,
+	});
 }
 
 export function form(entries: Record<string, string | string[]>): FormData {

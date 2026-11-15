@@ -84,6 +84,11 @@
 		"kind": "notice",
 		"text": "Token deleted"
 	},
+	"agent_disconnected": {
+		"id": "fls_af959r6okt7jnukv",
+		"kind": "notice",
+		"text": "Agent disconnected"
+	},
 	"subscriber_added": {
 		"id": "fls_ozypch0gz4rij1o3",
 		"kind": "notice",

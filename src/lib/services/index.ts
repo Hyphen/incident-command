@@ -6,6 +6,7 @@ import { DraftService } from "./drafts";
 import { IncidentService } from "./incidents";
 import { MemberService } from "./members";
 import { NotificationSettingsService } from "./notification-settings";
+import { OAuthService } from "./oauth";
 import { SessionService } from "./sessions";
 import { SettingsService } from "./settings";
 import { StatusService } from "./status";
@@ -21,6 +22,7 @@ export interface Services {
 	members: MemberService;
 	sessions: SessionService;
 	agents: AgentService;
+	oauth: OAuthService;
 	subscribers: SubscriberService;
 	/** Idempotent first-boot tasks, such as seeding demo data. */
 	bootstrap(): Promise<void>;
@@ -45,7 +47,8 @@ export function createServices(ctx: ServiceContext): Services {
 	const drafts = new DraftService(ctx, incidents);
 	const status = new StatusService(ctx, settings, catalog, incidents);
 	const sessions = new SessionService(ctx);
-	const members = new MemberService(ctx, sessions);
+	const oauth = new OAuthService(ctx);
+	const members = new MemberService(ctx, sessions, oauth);
 	const agents = new AgentService(ctx);
 
 	return {
@@ -58,6 +61,7 @@ export function createServices(ctx: ServiceContext): Services {
 		members,
 		sessions,
 		agents,
+		oauth,
 		subscribers,
 		async bootstrap() {
 			if (ctx.config.seedDemo && (await ctx.store.count("services")) === 0) {

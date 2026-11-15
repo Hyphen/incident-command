@@ -4,9 +4,56 @@ Incident Command ships a [Model Context Protocol](https://modelcontextprotocol.i
 
 - **Endpoint:** `POST https://<your-host>/api/mcp`
 - **Transport:** Streamable HTTP, stateless (every request is independent, so it scales horizontally and runs on serverless hosts). `GET`/`DELETE` return `405`.
-- **Auth:** `Authorization: Bearer icmd_...`. Create tokens in the portal under **Agents & MCP**. The plaintext token is shown once; only a SHA-256 hash is stored.
+- **Auth:** OAuth 2.1 (recommended) or an API token. See [Connect](#connect).
 
 ## Connect
+
+Add the endpoint to your agent. The **Agents** page in the portal shows the endpoint.
+
+Claude Code:
+
+```bash
+claude mcp add --transport http incident-command https://status.example.com/api/mcp
+```
+
+Any client that supports remote MCP servers:
+
+```json
+{
+	"mcpServers": {
+		"incident-command": {
+			"type": "http",
+			"url": "https://status.example.com/api/mcp"
+		}
+	}
+}
+```
+
+At the first connection, the agent opens the portal in your browser. Sign in and select **Allow**. The agent then acts as you, with your role. In Claude Code, run `/mcp` and select the server to start the sign-in again.
+
+### OAuth
+
+The server is an OAuth 2.1 authorization server for its MCP endpoint, as the MCP authorization specification describes.
+
+| Endpoint                                 | Path                                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Protected resource metadata (RFC 9728)   | `/.well-known/oauth-protected-resource/api/mcp` and `/.well-known/oauth-protected-resource` |
+| Authorization server metadata (RFC 8414) | `/.well-known/oauth-authorization-server`                                                   |
+| Dynamic client registration (RFC 7591)   | `POST /oauth/register`                                                                      |
+| Authorization (the consent page)         | `GET /manage/authorize`                                                                     |
+| Token                                    | `POST /oauth/token`                                                                         |
+- A request without a valid token gets `401` and `WWW-Authenticate: Bearer resource_metadata="…"`. The agent uses this address to find the other endpoints.
+- Each client is a public client without a secret. PKCE with `S256` is necessary.
+- A redirect URI uses `https`, `http` on `localhost`, `127.0.0.1` or `[::1]` (any port), or a private-use scheme such as `cursor://`.
+- An access token is valid for 1 hour. Each refresh replaces the access token and the refresh token. If the agent does not refresh in 30 days, the connection stops.
+- A connected agent has the current role of its member. The portal timeline shows its updates as `<member> via <agent>`.
+- Each member sees their connected agents on the **Agents** page and can disconnect them. An admin sees all connected agents and can disconnect each of them.
+- When an admin removes a member or resets the password of a member, the agents of that member stop.
+- The store keeps only SHA-256 hashes of codes and tokens.
+
+### API tokens
+
+Use an API token for a script or an agent that cannot sign in. An admin creates the token on the **Agents** page. The page shows the plaintext token one time. The store keeps only a SHA-256 hash. The agent sends the token in the `Authorization` header.
 
 Claude Code:
 
@@ -40,7 +87,7 @@ curl -s https://status.example.com/api/mcp \
 
 ## Roles
 
-Each token has a role. Tools the role cannot use are not listed, so agents never see tools they cannot call.
+A connected agent has the role of its member. An API token has its own role. Tools the role cannot use are not listed, so agents never see tools they cannot call.
 
 | Role     | Can                                                                                                |
 | -------- | -------------------------------------------------------------------------------------------------- |
@@ -52,7 +99,7 @@ Each token has a role. Tools the role cannot use are not listed, so agents never
 
 | Tool                          | Role   | What it does                                                                        |
 | ----------------------------- | ------ | ----------------------------------------------------------------------------------- |
-| `whoami`                      | viewer | The token's identity and role.                                                      |
+| `whoami`                      | viewer | The identity and role of the agent.                                                 |
 | `get_status`                  | viewer | Overall status, services with status and uptime, open incidents and maintenance.    |
 | `list_services`               | viewer | All services (including hidden) in display order.                                   |
 | `list_incidents`              | viewer | Incidents and maintenance, newest first. Filter by `kind` and `open`.               |

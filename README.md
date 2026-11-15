@@ -12,7 +12,7 @@
 - **Status page:** overall status banner, active incidents, upcoming maintenance, grouped services with 90-day uptime bars, incident history, RSS feed and a public JSON API. Light and dark mode, mobile friendly.
 - **MCP server:** a Streamable HTTP endpoint at `/api/mcp` with 33 role-scoped tools, so agents can declare and update incidents, change service status, schedule maintenance and (with an admin token) manage members, tokens, subscribers and settings. See [docs/mcp.md](docs/mcp.md).
 - **Human review of notifications:** an agent can save a notification as a draft. The MCP server returns a review link. A person opens the link, changes the draft if necessary, and approves it. Nothing is published or sent before approval. See [docs/mcp.md](docs/mcp.md#notification-drafts).
-- **Manage portal** at `/manage`: declare incidents, post updates, review notification drafts, manage services, members (viewer/editor/admin, added with one-time invite links), agent tokens, subscribers, and settings in three sections: General, Branding and Notifications.
+- **Manage portal** at `/manage`: declare incidents, post updates, review notification drafts, manage services, members (viewer/editor/admin, added with one-time invite links), connected agents and API tokens, subscribers, and settings in three sections: General, Branding and Notifications.
 - **Skinnable:** Tailwind CSS v4 on top of CSS design tokens. Pick a theme preset, set a brand color, logo and custom CSS from the portal, or add your own preset. See [docs/theming.md](docs/theming.md).
 - **Runs anywhere:** Docker image for any container host, plus guides for Cloudflare, DigitalOcean, Google Cloud, AWS and Azure. See [docs/deployment.md](docs/deployment.md).
 - **Pluggable storage:** PostgreSQL, MongoDB or in-memory, chosen from `DATABASE_URI`. Adding an adapter means implementing one small interface.
@@ -72,13 +72,15 @@ Health check: `GET /healthz` returns `ok`, `degraded` (database offline, cached 
 
 ## Connect an agent
 
-Create a token in **Manage → Agents & MCP**, then:
+Add the MCP endpoint to your agent. **Manage → Agents** shows the endpoint:
 
 ```bash
-claude mcp add --transport http incident-command https://status.example.com/api/mcp --header "Authorization: Bearer icmd_..."
+claude mcp add --transport http incident-command https://status.example.com/api/mcp
 ```
 
-Ask your agent something like _"We're seeing API errors in us-east, declare a major incident on the REST API and keep the status page updated"_. Tokens carry a role (viewer, editor or admin) and only see the tools that role allows. Details in [docs/mcp.md](docs/mcp.md).
+The agent opens the portal in your browser. Sign in and select **Allow**. The agent then acts as you, with your role. For a script that cannot sign in, an admin can create an API token on the same page.
+
+Ask your agent something like _"We're seeing API errors in us-east, declare a major incident on the REST API and keep the status page updated"_. An agent only sees the tools that its role (viewer, editor or admin) allows. Details in [docs/mcp.md](docs/mcp.md).
 
 ## Architecture
 
@@ -90,7 +92,7 @@ Ask your agent something like _"We're seeing API errors in us-east, declare a ma
                                     ▼
                       services (src/lib/services)
         incidents · drafts · services · uptime · members
-          sessions · agents · subscribers · settings · status
+     sessions · oauth · agents · subscribers · settings · status
                      │                         │
                      ▼                         ▼
           CachedStore (cacheable)        Notifier (airhorn)

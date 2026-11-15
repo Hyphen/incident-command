@@ -250,6 +250,65 @@ export interface AgentToken {
 /** An agent token without secrets, safe to return from APIs and render. */
 export type PublicAgentToken = Omit<AgentToken, "tokenHash">;
 
+/**
+ * An OAuth client that an agent registered with dynamic client registration
+ * (RFC 7591). All clients are public clients: they have no secret and they
+ * must use PKCE. The id is the `client_id`.
+ */
+export interface OAuthClient {
+	id: string;
+	/** The name that the agent reported. Nobody verified it. */
+	name: string;
+	redirectUris: string[];
+	createdAt: string;
+	/** The first time that a member approved the client. */
+	authorizedAt?: string;
+}
+
+/** A one-time authorization code. The id is the SHA-256 hash of the code. */
+export interface OAuthCode {
+	id: string;
+	clientId: string;
+	memberId: string;
+	redirectUri: string;
+	/** The PKCE `S256` code challenge. */
+	codeChallenge: string;
+	/** The RFC 8707 resource indicator of the authorization request. */
+	resource?: string;
+	expiresAt: string;
+	createdAt: string;
+}
+
+/**
+ * An agent that a member connected with OAuth. The agent acts as the member,
+ * with the current role of the member. Only hashes of the tokens are stored.
+ */
+export interface OAuthGrant {
+	id: string;
+	clientId: string;
+	clientName: string;
+	memberId: string;
+	resource?: string;
+	accessTokenHash: string;
+	accessTokenExpiresAt: string;
+	refreshTokenHash: string;
+	refreshTokenExpiresAt: string;
+	lastUsedAt?: string;
+	createdAt: string;
+}
+
+/** A connected agent, safe to return from APIs and render. */
+export interface AgentConnection {
+	id: string;
+	clientName: string;
+	memberId: string;
+	memberName: string;
+	lastUsedAt?: string;
+	/** The connection stops when the agent does not refresh its token before this time. */
+	expiresAt: string;
+	createdAt: string;
+}
+
 export interface Subscriber {
 	id: string;
 	type: SubscriberType;

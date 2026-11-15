@@ -1,7 +1,4 @@
-"use client";
-
-import { useState } from "react";
-import { buttonClass } from "./ui";
+import { CopyButton } from "./copy-button";
 
 /** Shows a value that the server returns only once, with a copy button. */
 export function OneTimeSecret({
@@ -11,11 +8,6 @@ export function OneTimeSecret({
 	label: string;
 	value: string;
 }) {
-	const [copied, setCopied] = useState(false);
-	const copy = async () => {
-		await navigator.clipboard.writeText(value);
-		setCopied(true);
-	};
 	return (
 		<div
 			role="status"
@@ -26,9 +18,7 @@ export function OneTimeSecret({
 				<code className="min-w-0 flex-1 overflow-x-auto rounded-md bg-surface px-3 py-2 font-mono text-xs">
 					{value}
 				</code>
-				<button type="button" onClick={copy} className={buttonClass.secondary}>
-					{copied ? "Copied" : "Copy"}
-				</button>
+				<CopyButton value={value} />
 			</div>
 		</div>
 	);

@@ -5,6 +5,9 @@ import type {
 	Member,
 	NotificationChannelSettings,
 	NotificationDraft,
+	OAuthClient,
+	OAuthCode,
+	OAuthGrant,
 	Service,
 	ServiceStatusChange,
 	Session,
@@ -22,6 +25,9 @@ export interface CollectionMap {
 	invites: Invite;
 	sessions: Session;
 	agent_tokens: AgentToken;
+	oauth_clients: OAuthClient;
+	oauth_codes: OAuthCode;
+	oauth_grants: OAuthGrant;
 	subscribers: Subscriber;
 	notification_drafts: NotificationDraft;
 	notification_channels: NotificationChannelSettings;
@@ -39,6 +45,9 @@ export const COLLECTIONS: readonly CollectionName[] = [
 	"invites",
 	"sessions",
 	"agent_tokens",
+	"oauth_clients",
+	"oauth_codes",
+	"oauth_grants",
 	"subscribers",
 	"notification_drafts",
 	"notification_channels",
@@ -65,6 +74,14 @@ export const INDEXES: Record<CollectionName, readonly IndexDefinition[]> = {
 	],
 	sessions: [{ field: "memberId" }, { field: "expiresAt" }],
 	agent_tokens: [{ field: "tokenHash", unique: true }],
+	oauth_clients: [{ field: "createdAt" }],
+	oauth_codes: [{ field: "memberId" }, { field: "expiresAt" }],
+	oauth_grants: [
+		{ field: "accessTokenHash", unique: true },
+		{ field: "refreshTokenHash", unique: true },
+		{ field: "memberId" },
+		{ field: "refreshTokenExpiresAt" },
+	],
 	subscribers: [
 		{ field: "token", unique: true },
 		{ field: "target", unique: true },

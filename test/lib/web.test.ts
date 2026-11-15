@@ -1,7 +1,12 @@
+import { GET as serverMetadata } from "@/app/.well-known/oauth-authorization-server/route";
+import { GET as resourceMetadataForPath } from "@/app/.well-known/oauth-protected-resource/api/mcp/route";
+import { GET as resourceMetadata } from "@/app/.well-known/oauth-protected-resource/route";
 import { POST as mcp } from "@/app/api/mcp/route";
 import { GET as status } from "@/app/api/v1/status/route";
 import { GET as feed } from "@/app/feed.xml/route";
 import { GET as health } from "@/app/healthz/route";
+import { POST as register } from "@/app/oauth/register/route";
+import { POST as token } from "@/app/oauth/token/route";
 import { createApp, setApp } from "@/lib/app";
 import { loadConfig } from "@/lib/config";
 import { buildRssFeed, escapeXml } from "@/lib/feed";
@@ -171,6 +176,35 @@ describe("API routes", () => {
 			new Request("http://localhost/api/mcp", { method: "POST", body: "{}" }),
 		);
 		expect(response.status).toBe(401);
+	});
+
+	it("routes the OAuth endpoints through the app", async () => {
+		await setup({ SITE_URL: "https://status.acme.dev" });
+		const get = new Request("http://internal/.well-known/x");
+		for (const route of [resourceMetadata, resourceMetadataForPath]) {
+			expect(await (await route(get)).json()).toMatchObject({
+				resource: "https://status.acme.dev/api/mcp",
+			});
+		}
+		expect(await (await serverMetadata(get)).json()).toMatchObject({
+			issuer: "https://status.acme.dev",
+		});
+		const registered = await register(
+			new Request("http://internal/oauth/register", {
+				method: "POST",
+				body: JSON.stringify({ redirect_uris: ["http://localhost:1/cb"] }),
+			}),
+		);
+		expect(registered.status).toBe(201);
+		const tokens = await token(
+			new Request("http://internal/oauth/token", {
+				method: "POST",
+				body: "grant_type=client_credentials",
+			}),
+		);
+		expect(await tokens.json()).toMatchObject({
+			error: "unsupported_grant_type",
+		});
 	});
 });
 
