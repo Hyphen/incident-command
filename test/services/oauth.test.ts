@@ -1,6 +1,11 @@
 import { pkceChallenge } from "@/lib/crypto";
 import type { Actor, Role } from "@/lib/domain/types";
-import { ForbiddenError, NotFoundError, OAuthError } from "@/lib/errors";
+import {
+	ForbiddenError,
+	NotFoundError,
+	OAuthError,
+	ValidationError,
+} from "@/lib/errors";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import { memberActor } from "@/lib/services/members";
 import {
@@ -306,6 +311,62 @@ describe("OAuthService", () => {
 			),
 		).rejects.toBeInstanceOf(ForbiddenError);
 	});
+
+	it("keeps the chosen name for each connection after a token refresh", async () => {
+		const { actor } = await addMember(t, "editor", "Ed Editor");
+		const { client_id } = await register(t);
+		for (const name of ["Primary agent", "Backup agent"]) {
+			const url = await t.services.oauth.approve(
+				actor,
+				authorization(client_id),
+				RESOURCE,
+				`  ${name}  `,
+			);
+			const code = new URL(url).searchParams.get("code") ?? "";
+			const tokens = await exchange(t, client_id, code);
+			const refreshed = await token(t, {
+				grant_type: "refresh_token",
+				client_id,
+				refresh_token: tokens.refresh_token,
+				resource: RESOURCE,
+			});
+			await expect(
+				t.services.oauth.authenticate(refreshed.access_token),
+			).resolves.toMatchObject({
+				name: `Ed Editor via ${name}`,
+			});
+		}
+		expect(
+			(await t.services.oauth.list(actor))
+				.map((grant) => grant.clientName)
+				.sort(),
+		).toEqual(["Backup agent", "Primary agent"]);
+		const check = await t.services.oauth.check(
+			authorization(client_id),
+			RESOURCE,
+		);
+		expect(check).toMatchObject({
+			kind: "consent",
+			client: { name: "Claude Code" },
+		});
+	});
+
+	it.each(["", "   ", "x".repeat(121)])(
+		"rejects the agent name %j before it issues a code",
+		async (name) => {
+			const { actor } = await addMember(t, "viewer", "Vi Viewer");
+			const { client_id } = await register(t);
+			await expect(
+				t.services.oauth.approve(
+					actor,
+					authorization(client_id),
+					RESOURCE,
+					name,
+				),
+			).rejects.toBeInstanceOf(ValidationError);
+			expect(await t.store.find("oauth_codes")).toEqual([]);
+		},
+	);
 
 	it("connects an agent that sends no resource indicator or state", async () => {
 		const { actor } = await addMember(t, "viewer", "Vi Viewer");

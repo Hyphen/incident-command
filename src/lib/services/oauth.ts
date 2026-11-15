@@ -5,7 +5,7 @@ import {
 	safeEqual,
 	sha256,
 } from "../crypto";
-import { registerClientSchema } from "../domain/schemas";
+import { createAgentSchema, registerClientSchema } from "../domain/schemas";
 import { hasRole } from "../domain/status";
 import type {
 	Actor,
@@ -349,6 +349,7 @@ export class OAuthService {
 		actor: Actor,
 		params: AuthorizationParams,
 		resource: string,
+		name?: string,
 	): Promise<string> {
 		if (actor.type !== "member") {
 			throw new ForbiddenError("Only a member can connect an agent");
@@ -372,6 +373,9 @@ export class OAuthService {
 			expiresAt: iso(new Date(now.getTime() + CODE_TTL_MS)),
 			createdAt: iso(now),
 		};
+		if (name !== undefined) {
+			record.clientName = parse(createAgentSchema.shape.name, name);
+		}
 		if (request.resource) {
 			record.resource = request.resource;
 		}
@@ -560,7 +564,7 @@ export class OAuthService {
 		const grant: OAuthGrant = {
 			id: createId("ogr"),
 			clientId: client.id,
-			clientName: client.name,
+			clientName: code.clientName ?? client.name,
 			memberId: code.memberId,
 			...tokens.fields,
 			createdAt: iso(now),

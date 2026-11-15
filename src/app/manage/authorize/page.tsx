@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { AuthLayout } from "@/components/manage/shell";
-import { buttonClass, Flash } from "@/components/manage/ui";
+import { buttonClass, Field, Flash, inputClass } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { getApp } from "@/lib/app";
 import { requireMember } from "@/lib/auth";
@@ -61,14 +61,28 @@ export default async function AuthorizePage({
 					</strong>{" "}
 					wants to connect to {settings.siteName} as you.
 				</p>
+				<Field
+					label="Agent name"
+					htmlFor="agent-name"
+					hint="Choose a name for this connection."
+				>
+					<input
+						id="agent-name"
+						name="name"
+						defaultValue={check.client.name}
+						required
+						maxLength={120}
+						className={inputClass}
+					/>
+				</Field>
 				<p className="text-muted">
 					The agent can do everything that you can do with the MCP tools. You
 					are signed in as {member.email} ({ROLE_LABELS[member.role]}). The
 					agent stays connected until you disconnect it on the Agents page.
 				</p>
 				<p className="text-muted">
-					The agent supplied its name. Allow it only if you started this
-					connection. Next, you go to{" "}
+					The agent supplied the client name above. Allow it only if you started
+					this connection. Next, you go to{" "}
 					<code className="font-mono text-xs break-words text-fg">
 						{destination(check.request.redirectUri)}
 					</code>
@@ -83,6 +97,7 @@ export default async function AuthorizePage({
 					</SubmitButton>
 					<SubmitButton
 						formAction={denyAgentAction}
+						formNoValidate
 						className={`${buttonClass.secondary} flex-1`}
 					>
 						Cancel

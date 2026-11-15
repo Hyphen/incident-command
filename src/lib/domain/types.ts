@@ -268,6 +268,8 @@ export interface OAuthClient {
 /** A one-time authorization code. The id is the SHA-256 hash of the code. */
 export interface OAuthCode {
 	id: string;
+	/** The name that the member chose for this connection. */
+	clientName?: string;
 	clientId: string;
 	memberId: string;
 	redirectUri: string;

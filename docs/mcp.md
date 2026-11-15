@@ -29,7 +29,7 @@ Any client that supports remote MCP servers:
 }
 ```
 
-At the first connection, the agent opens the portal in your browser. Sign in and select **Allow**. The agent then acts as you, with your role. In Claude Code, run `/mcp` and select the server to start the sign-in again.
+At the first connection, the agent opens the portal in your browser. Sign in. Set the **Agent name** for this connection. Select **Allow**. The agent then acts as you, with your role. In Claude Code, run `/mcp` and select the server to start the sign-in again.
 
 ### OAuth
 
