@@ -462,6 +462,34 @@ describe("OAuthService", () => {
 		]);
 	});
 
+	it("keeps a refresh that occurs while a request authenticates", async () => {
+		const { actor } = await addMember(t, "editor", "Ed Editor");
+		const { client, tokens } = await connect(t, actor);
+		const refresh = (refreshToken: string) =>
+			token(t, {
+				grant_type: "refresh_token",
+				client_id: client.client_id,
+				refresh_token: refreshToken,
+			});
+		// The refresh completes after authenticate() reads the grant and
+		// before it records the use of the grant.
+		let refreshed: Awaited<ReturnType<typeof refresh>> | undefined;
+		const get = t.store.get.bind(t.store);
+		vi.spyOn(t.store, "get").mockImplementationOnce((async (
+			...args: Parameters<typeof get>
+		) => {
+			refreshed = await refresh(tokens.refresh_token);
+			return get(...args);
+		}) as typeof get);
+		await expect(
+			t.services.oauth.authenticate(tokens.access_token),
+		).resolves.toMatchObject({ role: "editor" });
+		await expect(
+			t.services.oauth.authenticate(refreshed?.access_token),
+		).resolves.toMatchObject({ role: "editor" });
+		await expectOAuthError(refresh(tokens.refresh_token), "invalid_grant");
+	});
+
 	it("ends a connection that the agent does not refresh in 30 days", async () => {
 		const { actor } = await addMember(t, "editor", "Ed Editor");
 		const { client, tokens } = await connect(t, actor);

@@ -249,6 +249,16 @@ describe("MCP OAuth", () => {
 			error_description: "The client is not registered",
 		});
 
+		// Next.js can load a different copy of the errors module for the app.
+		vi.resetModules();
+		const copy = await import("@/lib/errors");
+		vi.spyOn(t.services.oauth, "token").mockRejectedValueOnce(
+			new copy.OAuthError("invalid_grant", "The refresh token is not valid"),
+		);
+		const fromCopy = await tokenRequest("grant_type=refresh_token");
+		expect(fromCopy.status).toBe(400);
+		expect(await fromCopy.json()).toMatchObject({ error: "invalid_grant" });
+
 		vi.spyOn(t.services.oauth, "token").mockRejectedValueOnce(
 			new Error("database offline"),
 		);
