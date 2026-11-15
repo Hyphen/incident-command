@@ -34,13 +34,22 @@ export const UNUSED_CLIENT_TTL_MS = 30 * 86_400_000;
 const LAST_USED_RESOLUTION_MS = 60_000;
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-const BLOCKED_SCHEMES = new Set([
+/** Schemes that a browser handles itself. A private-use scheme is any other scheme. */
+const BROWSER_SCHEMES = new Set([
+	"http:",
+	"https:",
+	"ftp:",
+	"file:",
+	"ws:",
+	"wss:",
 	"javascript:",
 	"data:",
-	"file:",
-	"vbscript:",
 	"blob:",
 	"about:",
+	"vbscript:",
+	"mailto:",
+	"tel:",
+	"sms:",
 ]);
 /** A base64url SHA-256 digest (RFC 7636 section 4.2). */
 const CODE_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
@@ -108,15 +117,18 @@ export interface ClientRegistration {
  * http on a loopback host (RFC 8252 section 7.3) and private-use schemes
  * (RFC 8252 section 7.1). A redirect URI cannot have a fragment.
  */
-export function isValidRedirectUri(value: string): boolean {
+function isValidRedirectUri(value: string): boolean {
 	const url = URL.parse(value);
 	if (!url || value.includes("#")) {
 		return false;
 	}
+	if (url.protocol === "https:") {
+		return true;
+	}
 	if (url.protocol === "http:") {
 		return LOOPBACK_HOSTS.has(url.hostname);
 	}
-	return !BLOCKED_SCHEMES.has(url.protocol);
+	return !BROWSER_SCHEMES.has(url.protocol);
 }
 
 /** A loopback redirect URI without its port, else `undefined`. */

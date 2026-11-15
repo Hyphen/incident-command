@@ -155,6 +155,9 @@ describe("OAuthService", () => {
 		["javascript:alert(1)", false],
 		["data:text/html,hello", false],
 		["file:///etc/passwd", false],
+		["ftp://files.example.com/callback", false],
+		["wss://app.example.com/callback", false],
+		["mailto:agent@example.com", false],
 		["not a url", false],
 	])("accepts the redirect URI %s: %s", async (uri, allowed) => {
 		const result = register(t, { redirect_uris: [uri] });
