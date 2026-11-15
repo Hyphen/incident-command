@@ -1123,6 +1123,13 @@ describe("public subscribe actions", () => {
 		const emptyEmail = await redirectOf(subscribeAction(new FormData()));
 		expect(new URL(emptyEmail, "http://localhost").pathname).toBe("/subscribe");
 		expect(flashMessage(emptyEmail, "error")).toBeTruthy();
+		notifier.confirmationResult = false;
+		const notSent = await redirectOf(
+			subscribeAction(form({ email: "sam@example.com" })),
+		);
+		expect(flashMessage(notSent, "error")).toBe(
+			"We couldn't send the confirmation email. Please try again later.",
+		);
 		const token = notifier.confirmations[0]?.subscriber.token ?? "";
 		expect(await redirectOf(unsubscribeAction(form({ token })))).toBe(
 			"/subscribe/unsubscribe?done=1",
