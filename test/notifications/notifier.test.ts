@@ -22,7 +22,6 @@ import {
 	unsubscribeUrl,
 	webhookPayload,
 } from "@/lib/notifications/templates";
-import { TWILIO_API } from "@/lib/notifications/twilio";
 import { SIGNATURE_HEADER } from "@/lib/notifications/webhook";
 
 type SdkResult = { success: boolean; response: unknown; errors: Error[] };
@@ -49,7 +48,7 @@ vi.mock("@airhornjs/aws", async (importOriginal) => {
 });
 
 const TWILIO_ACCOUNT = `AC${"0".repeat(32)}`;
-const TWILIO_URL = `${TWILIO_API}/Accounts/${TWILIO_ACCOUNT}/Messages.json`;
+const TWILIO_URL = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT}/Messages.json`;
 
 const requests: { url: string; init: RequestInit }[] = [];
 let respond: (url: string) => Response = () =>

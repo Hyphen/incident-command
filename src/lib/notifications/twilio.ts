@@ -6,7 +6,7 @@ import {
 } from "airhorn";
 import { errorMessage } from "../errors";
 
-export const TWILIO_API = "https://api.twilio.com/2010-04-01";
+const TWILIO_API = "https://api.twilio.com/2010-04-01";
 
 export interface TwilioProviderOptions {
 	accountSid: string;
@@ -18,9 +18,9 @@ function failure(error: Error, response: unknown): AirhornProviderSendResult {
 }
 
 /**
- * Airhorn text message provider for the Twilio Messages API. The
- * `@airhornjs/twilio` package cannot load in Node, because it imports a named
- * export that the CommonJS `twilio` package does not declare.
+ * Airhorn provider that sends text messages through the Twilio Messages API.
+ * The `@airhornjs/twilio` package cannot load in Node, because it imports a
+ * named export that the CommonJS `twilio` package does not declare.
  */
 export class TwilioProvider implements AirhornProvider {
 	readonly name = "twilio";

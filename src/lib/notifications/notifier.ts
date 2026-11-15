@@ -61,7 +61,9 @@ export interface AirhornNotifierOptions {
 /**
  * Loads airhorn, the provider SDKs and the providers on the first send. That
  * load takes approximately 0.5 s and 70 MiB. The container starts again after
- * each sleep, so a page request must not wait for it.
+ * each sleep, so a page request must not wait for it. Do not import
+ * `providers.ts` or a provider file from other code, because that loads
+ * airhorn when the server starts.
  */
 const loadProviders = () => import("./providers");
 

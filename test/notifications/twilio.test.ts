@@ -1,5 +1,5 @@
 import { AirhornSendType } from "airhorn";
-import { TWILIO_API, TwilioProvider } from "@/lib/notifications/twilio";
+import { TwilioProvider } from "@/lib/notifications/twilio";
 
 const ACCOUNT = `AC${"1".repeat(32)}`;
 
@@ -41,7 +41,9 @@ describe("TwilioProvider", () => {
 			errors: [],
 		});
 		const [call] = calls;
-		expect(call?.url).toBe(`${TWILIO_API}/Accounts/${ACCOUNT}/Messages.json`);
+		expect(call?.url).toBe(
+			`https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT}/Messages.json`,
+		);
 		expect(call?.init.method).toBe("POST");
 		expect(call?.init.headers).toEqual({
 			authorization: `Basic ${btoa(`${ACCOUNT}:token`)}`,

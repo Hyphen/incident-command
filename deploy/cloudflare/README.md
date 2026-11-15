@@ -87,11 +87,11 @@ The Worker is served at `https://incident-command.<your-subdomain>.workers.dev`.
 
 These vars configure the Worker. The container does not get them.
 
-| Var                       | Default | Description                                                                                                                                                          |
-| ------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CONTAINER_INSTANCES`     | `1`     | The number of containers. Each client address uses one of them. Use more than one only with Postgres or MongoDB.                                                     |
-| `CONTAINER_INSTANCE_TYPE` | `basic` | The size of each container: `lite` (1/16 vCPU, 256 MiB), `basic` (1/4 vCPU, 1 GiB), `standard-1`, `standard-2`, `standard-3` or `standard-4`.                        |
-| `CONTAINER_SLEEP_AFTER`   | `30m`   | An idle container stops after approximately this time. Use `ms`, `s`, `m` or `h`. The maximum is `6h`. A longer time gives fewer slow first requests and costs more. |
+| Var                       | Default | Description                                                                                                                                                                                                                |
+| ------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CONTAINER_INSTANCES`     | `1`     | The number of containers. Each client address uses one of them. Use more than one only with Postgres or MongoDB.                                                                                                           |
+| `CONTAINER_INSTANCE_TYPE` | `basic` | The size of each container: `lite` (1/16 vCPU, 256 MiB), `basic` (1/4 vCPU, 1 GiB), `standard-1`, `standard-2`, `standard-3` or `standard-4`. The server uses approximately 185 MiB after it sends the first notification. |
+| `CONTAINER_SLEEP_AFTER`   | `30m`   | An idle container stops after approximately this time. Use `ms`, `s`, `m` or `h`. The maximum is `6h`. A longer time gives fewer slow first requests and costs more.                                                       |
 
 Cloudflare bills a container while it runs. See [Containers pricing](https://developers.cloudflare.com/containers/platform/pricing/).
 
