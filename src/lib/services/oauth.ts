@@ -433,10 +433,21 @@ export class OAuthService {
 			? new Date(grant.lastUsedAt).getTime()
 			: 0;
 		if (now.getTime() - lastUsed > LAST_USED_RESOLUTION_MS) {
-			await this.ctx.store.update("oauth_grants", {
-				...grant,
-				lastUsedAt: iso(now),
-			});
+			// A refresh can replace the tokens after the read. The condition stops
+			// this write when that occurs, so it cannot restore the old tokens.
+			await this.ctx.store.update(
+				"oauth_grants",
+				{ ...grant, lastUsedAt: iso(now) },
+				{
+					where: [
+						{
+							field: "accessTokenHash",
+							op: "eq",
+							value: grant.accessTokenHash,
+						},
+					],
+				},
+			);
 		}
 		return {
 			type: "agent",

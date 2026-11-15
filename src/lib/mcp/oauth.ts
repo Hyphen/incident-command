@@ -1,4 +1,4 @@
-import { OAuthError } from "../errors";
+import { isOAuthError } from "../errors";
 import { originFrom, publicOrigin } from "../manage/origin";
 import type { Services } from "../services";
 import {
@@ -87,7 +87,7 @@ async function oauthResponse(
 	try {
 		return Response.json(await operation(), { status, headers: NO_STORE });
 	} catch (error) {
-		if (!(error instanceof OAuthError)) {
+		if (!isOAuthError(error)) {
 			throw error;
 		}
 		return Response.json(

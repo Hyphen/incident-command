@@ -90,9 +90,13 @@ export type OAuthErrorCode =
 	| "invalid_redirect_uri"
 	| "invalid_client_metadata";
 
+/** Marks an `OAuthError` in each copy of this module, like `APP_ERROR`. */
+const OAUTH_ERROR = Symbol.for("incident-command.OAuthError");
+
 /** An OAuth request that failed. `error` is the OAuth error code. */
 export class OAuthError extends AppError {
 	readonly error: OAuthErrorCode;
+	readonly [OAUTH_ERROR] = true;
 
 	constructor(error: OAuthErrorCode, message: string) {
 		super(error === "invalid_client" ? "unauthorized" : "bad_request", message);
@@ -103,6 +107,11 @@ export class OAuthError extends AppError {
 
 export function isAppError(error: unknown): error is AppError {
 	return error instanceof Error && APP_ERROR in error;
+}
+
+/** Whether an error is an `OAuthError`, also from a different copy of this module. */
+export function isOAuthError(error: unknown): error is OAuthError {
+	return isAppError(error) && OAUTH_ERROR in error;
 }
 
 export function errorMessage(error: unknown): string {
