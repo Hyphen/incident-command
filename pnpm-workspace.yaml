@@ -18,3 +18,9 @@ allowBuilds:
   esbuild: true # Vite and Wrangler native binary
   mongodb-memory-server: true # MongoDB binary for tests
   workerd: true # Cloudflare Workers runtime binary
+minimumReleaseAgeExclude:
+  # airhorn 7.2.2 was published on 2026-11-15. @airhornjs/twilio 7.2.2 fixes
+  # the twilio import that failed in Node. Remove these entries after 2026-11-22.
+  - airhorn@7.2.2
+  - "@airhornjs/aws@7.2.2"
+  - "@airhornjs/twilio@7.2.2"

@@ -1,4 +1,6 @@
-import { Airhorn, type AirhornProviderMessage } from "airhorn";
+import type { AirhornAws } from "@airhornjs/aws";
+import type { AirhornTwilio } from "@airhornjs/twilio";
+import type { AirhornProviderMessage } from "airhorn";
 import { loadConfig } from "@/lib/config";
 import { hmacSha256 } from "@/lib/crypto";
 import type { Incident, Settings, Subscriber } from "@/lib/domain/types";
@@ -30,36 +32,40 @@ const sdk = vi.hoisted(() => ({
 	sends: [] as { sdk: string; message: unknown; options: unknown }[],
 	result: (): SdkResult => ({ success: true, response: {}, errors: [] }),
 }));
-vi.mock("@airhornjs/twilio", () => ({
-	AirhornTwilio: class {
-		name = "twilio";
-		capabilities = ["sms", "email"];
-		constructor(options: { accountSid: string }) {
-			if (options.accountSid === "broken") {
-				throw new Error("accountSid must start with AC");
+// The real provider packages, with their sends recorded. Their constructors
+// check the options. Vitest loads them with plain Node, as the server does.
+vi.mock("@airhornjs/twilio", async (importOriginal) => {
+	const actual = await importOriginal<{
+		AirhornTwilio: typeof AirhornTwilio;
+	}>();
+	return {
+		AirhornTwilio: class extends actual.AirhornTwilio {
+			constructor(options: ConstructorParameters<typeof AirhornTwilio>[0]) {
+				super(options);
+				sdk.twilioCtor(options);
 			}
-			sdk.twilioCtor(options);
-		}
-		async send(message: unknown, options: unknown) {
-			sdk.sends.push({ sdk: "twilio", message, options });
-			return sdk.result();
-		}
-	},
-}));
-vi.mock("@airhornjs/aws", () => ({
-	AirhornAws: class {
-		name = "aws";
-		capabilities: string[];
-		constructor(options: { capabilities: string[] }) {
-			sdk.awsCtor(options);
-			this.capabilities = options.capabilities;
-		}
-		async send(message: unknown, options: unknown) {
-			sdk.sends.push({ sdk: "aws", message, options });
-			return sdk.result();
-		}
-	},
-}));
+			override async send(message: AirhornProviderMessage, options: unknown) {
+				sdk.sends.push({ sdk: "twilio", message, options });
+				return sdk.result();
+			}
+		},
+	};
+});
+vi.mock("@airhornjs/aws", async (importOriginal) => {
+	const actual = await importOriginal<{ AirhornAws: typeof AirhornAws }>();
+	return {
+		AirhornAws: class extends actual.AirhornAws {
+			constructor(options: ConstructorParameters<typeof AirhornAws>[0]) {
+				super(options);
+				sdk.awsCtor(options);
+			}
+			override async send(message: AirhornProviderMessage, options: unknown) {
+				sdk.sends.push({ sdk: "aws", message, options });
+				return sdk.result();
+			}
+		},
+	};
+});
 
 const requests: { url: string; init: RequestInit }[] = [];
 let respond: (url: string) => Response = () =>
@@ -525,76 +531,35 @@ describe("AirhornNotifier", () => {
 
 	it("keeps one airhorn instance per channel until the settings change", async () => {
 		const { notifier: n } = notifier();
-		const first = n.airhorn(channel("email", [provider("sendgrid")]));
-		expect(n.airhorn(channel("email", [provider("sendgrid")]))).toBe(first);
-		const changed = n.airhorn(
+		const email = channel("email", [provider("sendgrid")]);
+		// The first sends of a batch start together and must share one instance.
+		const [first, again] = await Promise.all([
+			n.airhorn(email),
+			n.airhorn(email),
+		]);
+		expect(again).toBe(first);
+		expect(await n.airhorn(email)).toBe(first);
+		const changed = await n.airhorn(
 			channel("email", [provider("ses")], { version: "v2" }),
 		);
 		expect(changed).not.toBe(first);
-		expect((await changed).sendStrategy).toBe("FailOver");
+		expect(changed.sendStrategy).toBe("FailOver");
+		// The render cache has no size limit, so it must stay off.
+		expect(changed.cache).toBeUndefined();
 		expect(
 			(await n.airhorn(channel("sms", [], { strategy: "load_balanced" })))
 				.sendStrategy,
 		).toBe("RoundRobin");
 	});
 
-	it("reports and retries when airhorn cannot be loaded (e.g. on Cloudflare Workers)", async () => {
-		const errors: Error[] = [];
-		const createAirhorn = vi
-			.fn<() => Promise<Airhorn>>()
-			.mockRejectedValueOnce(
-				new Error("Code generation from strings disallowed"),
-			)
-			.mockRejectedValueOnce("odd")
-			.mockResolvedValue(new Airhorn({ useWebhookProvider: false }));
-		const n = new AirhornNotifier({
-			createAirhorn,
-			onError: (error) => errors.push(error),
-		});
-		// airhorn loads on the first send, not at startup.
-		expect(createAirhorn).not.toHaveBeenCalled();
-		const email = channels();
-		await expect(
-			n.notifyIncident(notification, [subscriber()], email),
-		).resolves.toEqual({ sent: 0, failed: 1 });
-		await n.notifyIncident(notification, [subscriber()], email);
-		await n.notifyIncident(notification, [subscriber()], email);
-		await n.notifyIncident(notification, [subscriber()], email);
-		expect(createAirhorn).toHaveBeenCalledTimes(3);
-		expect(errors.map((error) => error.message)).toEqual([
-			"Code generation from strings disallowed",
-			"odd",
-			"Failed to send email to jane@example.com: No providers available for type: email",
-			"Failed to send email to jane@example.com: No providers available for type: email",
-		]);
-	});
-
-	it("keeps a newer airhorn instance when an older load fails", async () => {
-		let failOld: (error: Error) => void = () => {};
-		const createAirhorn = vi
-			.fn<() => Promise<Airhorn>>()
-			.mockReturnValueOnce(
-				new Promise((_resolve, reject) => {
-					failOld = reject;
-				}),
-			)
-			.mockResolvedValueOnce(new Airhorn({ useWebhookProvider: false }));
-		const n = new AirhornNotifier({ createAirhorn });
-		const old = n.airhorn(channel("email", [], { version: "v1" }));
-		const current = n.airhorn(channel("email", [], { version: "v2" }));
-		failOld(new Error("boom"));
-		await expect(old).rejects.toThrow("boom");
-		expect(n.airhorn(channel("email", [], { version: "v2" }))).toBe(current);
-		expect(createAirhorn).toHaveBeenCalledTimes(2);
-	});
-
 	it("logs to the console by default", async () => {
+		respond = () => new Response("bad key", { status: 401 });
 		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-		const n = new AirhornNotifier({
-			createAirhorn: () => Promise.reject(new Error("kaput")),
-		});
+		const n = new AirhornNotifier();
 		await n.notifyIncident(notification, [subscriber()], channels());
-		expect(spy).toHaveBeenCalledWith("[notifications] kaput");
+		expect(spy).toHaveBeenCalledWith(
+			"[notifications] Failed to send email to jane@example.com: sendgrid provider: SendGrid responded with status 401",
+		);
 	});
 
 	it("sends subscription confirmations through the email channel", async () => {
@@ -637,7 +602,7 @@ describe("AirhornNotifier", () => {
 describe("createProvider", () => {
 	it("passes the timeout and secret to the webhook provider", async () => {
 		const timeout = vi.spyOn(AbortSignal, "timeout");
-		const webhook = await createProvider(
+		const webhook = createProvider(
 			provider("webhook", { options: { timeoutSeconds: "5" }, secrets: {} }),
 		);
 		await webhook.send({
@@ -650,14 +615,14 @@ describe("createProvider", () => {
 		expect(headers(requests[0])[SIGNATURE_HEADER]).toBeUndefined();
 	});
 
-	it("builds the AWS providers for SES and SNS", async () => {
-		await createProvider(
+	it("builds the AWS providers for SES and SNS", () => {
+		createProvider(
 			provider("ses", {
 				options: { region: "us-east-1", accessKeyId: "AKIAIOSFODNN7EXAMPLE" },
 				secrets: { secretAccessKey: "secret" },
 			}),
 		);
-		await createProvider(provider("sns"));
+		createProvider(provider("sns"));
 		expect(sdk.awsCtor.mock.calls).toEqual([
 			[
 				{
@@ -678,8 +643,8 @@ describe("createProvider", () => {
 		]);
 	});
 
-	it("builds the Twilio provider", async () => {
-		await createProvider(provider("twilio"));
+	it("builds the Twilio provider", () => {
+		createProvider(provider("twilio"));
 		expect(sdk.twilioCtor).toHaveBeenCalledWith({
 			accountSid: `AC${"0".repeat(32)}`,
 			authToken: "tok",

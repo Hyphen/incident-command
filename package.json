@@ -29,10 +29,10 @@
 		"clean": "rm -rf .next .wrangler coverage node_modules"
 	},
 	"dependencies": {
-		"@airhornjs/aws": "^7.2.0",
-		"@airhornjs/twilio": "^7.2.0",
+		"@airhornjs/aws": "^7.2.2",
+		"@airhornjs/twilio": "^7.2.2",
 		"@modelcontextprotocol/sdk": "^1.32.2",
-		"airhorn": "^7.2.0",
+		"airhorn": "^7.2.2",
 		"cacheable": "^2.5.0",
 		"mongodb": "^7.7.0",
 		"next": "^16.4.5",

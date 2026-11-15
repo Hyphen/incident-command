@@ -205,24 +205,24 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  "@node-minify/core>glob": 10.5.0
   make-dir@3>semver: 6.3.1
+  "@node-minify/core>glob": 10.5.0
 
 importers:
   .:
     dependencies:
       "@airhornjs/aws":
-        specifier: ^7.2.0
-        version: 7.2.0(airhorn@7.2.0(@types/react@19.3.0)(supports-color@10.2.2))
+        specifier: ^7.2.2
+        version: 7.2.2(airhorn@7.2.2(@types/react@19.3.0)(supports-color@10.2.2))
       "@airhornjs/twilio":
-        specifier: ^7.2.0
-        version: 7.2.0(airhorn@7.2.0(@types/react@19.3.0)(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
+        specifier: ^7.2.2
+        version: 7.2.2(airhorn@7.2.2(@types/react@19.3.0)(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
       "@modelcontextprotocol/sdk":
         specifier: ^1.32.2
         version: 1.32.2(supports-color@10.2.2)(zod@4.6.7)
       airhorn:
-        specifier: ^7.2.0
-        version: 7.2.0(@types/react@19.3.0)(supports-color@10.2.2)
+        specifier: ^7.2.2
+        version: 7.2.2(@types/react@19.3.0)(supports-color@10.2.2)
       cacheable:
         specifier: ^2.5.0
         version: 2.5.0
@@ -335,22 +335,22 @@ packages:
       }
     engines: { node: ">=22" }
 
-  "@airhornjs/aws@7.2.0":
+  "@airhornjs/aws@7.2.2":
     resolution:
       {
-        integrity: sha512-h1hdd+TFANeuuvbQ26NjfKwZFSnZLc8O6HAvMxSbs66cl13Iq8F8HmGPBsNhlPI+rD1U3g/Rv8cDugVHf1gm/Q==,
+        integrity: sha512-YKj0/Iuhufn6iI1HVu7kfyfOUtcVOwbxhTLeM8OirOxdAKSMTP8/nHKOq7LNtsO5jyNa54q3vuuGxgSFquPljQ==,
       }
     peerDependencies:
-      airhorn: ^7.2.0
+      airhorn: ^7.2.2
 
-  "@airhornjs/twilio@7.2.0":
+  "@airhornjs/twilio@7.2.2":
     resolution:
       {
-        integrity: sha512-kgRHj9Sg85g7S9e4ogI6rF5G1lGnSaQ21F1MJ0V8DFY0/c6atRjNtw2AL7EQvHIMZ1qneQsrkHkuI6d1LKmzuA==,
+        integrity: sha512-0COc0wbkt593PqZeXxio2wjJxqlfKXi7mQT54va5iFxuXGWMs4+acRjIj4R1EHbZBIvkdkkWT/WTE4ShKjbLgg==,
       }
     engines: { node: ">=22.0.0" }
     peerDependencies:
-      airhorn: ^7.2.0
+      airhorn: ^7.2.2
 
   "@alloc/quick-lru@5.3.0":
     resolution:
@@ -2174,10 +2174,10 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  airhorn@7.2.0:
+  airhorn@7.2.2:
     resolution:
       {
-        integrity: sha512-ev1pjqO7U8iYo3aTJ+i7UObZ8nP4M/uOMcqAs6HVbPMe/fFqsBDgoHhd5fKIGnB/qoApPlg2fsKN1fjWXadbhA==,
+        integrity: sha512-MREVpR8ZgibScQP9ItM/A8Am82Ke9FokPRlqGCFCdSMEA3kHx7/EgBJ+nLoGLzF/5g1R8EcB2oiaEuC6tfFT0Q==,
       }
     engines: { node: ">=22.18.0" }
 
@@ -2268,10 +2268,10 @@ packages:
         integrity: sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==,
       }
 
-  axios@1.20.0:
+  axios@1.21.0:
     resolution:
       {
-        integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==,
+        integrity: sha512-YCzXMB53Q9PZBsh7yN7wtapit4WepwcHS2fP8QhGsBxSz5YtgYobV7GGlWlAJi+RxfU77GQTQi2DSLUma42EYA==,
       }
 
   b4a@1.9.0:
@@ -5416,10 +5416,10 @@ packages:
         integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==,
       }
 
-  twilio@6.2.0:
+  twilio@6.3.0:
     resolution:
       {
-        integrity: sha512-zuwVhRa8gGIvaTjXIkRNcf7cPPQCeghMukMcG9WnhWmm7SLnregVpdIoYOSrOvlqMUYf6xP9A2ivsJNf6URoSg==,
+        integrity: sha512-F7/jJQ3dh060ByUV1sWPhVJLxIaezuIXydksdZkmPbMI/jnRxX256CL+knxGcFBuu908qbH22JLK/sK1L+1SMg==,
       }
     engines: { node: ">=20.0.0" }
 
@@ -5885,17 +5885,19 @@ snapshots:
     dependencies:
       json-schema: 0.4.0
 
-  "@airhornjs/aws@7.2.0(airhorn@7.2.0(@types/react@19.3.0)(supports-color@10.2.2))":
+  "@airhornjs/aws@7.2.2(airhorn@7.2.2(@types/react@19.3.0)(supports-color@10.2.2))":
     dependencies:
       "@aws-sdk/client-ses": 3.1157.0
       "@aws-sdk/client-sns": 3.1157.0
-      airhorn: 7.2.0(@types/react@19.3.0)(supports-color@10.2.2)
+      airhorn: 7.2.2(@types/react@19.3.0)(supports-color@10.2.2)
 
-  "@airhornjs/twilio@7.2.0(airhorn@7.2.0(@types/react@19.3.0)(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)":
+  "@airhornjs/twilio@7.2.2(airhorn@7.2.2(@types/react@19.3.0)(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)":
     dependencies:
       "@sendgrid/mail": 8.1.6(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
-      airhorn: 7.2.0(@types/react@19.3.0)(supports-color@10.2.2)
-      twilio: 6.2.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
+      airhorn: 7.2.2(@types/react@19.3.0)(supports-color@10.2.2)
+      axios: 1.21.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
+      follow-redirects: 1.16.2(debug@4.4.3(supports-color@10.2.2))
+      twilio: 6.3.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -6566,7 +6568,7 @@ snapshots:
   "@sendgrid/client@8.1.6(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)":
     dependencies:
       "@sendgrid/helpers": 8.0.0
-      axios: 1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
+      axios: 1.21.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -6865,7 +6867,7 @@ snapshots:
       "@ai-sdk/provider-utils": 5.0.69(zod@4.6.7)
       zod: 4.6.7
 
-  airhorn@7.2.0(@types/react@19.3.0)(supports-color@10.2.2):
+  airhorn@7.2.2(@types/react@19.3.0)(supports-color@10.2.2):
     dependencies:
       cacheable: 2.5.0
       ecto: 5.1.1(@types/react@19.3.0)(supports-color@10.2.2)
@@ -6917,7 +6919,7 @@ snapshots:
 
   asynckit@0.4.0: {}
 
-  axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2):
+  axios@1.21.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2):
     dependencies:
       follow-redirects: 1.16.2(debug@4.4.3(supports-color@10.2.2))
       form-data: 4.0.6
@@ -9169,9 +9171,9 @@ snapshots:
 
   tslib@2.8.1: {}
 
-  twilio@6.2.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2):
+  twilio@6.3.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2):
     dependencies:
-      axios: 1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
+      axios: 1.21.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
       dayjs: 1.11.23
       https-proxy-agent: 5.0.1(supports-color@10.2.2)
       jsonwebtoken: 9.0.3
