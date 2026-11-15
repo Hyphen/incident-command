@@ -15,12 +15,16 @@ import BrandingPage from "@/app/manage/(portal)/settings/branding/page";
 import NotificationsSettingsPage from "@/app/manage/(portal)/settings/notifications/page";
 import SettingsPage from "@/app/manage/(portal)/settings/page";
 import SubscribersPage from "@/app/manage/(portal)/subscribers/page";
+import AuthorizePage from "@/app/manage/authorize/page";
 import InvitePage from "@/app/manage/invite/page";
 import LoginPage from "@/app/manage/login/page";
 import SetupPage from "@/app/manage/setup/page";
 import type { Actor } from "@/lib/domain/types";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import {
+	AGENT_REDIRECT,
+	authorizationQuery,
+	connectAgent,
 	expectFlashRedirect,
 	expectNotFound,
 	flashQueryParams,
@@ -148,6 +152,77 @@ describe("login and setup", () => {
 	});
 });
 
+describe("agent consent page", () => {
+	const consent = (query: Record<string, string | string[]>) =>
+		AuthorizePage({ searchParams: params(query) });
+
+	async function register(app: Awaited<ReturnType<typeof setupApp>>["app"]) {
+		const { client_id } = await app.services.oauth.register({
+			client_name: "Claude Code",
+			redirect_uris: [AGENT_REDIRECT],
+		});
+		return authorizationQuery(client_id);
+	}
+
+	it("sends a visitor to sign in and back to the request", async () => {
+		const { app } = await setupApp();
+		const query = await register(app);
+		const url = await redirectOf(consent(query));
+		expect(url.startsWith("/manage/login?next=/manage/authorize?")).toBe(true);
+		expect(url).toContain(`client_id=${query.client_id}`);
+	});
+
+	it("asks the member to allow the agent", async () => {
+		const { app } = await setupApp();
+		const query = await register(app);
+		const { member } = await signIn(app, "editor");
+		render(await consent({ ...query, error: "unavailable" }));
+		expect(
+			screen.getByRole("heading", { name: "Connect an agent" }),
+		).toBeInTheDocument();
+		expect(screen.getByText("Claude Code")).toBeInTheDocument();
+		expect(
+			screen.getByText(new RegExp(`signed in as ${member.email} \\(Editor\\)`)),
+		).toBeInTheDocument();
+		expect(screen.getByText("http://localhost:4567")).toBeInTheDocument();
+		expect(screen.getByRole("alert")).toHaveTextContent(
+			"The data store is unavailable",
+		);
+		const form = screen.getByRole("button", { name: "Allow" }).closest("form");
+		expect(Object.fromEntries(new FormData(form as HTMLFormElement))).toEqual(
+			query,
+		);
+		expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+	});
+
+	it("explains a request that it cannot send back to the agent", async () => {
+		const { app } = await setupApp();
+		const query = await register(app);
+		await signIn(app, "editor");
+		render(await consent({ ...query, client_id: [query.client_id, "x"] }));
+		expect(
+			screen.getByRole("heading", { name: "Cannot connect the agent" }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(/This agent is not registered/),
+		).toBeInTheDocument();
+	});
+
+	it("does not send a visitor to the agent for a request that is not valid", async () => {
+		const { app } = await setupApp();
+		const query = await register(app);
+		// Anybody can register a client, so an automatic redirect would let
+		// any site use this page to send visitors to a different site.
+		render(await consent({ ...query, code_challenge_method: "plain" }));
+		expect(
+			screen.getByRole("heading", { name: "Cannot connect the agent" }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(/PKCE with code_challenge_method S256 is required/),
+		).toBeInTheDocument();
+	});
+});
+
 describe("portal layout", () => {
 	const page = <p>Page content</p>;
 
@@ -167,6 +242,11 @@ describe("portal layout", () => {
 		expect(
 			nav.queryByRole("link", { name: "Members" }),
 		).not.toBeInTheDocument();
+		// Each member can connect their own agents.
+		expect(nav.getByRole("link", { name: "Agents" })).toHaveAttribute(
+			"href",
+			"/manage/agents",
+		);
 		expect(screen.getByRole("link", { name: "Acme Status" })).toHaveAttribute(
 			"href",
 			"/manage",
@@ -821,20 +901,42 @@ describe("admin pages", () => {
 		).not.toBeInTheDocument();
 	});
 
-	it("shows agent tokens and MCP instructions", async () => {
+	it("shows the endpoint, the OAuth instructions, connected agents and API tokens", async () => {
 		const { app, services, clock } = await setupApp();
 		const { actor } = await signIn(app, "admin");
 		setRequestHeaders({
 			host: "status.acme.dev",
 			"x-forwarded-proto": "https",
 		});
+		const endpoint = "https://status.acme.dev/api/mcp";
 		const empty = render(await AgentsPage(flash()));
-		expect(screen.getByText("No agent tokens yet.")).toBeInTheDocument();
+		const banner = within(screen.getByRole("region", { name: "MCP endpoint" }));
+		expect(banner.getByText(endpoint)).toBeInTheDocument();
+		expect(banner.getByRole("button", { name: "Copy" })).toBeInTheDocument();
 		expect(
-			screen.getAllByText(/https:\/\/status\.acme\.dev\/api\/mcp/).length,
-		).toBeGreaterThan(0);
+			screen.getByText(
+				`claude mcp add --transport http incident-command ${endpoint}`,
+			),
+		).toBeInTheDocument();
+		// OAuth is the main way to connect, so the client config has no token.
+		const config = screen.getByText(/"mcpServers"/);
+		expect(JSON.parse(config.textContent ?? "")).toEqual({
+			mcpServers: { "incident-command": { type: "http", url: endpoint } },
+		});
+		expect(
+			screen.getByText(
+				`claude mcp add --transport http incident-command ${endpoint} --header "Authorization: Bearer <token>"`,
+			),
+		).toBeInTheDocument();
+		expect(screen.getByText("No connected agents yet.")).toBeInTheDocument();
+		expect(screen.getByText("No API tokens yet.")).toBeInTheDocument();
 		empty.unmount();
 
+		const editor = await signIn(app, "editor");
+		await signIn(app, "admin").then(({ actor: admin }) =>
+			connectAgent(app, admin, "Claude Code"),
+		);
+		await connectAgent(app, editor.actor, "Cursor");
 		const used = await services.agents.create(actor, {
 			name: "Used bot",
 			description: "Pager bridge",
@@ -853,12 +955,34 @@ describe("admin pages", () => {
 		vi.useFakeTimers({ now: clock.current, toFake: ["Date"] });
 		render(await AgentsPage(flash()));
 		vi.useRealTimers();
+		expect(screen.getByText("Claude Code")).toBeInTheDocument();
+		expect(screen.getByText("Cursor")).toBeInTheDocument();
+		expect(screen.getByText(/^Editor User · Connected/)).toBeInTheDocument();
+		expect(screen.getAllByRole("button", { name: "Disconnect" })).toHaveLength(
+			2,
+		);
 		expect(screen.getByText("Pager bridge")).toBeInTheDocument();
 		expect(screen.getByText("active")).toBeInTheDocument();
 		expect(screen.getByText("revoked")).toBeInTheDocument();
 		expect(screen.getByText("expired")).toBeInTheDocument();
-		expect(screen.getAllByText(/Never used/)).toHaveLength(2);
+		expect(screen.getAllByText(/Never used/)).toHaveLength(4);
 		expect(screen.getAllByRole("button", { name: "Revoke" })).toHaveLength(1);
+	});
+
+	it("shows a member only their own agents and no API tokens", async () => {
+		const { app } = await setupApp();
+		const admin = await signIn(app, "admin");
+		const editor = await signIn(app, "editor");
+		await connectAgent(app, admin.actor, "Admin agent");
+		await connectAgent(app, editor.actor, "Editor agent");
+		render(await AgentsPage(flash()));
+		expect(screen.getByText("Editor agent")).toBeInTheDocument();
+		expect(screen.queryByText("Admin agent")).not.toBeInTheDocument();
+		expect(screen.queryByText(/Editor User ·/)).not.toBeInTheDocument();
+		expect(screen.getByText("Agents that you connected.")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("heading", { name: "API tokens" }),
+		).not.toBeInTheDocument();
 	});
 
 	it("uses the configured site url for the MCP endpoint", async () => {

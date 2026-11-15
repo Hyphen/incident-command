@@ -29,6 +29,11 @@ export function sha256(value: string): string {
 	return createHash("sha256").update(value).digest("hex");
 }
 
+/** The PKCE `S256` code challenge of a code verifier (RFC 7636). */
+export function pkceChallenge(verifier: string): string {
+	return createHash("sha256").update(verifier).digest("base64url");
+}
+
 export function hmacSha256(secret: string, value: string): string {
 	return createHmac("sha256", secret).update(value).digest("hex");
 }

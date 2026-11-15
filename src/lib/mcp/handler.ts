@@ -1,5 +1,6 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { Services } from "../services";
+import { RESOURCE_METADATA_PATH, requestOrigin } from "./oauth";
 import { createMcpServer } from "./server";
 
 function jsonRpcError(
@@ -20,7 +21,9 @@ export function bearerToken(header: string | null): string | undefined {
 
 /**
  * Handles a Streamable HTTP MCP request in stateless mode: every POST is
- * authenticated with an agent bearer token and served by a fresh server.
+ * authenticated and served by a fresh server. The bearer token is an OAuth
+ * access token or an API token. A request without a valid token gets the
+ * address of the protected resource metadata, so the agent can sign in.
  */
 export async function handleMcpRequest(
 	request: Request,
@@ -35,15 +38,20 @@ export async function handleMcpRequest(
 			},
 		);
 	}
-	const actor = await services.agents.authenticate(
-		bearerToken(request.headers.get("authorization")),
-	);
+	const token = bearerToken(request.headers.get("authorization"));
+	const origin = await requestOrigin(request, services);
+	const actor =
+		(await services.oauth.authenticate(token)) ??
+		(await services.agents.authenticate(token));
 	if (!actor) {
+		const challenge = `Bearer resource_metadata="${origin}${RESOURCE_METADATA_PATH}"`;
 		return jsonRpcError(401, "Missing or invalid agent token", {
-			"www-authenticate": 'Bearer realm="incident-command"',
+			"www-authenticate": token
+				? `${challenge}, error="invalid_token"`
+				: challenge,
 		});
 	}
-	const server = createMcpServer(services, actor, new URL(request.url).origin);
+	const server = createMcpServer(services, actor, origin);
 	const transport = new WebStandardStreamableHTTPServerTransport({
 		sessionIdGenerator: undefined,
 		enableJsonResponse: true,

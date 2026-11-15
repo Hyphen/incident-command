@@ -164,6 +164,12 @@ export const createAgentSchema = z.object({
 });
 export type CreateAgentInput = z.input<typeof createAgentSchema>;
 
+/** Client metadata for dynamic client registration (RFC 7591). The service ignores other fields. */
+export const registerClientSchema = z.object({
+	redirect_uris: z.array(z.string().max(2000)).min(1).max(10),
+	client_name: z.string().trim().max(120).optional(),
+});
+
 export const updateSettingsSchema = z.object({
 	siteName: z.string().trim().min(1).max(120).optional(),
 	description: z.string().trim().max(500).optional(),

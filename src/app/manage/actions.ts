@@ -35,6 +35,11 @@ import {
 	text,
 } from "@/lib/manage/forms";
 import { publicOrigin } from "@/lib/manage/origin";
+import {
+	authorizationParams,
+	authorizePath,
+	publicMcpEndpoint,
+} from "@/lib/mcp/oauth";
 import { draftPath } from "@/lib/services/drafts";
 import { invitePath } from "@/lib/services/members";
 
@@ -385,6 +390,49 @@ export async function deleteAgentAction(form: FormData): Promise<void> {
 		services.agents.delete(actor, text(form, "id")),
 	);
 	redirect(flash("/manage/agents", "token_deleted"));
+}
+
+// ---- connected agents -------------------------------------------------------------
+
+/** Reads an authorization request that the consent page posts. */
+async function authorizationRequest(form: FormData) {
+	const { actor, services } = await requireMemberForAction();
+	const { siteUrl } = await services.settings.get();
+	return {
+		actor,
+		services,
+		params: authorizationParams((key) => form.get(key)),
+		resource: await publicMcpEndpoint(siteUrl),
+	};
+}
+
+/** The member allows the agent. The agent gets an authorization code. */
+export async function approveAgentAction(form: FormData): Promise<void> {
+	const { actor, services, params, resource } =
+		await authorizationRequest(form);
+	redirect(
+		await attempt(authorizePath(params), () =>
+			services.oauth.approve(actor, params, resource),
+		),
+	);
+}
+
+/** The member denies the agent. The agent gets an `access_denied` error. */
+export async function denyAgentAction(form: FormData): Promise<void> {
+	const { services, params, resource } = await authorizationRequest(form);
+	redirect(
+		await attempt(authorizePath(params), () =>
+			services.oauth.deny(params, resource),
+		),
+	);
+}
+
+export async function disconnectAgentAction(form: FormData): Promise<void> {
+	const { actor, services } = await requireMemberForAction();
+	await attempt("/manage/agents", () =>
+		services.oauth.disconnect(actor, text(form, "id")),
+	);
+	redirect(flash("/manage/agents", "agent_disconnected"));
 }
 
 // ---- subscribers --------------------------------------------------------------------

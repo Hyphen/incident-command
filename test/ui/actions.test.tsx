@@ -3,6 +3,7 @@ import {
 	acceptInviteAction,
 	addNotificationProviderAction,
 	addSubscriberAction,
+	approveAgentAction,
 	approveDraftAction,
 	changePasswordAction,
 	createAgentAction,
@@ -13,7 +14,9 @@ import {
 	deleteMemberAction,
 	deleteServiceAction,
 	deleteSubscriberAction,
+	denyAgentAction,
 	discardDraftAction,
+	disconnectAgentAction,
 	editIncidentAction,
 	inviteMemberAction,
 	loginAction,
@@ -39,6 +42,9 @@ import { SESSION_COOKIE } from "@/lib/auth";
 import type { Actor } from "@/lib/domain/types";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import {
+	AGENT_REDIRECT,
+	authorizationQuery,
+	connectAgent,
 	expectFlashRedirect,
 	expectSameFlash,
 	flashMessage,
@@ -760,6 +766,62 @@ describe("agent actions", () => {
 		expect(
 			flashMessage(
 				await redirectOf(revokeAgentAction(form({ id: "nope" }))),
+				"error",
+			),
+		).toBe("That item was not found.");
+	});
+});
+
+describe("connected agent actions", () => {
+	it("sends the decision of the member to the agent", async () => {
+		const { app } = await setupApp({ SITE_URL: "https://status.acme.dev" });
+		await signIn(app, "editor");
+		const { client_id } = await app.services.oauth.register({
+			client_name: "Claude Code",
+			redirect_uris: [AGENT_REDIRECT],
+		});
+		const fields = {
+			...authorizationQuery(client_id),
+			resource: "https://status.acme.dev/api/mcp",
+		};
+		const approved = new URL(
+			await redirectOf(approveAgentAction(form(fields))),
+		);
+		expect(approved.origin + approved.pathname).toBe(AGENT_REDIRECT);
+		expect(approved.searchParams.get("code")).toMatch(/^[\w-]{43}$/);
+		expect(approved.searchParams.get("state")).toBe("state-1");
+
+		const denied = new URL(await redirectOf(denyAgentAction(form(fields))));
+		expect(denied.searchParams.get("error")).toBe("access_denied");
+		expect(denied.searchParams.has("code")).toBe(false);
+
+		// A request that is not valid goes back to the consent page.
+		const failed = await redirectOf(
+			approveAgentAction(form({ ...fields, client_id: "ocl_unknown" })),
+		);
+		expect(failed.startsWith("/manage/authorize?")).toBe(true);
+		expect(flashMessage(failed, "error")).toBe("Check the form and try again.");
+	});
+
+	it("disconnects an agent", async () => {
+		const { app, services } = await setupApp();
+		const { actor } = await signIn(app, "viewer");
+		const tokens = await connectAgent(app, actor, "Claude Code");
+		const [connection] = await services.oauth.list(actor);
+		expectSameFlash(
+			await redirectOf(
+				disconnectAgentAction(form({ id: connection?.id ?? "" })),
+			),
+			"/manage/agents?notice=Agent disconnected",
+		);
+		await expect(
+			services.oauth.authenticate(tokens.access_token),
+		).resolves.toBeUndefined();
+		expect(
+			flashMessage(
+				await redirectOf(
+					disconnectAgentAction(form({ id: connection?.id ?? "" })),
+				),
 				"error",
 			),
 		).toBe("That item was not found.");

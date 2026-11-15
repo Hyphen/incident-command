@@ -80,6 +80,27 @@ export class StoreUnavailableError extends AppError {
 	}
 }
 
+/** The `error` values that the OAuth endpoints return (RFC 6749, RFC 7591, RFC 8707). */
+export type OAuthErrorCode =
+	| "invalid_request"
+	| "invalid_client"
+	| "invalid_grant"
+	| "unsupported_grant_type"
+	| "invalid_target"
+	| "invalid_redirect_uri"
+	| "invalid_client_metadata";
+
+/** An OAuth request that failed. `error` is the OAuth error code. */
+export class OAuthError extends AppError {
+	readonly error: OAuthErrorCode;
+
+	constructor(error: OAuthErrorCode, message: string) {
+		super(error === "invalid_client" ? "unauthorized" : "bad_request", message);
+		this.name = "OAuthError";
+		this.error = error;
+	}
+}
+
 export function isAppError(error: unknown): error is AppError {
 	return error instanceof Error && APP_ERROR in error;
 }
