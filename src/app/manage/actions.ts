@@ -412,7 +412,12 @@ export async function approveAgentAction(form: FormData): Promise<void> {
 		await authorizationRequest(form);
 	redirect(
 		await attempt(authorizePath(params), () =>
-			services.oauth.approve(actor, params, resource),
+			services.oauth.approve(
+				actor,
+				params,
+				resource,
+				optionalText(form, "name"),
+			),
 		),
 	);
 }

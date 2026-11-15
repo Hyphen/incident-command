@@ -189,10 +189,17 @@ describe("agent consent page", () => {
 			"The data store is unavailable",
 		);
 		const form = screen.getByRole("button", { name: "Allow" }).closest("form");
-		expect(Object.fromEntries(new FormData(form as HTMLFormElement))).toEqual(
-			query,
+		expect(Object.fromEntries(new FormData(form as HTMLFormElement))).toEqual({
+			...query,
+			name: "Claude Code",
+		});
+		expect(screen.getByRole("textbox", { name: "Agent name" })).toHaveValue(
+			"Claude Code",
 		);
-		expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+		expect(screen.getByRole("textbox", { name: "Agent name" })).toBeRequired();
+		expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute(
+			"formnovalidate",
+		);
 	});
 
 	it("explains a request that it cannot send back to the agent", async () => {

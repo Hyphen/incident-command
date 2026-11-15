@@ -13,11 +13,13 @@ export function SubmitButton({
 	className,
 	onClick,
 	formAction,
+	formNoValidate,
 }: {
 	children: ReactNode;
 	/** Usually a `buttonClass` value. */
 	className: string;
 	onClick?: MouseEventHandler<HTMLButtonElement>;
+	formNoValidate?: boolean;
 	/**
 	 * The server action of this button, when a form has more than one. All
 	 * buttons of the form are disabled while an action runs, but only the
@@ -34,6 +36,7 @@ export function SubmitButton({
 			aria-busy={busy}
 			onClick={onClick}
 			formAction={formAction}
+			formNoValidate={formNoValidate}
 			className={`${className} disabled:cursor-wait`}
 		>
 			{busy && (

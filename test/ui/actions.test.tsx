@@ -785,11 +785,16 @@ describe("connected agent actions", () => {
 			resource: "https://status.acme.dev/api/mcp",
 		};
 		const approved = new URL(
-			await redirectOf(approveAgentAction(form(fields))),
+			await redirectOf(
+				approveAgentAction(form({ ...fields, name: "On-call agent" })),
+			),
 		);
 		expect(approved.origin + approved.pathname).toBe(AGENT_REDIRECT);
 		expect(approved.searchParams.get("code")).toMatch(/^[\w-]{43}$/);
 		expect(approved.searchParams.get("state")).toBe("state-1");
+		expect(await app.store.find("oauth_codes")).toEqual([
+			expect.objectContaining({ clientName: "On-call agent" }),
+		]);
 
 		const denied = new URL(await redirectOf(denyAgentAction(form(fields))));
 		expect(denied.searchParams.get("error")).toBe("access_denied");
