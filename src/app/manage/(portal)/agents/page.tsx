@@ -173,25 +173,9 @@ export default async function AgentsPage({
 	]);
 	const endpoint = await publicMcpEndpoint(settings.siteUrl);
 	const claudeCommand = `claude mcp add --transport http incident-command ${endpoint}`;
-	const jsonConfig = JSON.stringify(
-		{ mcpServers: { "incident-command": { type: "http", url: endpoint } } },
-		null,
-		2,
-	);
 	return (
 		<ManagePage title="Agents" flash={flash} health={app.store.health}>
 			<EndpointBanner endpoint={endpoint} />
-			<Card
-				title="Connect an agent"
-				description="Add the endpoint to your agent. When the agent opens this site, sign in and select Allow. The agent then acts as you, with your role."
-			>
-				<div className="space-y-3 text-sm">
-					<p className="text-muted">Claude Code:</p>
-					<pre className={preClass}>{claudeCommand}</pre>
-					<p className="text-muted">Other MCP clients:</p>
-					<pre className={preClass}>{jsonConfig}</pre>
-				</div>
-			</Card>
 			<Card
 				title="Connected agents"
 				description={

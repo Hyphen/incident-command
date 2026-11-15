@@ -901,7 +901,7 @@ describe("admin pages", () => {
 		).not.toBeInTheDocument();
 	});
 
-	it("shows the endpoint, the OAuth instructions, connected agents and API tokens", async () => {
+	it("shows the endpoint, connected agents and API tokens", async () => {
 		const { app, services, clock } = await setupApp();
 		const { actor } = await signIn(app, "admin");
 		setRequestHeaders({
@@ -913,16 +913,6 @@ describe("admin pages", () => {
 		const banner = within(screen.getByRole("region", { name: "MCP endpoint" }));
 		expect(banner.getByText(endpoint)).toBeInTheDocument();
 		expect(banner.getByRole("button", { name: "Copy" })).toBeInTheDocument();
-		expect(
-			screen.getByText(
-				`claude mcp add --transport http incident-command ${endpoint}`,
-			),
-		).toBeInTheDocument();
-		// OAuth is the main way to connect, so the client config has no token.
-		const config = screen.getByText(/"mcpServers"/);
-		expect(JSON.parse(config.textContent ?? "")).toEqual({
-			mcpServers: { "incident-command": { type: "http", url: endpoint } },
-		});
 		expect(
 			screen.getByText(
 				`claude mcp add --transport http incident-command ${endpoint} --header "Authorization: Bearer <token>"`,
