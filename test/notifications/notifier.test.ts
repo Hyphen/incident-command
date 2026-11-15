@@ -1,4 +1,5 @@
 import type { AirhornAws } from "@airhornjs/aws";
+import type { AirhornTwilio } from "@airhornjs/twilio";
 import type { AirhornProviderMessage } from "airhorn";
 import { loadConfig } from "@/lib/config";
 import { hmacSha256 } from "@/lib/crypto";
@@ -26,11 +27,30 @@ import { SIGNATURE_HEADER } from "@/lib/notifications/webhook";
 
 type SdkResult = { success: boolean; response: unknown; errors: Error[] };
 const sdk = vi.hoisted(() => ({
+	twilioCtor: vi.fn(),
 	awsCtor: vi.fn(),
 	sends: [] as { sdk: string; message: unknown; options: unknown }[],
 	result: (): SdkResult => ({ success: true, response: {}, errors: [] }),
 }));
-// The real AWS provider, which checks its options, with its sends recorded.
+// The real provider packages, with their sends recorded. Their constructors
+// check the options. Vitest loads them with plain Node, as the server does.
+vi.mock("@airhornjs/twilio", async (importOriginal) => {
+	const actual = await importOriginal<{
+		AirhornTwilio: typeof AirhornTwilio;
+	}>();
+	return {
+		AirhornTwilio: class extends actual.AirhornTwilio {
+			constructor(options: ConstructorParameters<typeof AirhornTwilio>[0]) {
+				super(options);
+				sdk.twilioCtor(options);
+			}
+			override async send(message: AirhornProviderMessage, options: unknown) {
+				sdk.sends.push({ sdk: "twilio", message, options });
+				return sdk.result();
+			}
+		},
+	};
+});
 vi.mock("@airhornjs/aws", async (importOriginal) => {
 	const actual = await importOriginal<{ AirhornAws: typeof AirhornAws }>();
 	return {
@@ -46,9 +66,6 @@ vi.mock("@airhornjs/aws", async (importOriginal) => {
 		},
 	};
 });
-
-const TWILIO_ACCOUNT = `AC${"0".repeat(32)}`;
-const TWILIO_URL = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT}/Messages.json`;
 
 const requests: { url: string; init: RequestInit }[] = [];
 let respond: (url: string) => Response = () =>
@@ -79,7 +96,7 @@ const DEFAULTS: Record<ResolvedProvider["type"], Partial<ResolvedProvider>> = {
 	ses: { from: "status@acme.dev", options: { region: "us-east-1" } },
 	twilio: {
 		from: "+15550001111",
-		options: { accountSid: TWILIO_ACCOUNT },
+		options: { accountSid: `AC${"0".repeat(32)}` },
 		secrets: { authToken: "tok" },
 	},
 	sns: { from: "ACME", options: { region: "eu-west-1" } },
@@ -354,17 +371,22 @@ describe("AirhornNotifier", () => {
 			`sha256=${hmacSha256("whsec", String(hook?.init.body))}`,
 		);
 
-		const sms = requests.find((request) => request.url === TWILIO_URL);
-		expect(headers(sms).authorization).toBe(
-			`Basic ${btoa(`${TWILIO_ACCOUNT}:tok`)}`,
-		);
-		expect(
-			Object.fromEntries(new URLSearchParams(String(sms?.init.body))),
-		).toEqual({
-			To: "+15551234567",
-			From: "+15550001111",
-			Body: smsText({ ...notification, siteUrl: "https://status.acme.dev" }),
-		});
+		// SMS gets no provider options: the SNS provider copies them into its request.
+		expect(sdk.sends).toEqual([
+			{
+				sdk: "twilio",
+				message: expect.objectContaining({
+					to: "+15551234567",
+					from: "+15550001111",
+					type: "sms",
+					content: smsText({
+						...notification,
+						siteUrl: "https://status.acme.dev",
+					}),
+				}),
+				options: undefined,
+			},
+		]);
 	});
 
 	it("renders emails without links or services when unavailable", async () => {
@@ -435,17 +457,16 @@ describe("AirhornNotifier", () => {
 			...channels(),
 			sms,
 		});
-		expect(
-			requests.filter((request) => request.url === TWILIO_URL),
-		).toHaveLength(2);
-		// SMS gets no provider options: the SNS provider copies them into its request.
-		expect(sdk.sends).toEqual([
-			{
-				sdk: "aws",
-				message: expect.objectContaining({ from: "ACME" }),
-				options: undefined,
-			},
+		expect(sdk.sends.map((send) => send.sdk).sort()).toEqual([
+			"aws",
+			"twilio",
+			"twilio",
 		]);
+		expect(
+			sdk.sends
+				.filter((send) => send.sdk === "aws")
+				.map((send) => (send.message as AirhornProviderMessage).from),
+		).toEqual(["ACME"]);
 	});
 
 	it("names the failed provider in the error", async () => {
@@ -464,7 +485,7 @@ describe("AirhornNotifier", () => {
 
 	it("reports load-balanced failures from the provider response", async () => {
 		const { notifier: n, errors } = notifier();
-		const sms = channel("sms", [provider("sns")], {
+		const sms = channel("sms", [provider("twilio")], {
 			strategy: "load_balanced",
 		});
 		const phone = subscriber({ type: "sms", target: "+15551234567" });
@@ -477,19 +498,22 @@ describe("AirhornNotifier", () => {
 		sdk.result = () => ({ success: false, response: {}, errors: [] });
 		await n.notifyIncident(notification, [phone], { ...channels(), sms });
 		expect(errors.map((error) => error.message)).toEqual([
-			"Failed to send sms to +15551234567: sns provider: invalid number",
+			"Failed to send sms to +15551234567: twilio provider: invalid number",
 			"Failed to send sms to +15551234567: the provider gave no reason",
 		]);
 	});
 
 	it("leaves out providers that cannot be built", async () => {
 		const { notifier: n, errors } = notifier();
-		const broken = provider("sns", { name: "Broken", options: {} });
+		const broken = provider("twilio", {
+			name: "Broken",
+			options: { accountSid: "broken" },
+		});
 		const phone = subscriber({ type: "sms", target: "+15551234567" });
 		await expect(
 			n.notifyIncident(notification, [phone], {
 				...channels(),
-				sms: channel("sms", [broken, provider("twilio")]),
+				sms: channel("sms", [broken, provider("sns")]),
 			}),
 		).resolves.toEqual({ sent: 1, failed: 0 });
 		await expect(
@@ -499,8 +523,8 @@ describe("AirhornNotifier", () => {
 			}),
 		).resolves.toEqual({ sent: 0, failed: 1 });
 		expect(errors.map((error) => error.message)).toEqual([
-			'Cannot use provider "Broken": AirhornAws requires region',
-			'Cannot use provider "Broken": AirhornAws requires region',
+			'Cannot use provider "Broken": accountSid must start with AC',
+			'Cannot use provider "Broken": accountSid must start with AC',
 			"Failed to send sms to +15551234567: No providers available for type: sms",
 		]);
 	});
@@ -617,6 +641,14 @@ describe("createProvider", () => {
 				},
 			],
 		]);
+	});
+
+	it("builds the Twilio provider", () => {
+		createProvider(provider("twilio"));
+		expect(sdk.twilioCtor).toHaveBeenCalledWith({
+			accountSid: `AC${"0".repeat(32)}`,
+			authToken: "tok",
+		});
 	});
 });
 

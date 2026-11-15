@@ -14,8 +14,14 @@ const nextConfig: NextConfig = {
 		];
 	},
 	// Node loads these packages from node_modules. airhorn is in the list
-	// because @airhornjs/aws loads it too, and one copy must load, not two.
-	serverExternalPackages: ["mongodb", "pg", "airhorn", "@airhornjs/aws"],
+	// because the provider packages load it too, and one copy must load, not two.
+	serverExternalPackages: [
+		"mongodb",
+		"pg",
+		"airhorn",
+		"@airhornjs/aws",
+		"@airhornjs/twilio",
+	],
 };
 
 export default nextConfig;

@@ -1,4 +1,5 @@
 import { AirhornAws } from "@airhornjs/aws";
+import { AirhornTwilio } from "@airhornjs/twilio";
 import {
 	Airhorn,
 	type AirhornProvider,
@@ -12,7 +13,6 @@ import type { DeliveryStrategy, NotificationChannel } from "../domain/types";
 import { errorMessage } from "../errors";
 import type { DeliveryChannel, ResolvedProvider } from "./delivery";
 import { SendGridProvider } from "./sendgrid";
-import { TwilioProvider } from "./twilio";
 import { WebhookProvider } from "./webhook";
 
 /** The airhorn send type of each channel. */
@@ -134,7 +134,7 @@ export function createProvider(provider: ResolvedProvider): AirhornProvider {
 				}),
 			);
 		case "twilio":
-			return new TwilioProvider({
+			return new AirhornTwilio({
 				accountSid: provider.options.accountSid as string,
 				authToken: provider.secrets.authToken as string,
 			});
