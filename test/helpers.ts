@@ -1,5 +1,6 @@
 import { type Config, loadConfig } from "@/lib/config";
-import type { Actor, Settings, Subscriber } from "@/lib/domain/types";
+import { permissionsForRole } from "@/lib/domain/permissions";
+import type { Actor, AgentActor, Settings, Subscriber } from "@/lib/domain/types";
 import type {
 	DeliveryChannel,
 	DeliveryChannels,
@@ -79,11 +80,26 @@ export const EDITOR: Actor = {
 	role: "editor",
 };
 export const VIEWER: Actor = {
-	type: "agent",
-	id: "agt_viewer",
+	type: "member",
+	id: "mem_viewer",
 	name: "Vi Viewer",
 	role: "viewer",
 };
+
+/** An agent actor for service tests. Defaults to the editor permission set. */
+export function agentActor(
+	permissions: readonly string[] = permissionsForRole("editor"),
+	extras: Partial<AgentActor> = {},
+): AgentActor {
+	return {
+		type: "agent",
+		id: "agt_test",
+		name: "Test agent",
+		permissions,
+		credential: { type: "token", id: "tok_test" },
+		...extras,
+	};
+}
 
 export interface TestContext extends ServiceContext {
 	services: Services;

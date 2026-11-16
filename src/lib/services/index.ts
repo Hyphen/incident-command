@@ -1,4 +1,5 @@
 import { seedDemo } from "../demo";
+import { ActivityService } from "./activity";
 import { AgentService } from "./agents";
 import { ServiceCatalog } from "./catalog";
 import type { ServiceContext } from "./context";
@@ -22,6 +23,7 @@ export interface Services {
 	members: MemberService;
 	sessions: SessionService;
 	agents: AgentService;
+	activity: ActivityService;
 	oauth: OAuthService;
 	subscribers: SubscriberService;
 	/** Idempotent first-boot tasks, such as seeding demo data. */
@@ -44,12 +46,13 @@ export function createServices(ctx: ServiceContext): Services {
 		settings,
 		notificationSettings,
 	);
-	const drafts = new DraftService(ctx, incidents);
+	const activity = new ActivityService(ctx);
+	const agents = new AgentService(ctx, activity);
+	const drafts = new DraftService(ctx, incidents, activity);
 	const status = new StatusService(ctx, settings, catalog, incidents);
 	const sessions = new SessionService(ctx);
-	const oauth = new OAuthService(ctx);
+	const oauth = new OAuthService(ctx, agents, activity);
 	const members = new MemberService(ctx, sessions, oauth);
-	const agents = new AgentService(ctx);
 
 	return {
 		settings,
@@ -61,9 +64,11 @@ export function createServices(ctx: ServiceContext): Services {
 		members,
 		sessions,
 		agents,
+		activity,
 		oauth,
 		subscribers,
 		async bootstrap() {
+			await agents.migrate();
 			if (ctx.config.seedDemo && (await ctx.store.count("services")) === 0) {
 				await seedDemo(ctx);
 			}

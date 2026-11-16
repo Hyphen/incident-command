@@ -10,7 +10,7 @@
 ## Features
 
 - **Status page:** overall status banner, active incidents, upcoming maintenance, grouped services with 90-day uptime bars, incident history, RSS feed and a public JSON API. Light and dark mode, mobile friendly.
-- **MCP server:** a Streamable HTTP endpoint at `/api/mcp` with 33 role-scoped tools, so agents can declare and update incidents, change service status, schedule maintenance and (with an admin token) manage members, tokens, subscribers and settings. See [docs/mcp.md](docs/mcp.md).
+- **MCP server:** a Streamable HTTP endpoint at `/api/mcp`. Each agent has its own permissions. A new agent can read the status page and write drafts. It cannot publish or notify subscribers until an admin grants those permissions. See [docs/mcp.md](docs/mcp.md).
 - **Human review of notifications:** an agent can save a notification as a draft. The MCP server returns a review link. A person opens the link, changes the draft if necessary, and approves it. Nothing is published or sent before approval. See [docs/mcp.md](docs/mcp.md#notification-drafts).
 - **Manage portal** at `/manage`: declare incidents, post updates, review notification drafts, manage services, members (viewer/editor/admin, added with one-time invite links), connected agents and API tokens, subscribers, and settings in three sections: General, Branding and Notifications.
 - **Skinnable:** Tailwind CSS v4 on top of CSS design tokens. Pick a theme preset, set a brand color, logo and custom CSS from the portal, or add your own preset. See [docs/theming.md](docs/theming.md).
@@ -78,9 +78,9 @@ Add the MCP endpoint to your agent. **Manage → Agents** shows the endpoint:
 claude mcp add --transport http incident-command https://status.example.com/api/mcp
 ```
 
-The agent opens the portal in your browser. Sign in and select **Allow**. The agent then acts as you, with your role. For a script that cannot sign in, an admin can create an API token on the same page.
+The agent opens the portal in your browser. Sign in and select **Allow**. A new agent can read the status page and write drafts. For a script that cannot sign in, an admin can add an API token on the agent page.
 
-Ask your agent something like _"We're seeing API errors in us-east, declare a major incident on the REST API and keep the status page updated"_. An agent only sees the tools that its role (viewer, editor or admin) allows. Details in [docs/mcp.md](docs/mcp.md).
+Ask your agent something like _"We're seeing API errors in us-east, declare a major incident on the REST API and keep the status page updated"_. An agent only sees the tools that its permissions allow. Details in [docs/mcp.md](docs/mcp.md).
 
 ## Architecture
 

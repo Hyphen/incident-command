@@ -9,6 +9,7 @@ import type {
 	OAuthClientMetadata,
 	OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
+import { DEFAULT_AGENT_PERMISSIONS } from "@/lib/domain/permissions";
 import { handleMcpRequest } from "@/lib/mcp/handler";
 import {
 	authorizationParams,
@@ -158,13 +159,16 @@ describe("MCP OAuth", () => {
 		expect(await whoami(client)).toMatchObject({
 			type: "agent",
 			name: "Ed Editor via Test agent",
-			role: "editor",
+			permissions: [...DEFAULT_AGENT_PERMISSIONS],
+			credential: "oauth",
 		});
 
 		// After the access token expires, the client refreshes it and retries.
 		const expired = provider.saved?.access_token;
 		t.clock.advance(3_600_000);
-		expect(await whoami(client)).toMatchObject({ role: "editor" });
+		expect(await whoami(client)).toMatchObject({
+			permissions: [...DEFAULT_AGENT_PERMISSIONS],
+		});
 		expect(provider.saved?.access_token).not.toBe(expired);
 		await client.close();
 	});

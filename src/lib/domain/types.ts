@@ -72,10 +72,27 @@ export interface AuthorRef {
 	name: string;
 }
 
-/** The authenticated principal performing an operation. */
-export interface Actor extends AuthorRef {
-	role: Role;
+/** A credential that an agent uses to call the MCP server. */
+export interface AgentCredential {
+	type: "token" | "oauth";
+	id: string;
 }
+
+/** A signed-in member, or the system actor. */
+export type MemberActor = AuthorRef & {
+	type: "member" | "system";
+	role: Role;
+};
+
+/** An agent. Its permissions are the ones in effect for this credential. */
+export type AgentActor = AuthorRef & {
+	type: "agent";
+	permissions: readonly string[];
+	credential: AgentCredential;
+};
+
+/** The authenticated principal performing an operation. */
+export type Actor = MemberActor | AgentActor;
 
 export interface Settings {
 	id: string;
@@ -233,13 +250,33 @@ export interface Session {
 	createdAt: string;
 }
 
-export interface AgentToken {
+/** An agent. API tokens and OAuth grants are credentials for this record. */
+export interface Agent {
 	id: string;
 	name: string;
 	description?: string;
+	permissions: string[];
+	ownerId?: string;
+	/** Set when migration built this agent from an old token or OAuth grant. */
+	migratedFrom?: "token" | "oauth";
+	createdBy: AuthorRef;
+	revision: number;
+	createdAt: string;
+	updatedAt: string;
+}
+
+/**
+ * An API token for an agent. Tokens created before permissions also have
+ * `name`, `description` and `role`.
+ */
+export interface AgentToken {
+	id: string;
+	agentId?: string;
+	name?: string;
+	description?: string;
 	tokenHash: string;
 	tokenPrefix: string;
-	role: Role;
+	role?: Role;
 	createdBy: AuthorRef;
 	lastUsedAt?: string;
 	expiresAt?: string;
@@ -247,8 +284,39 @@ export interface AgentToken {
 	createdAt: string;
 }
 
-/** An agent token without secrets, safe to return from APIs and render. */
-export type PublicAgentToken = Omit<AgentToken, "tokenHash">;
+export const AGENT_ACTIVITY_TYPES = [
+	"tool_call",
+	"agent_created",
+	"agent_renamed",
+	"permissions_changed",
+	"token_created",
+	"token_revoked",
+	"oauth_connected",
+	"oauth_disconnected",
+	"owner_removed",
+	"draft_approved",
+	"draft_discarded",
+] as const;
+export type AgentActivityType = (typeof AGENT_ACTIVITY_TYPES)[number];
+
+export type AgentActivityOutcome = "ok" | "denied" | "error";
+
+/** One row in the activity log of an agent. It never holds a secret. */
+export interface AgentActivity {
+	id: string;
+	agentId: string;
+	type: AgentActivityType;
+	actor: AuthorRef;
+	credential?: AgentCredential;
+	tool?: string;
+	target?: { type: string; id: string; label?: string };
+	outcome: AgentActivityOutcome;
+	code?: string;
+	permission?: string;
+	added?: string[];
+	removed?: string[];
+	createdAt: string;
+}
 
 /**
  * An OAuth client that an agent registered with dynamic client registration
@@ -275,6 +343,8 @@ export interface OAuthCode {
 	redirectUri: string;
 	/** The PKCE `S256` code challenge. */
 	codeChallenge: string;
+	/** The existing agent that the member chose. A new agent has no id yet. */
+	agentId?: string;
 	/** The RFC 8707 resource indicator of the authorization request. */
 	resource?: string;
 	expiresAt: string;
@@ -295,6 +365,8 @@ export interface OAuthGrant {
 	accessTokenExpiresAt: string;
 	refreshTokenHash: string;
 	refreshTokenExpiresAt: string;
+	/** The agent that this connection acts as. */
+	agentId?: string;
 	lastUsedAt?: string;
 	createdAt: string;
 }

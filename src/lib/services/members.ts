@@ -34,7 +34,7 @@ import {
 	authorRef,
 	iso,
 	parse,
-	requireRole,
+	requirePermission,
 	type ServiceContext,
 } from "./context";
 import type { OAuthService } from "./oauth";
@@ -88,7 +88,7 @@ export class MemberService {
 	}
 
 	async list(actor: Actor): Promise<PublicMember[]> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "members.read");
 		const members = await this.ctx.store.find("members", {
 			sort: [{ field: "createdAt" }],
 		});
@@ -108,7 +108,7 @@ export class MemberService {
 		actor: Actor,
 		input: CreateInviteInput,
 	): Promise<{ token: string; invite: PublicInvite }> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "members.manage");
 		const data = parse(createInviteSchema, input);
 		await this.assertEmailAvailable(data.email);
 		await this.ctx.store.deleteMany("invites", {
@@ -130,7 +130,7 @@ export class MemberService {
 	}
 
 	async listInvites(actor: Actor): Promise<PublicInvite[]> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "members.read");
 		const invites = await this.ctx.store.find("invites", {
 			sort: [{ field: "createdAt", direction: "desc" }],
 		});
@@ -138,7 +138,7 @@ export class MemberService {
 	}
 
 	async revokeInvite(actor: Actor, id: string): Promise<void> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "members.manage");
 		if (!(await this.ctx.store.delete("invites", id))) {
 			throw new NotFoundError("Invite", id);
 		}
@@ -152,7 +152,7 @@ export class MemberService {
 		actor: Actor,
 		id: string,
 	): Promise<{ token: string; invite: PublicInvite }> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "members.manage");
 		const invite = await this.ctx.store.get("invites", id, {
 			consistent: true,
 		});
@@ -229,7 +229,7 @@ export class MemberService {
 		id: string,
 		input: UpdateMemberInput,
 	): Promise<PublicMember> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "members.manage");
 		const patch = parse(updateMemberSchema, input);
 		const current = await this.load(id);
 		if (patch.role && patch.role !== "admin" && current.role === "admin") {
@@ -278,7 +278,7 @@ export class MemberService {
 	}
 
 	async delete(actor: Actor, id: string): Promise<void> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "members.manage");
 		const member = await this.load(id);
 		if (member.role === "admin") {
 			await this.assertNotLastAdmin();

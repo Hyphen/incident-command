@@ -5,10 +5,11 @@ import {
 	safeEqual,
 	sha256,
 } from "../crypto";
+import { can, permissionsInEffect } from "../domain/permissions";
 import { createAgentSchema, registerClientSchema } from "../domain/schemas";
-import { hasRole } from "../domain/status";
 import type {
 	Actor,
+	AgentActor,
 	AgentConnection,
 	OAuthClient,
 	OAuthCode,
@@ -21,7 +22,9 @@ import {
 	OAuthError,
 } from "../errors";
 import type { Condition } from "../store/types";
-import { iso, parse, type ServiceContext } from "./context";
+import type { ActivityService } from "./activity";
+import type { AgentService } from "./agents";
+import { authorRef, iso, parse, type ServiceContext } from "./context";
 
 export const ACCESS_TOKEN_PREFIX = "icat_";
 export const REFRESH_TOKEN_PREFIX = "icrt_";
@@ -238,9 +241,17 @@ function memberCondition(memberId: string): Condition[] {
  */
 export class OAuthService {
 	private readonly ctx: ServiceContext;
+	private readonly agents: AgentService;
+	private readonly activity: ActivityService;
 
-	constructor(ctx: ServiceContext) {
+	constructor(
+		ctx: ServiceContext,
+		agents: AgentService,
+		activity: ActivityService,
+	) {
 		this.ctx = ctx;
+		this.agents = agents;
+		this.activity = activity;
 	}
 
 	/** Dynamic client registration (RFC 7591). Each client is a public client. */
@@ -349,7 +360,7 @@ export class OAuthService {
 		actor: Actor,
 		params: AuthorizationParams,
 		resource: string,
-		name?: string,
+		choice?: string | { name?: string; agentId?: string },
 	): Promise<string> {
 		if (actor.type !== "member") {
 			throw new ForbiddenError("Only a member can connect an agent");
@@ -373,8 +384,12 @@ export class OAuthService {
 			expiresAt: iso(new Date(now.getTime() + CODE_TTL_MS)),
 			createdAt: iso(now),
 		};
-		if (name !== undefined) {
-			record.clientName = parse(createAgentSchema.shape.name, name);
+		const selected = typeof choice === "string" ? { name: choice } : choice;
+		if (selected?.agentId) {
+			const agent = await this.agents.requireChoice(actor, selected.agentId);
+			record.agentId = agent.id;
+		} else if (selected?.name) {
+			record.clientName = parse(createAgentSchema.shape.name, selected.name);
 		}
 		if (request.resource) {
 			record.resource = request.resource;
@@ -417,7 +432,7 @@ export class OAuthService {
 	}
 
 	/** Resolves an access token to the actor of its agent, or `undefined`. */
-	async authenticate(token: string | undefined): Promise<Actor | undefined> {
+	async authenticate(token: string | undefined): Promise<AgentActor | undefined> {
 		if (!token?.startsWith(ACCESS_TOKEN_PREFIX)) {
 			return undefined;
 		}
@@ -433,6 +448,10 @@ export class OAuthService {
 		if (!grant || !member) {
 			return undefined;
 		}
+		const agent = await this.agents.ensureGrant(grant);
+		if (!agent) {
+			return undefined;
+		}
 		const lastUsed = grant.lastUsedAt
 			? new Date(grant.lastUsedAt).getTime()
 			: 0;
@@ -441,7 +460,7 @@ export class OAuthService {
 			// this write when that occurs, so it cannot restore the old tokens.
 			await this.ctx.store.update(
 				"oauth_grants",
-				{ ...grant, lastUsedAt: iso(now) },
+				{ ...grant, agentId: agent.id, lastUsedAt: iso(now) },
 				{
 					where: [
 						{
@@ -455,10 +474,27 @@ export class OAuthService {
 		}
 		return {
 			type: "agent",
-			id: grant.id,
-			name: `${member.name} via ${grant.clientName}`,
-			role: member.role,
+			id: agent.id,
+			name: `${member.name} via ${agent.name}`,
+			permissions: permissionsInEffect(agent.permissions, member.role),
+			credential: { type: "oauth", id: grant.id },
 		};
+	}
+
+	/** The agent this member last connected for this client, when it still exists. */
+	async preferredAgentId(
+		memberId: string,
+		clientId: string,
+	): Promise<string | undefined> {
+		const [grant] = await this.ctx.store.find("oauth_grants", {
+			where: [
+				{ field: "memberId", op: "eq", value: memberId },
+				{ field: "clientId", op: "eq", value: clientId },
+			],
+			sort: [{ field: "createdAt", direction: "desc" }],
+			limit: 1,
+		});
+		return grant?.agentId;
 	}
 
 	/** The connected agents. An admin sees each connection, a member sees their own. */
@@ -470,7 +506,10 @@ export class OAuthService {
 				value: iso(this.ctx.now()),
 			},
 		];
-		if (!hasRole(actor.role, "admin")) {
+		if (!can(actor, "agents.read")) {
+			if (actor.type !== "member") {
+				return [];
+			}
 			where.push(...memberCondition(actor.id));
 		}
 		const [grants, members] = await Promise.all([
@@ -505,11 +544,20 @@ export class OAuthService {
 		const grant = await this.ctx.store.get("oauth_grants", id);
 		if (
 			!grant ||
-			(grant.memberId !== actor.id && !hasRole(actor.role, "admin"))
+			(grant.memberId !== actor.id && !can(actor, "agents.manage"))
 		) {
 			throw new NotFoundError("Connection", id);
 		}
 		await this.ctx.store.delete("oauth_grants", id);
+		if (grant.agentId) {
+			await this.activity.record({
+				agentId: grant.agentId,
+				type: "oauth_disconnected",
+				actor: authorRef(actor),
+				credential: { type: "oauth", id: grant.id },
+				outcome: "ok",
+			});
+		}
 	}
 
 	/** Disconnects each agent of a member, for example when the member is removed. */
@@ -517,6 +565,7 @@ export class OAuthService {
 		const where = memberCondition(memberId);
 		await this.ctx.store.deleteMany("oauth_codes", { where });
 		await this.ctx.store.deleteMany("oauth_grants", { where });
+		await this.agents.releaseOwner(memberId);
 	}
 
 	private async requireCheck(params: AuthorizationParams, resource: string) {
@@ -557,6 +606,20 @@ export class OAuthService {
 			throw invalidGrant("The authorization code is not valid");
 		}
 		checkResource(params.resource, code.resource);
+		const member = await this.ctx.store.get("members", code.memberId);
+		if (!member) {
+			throw invalidGrant("The member is not available");
+		}
+		const agent = code.agentId
+			? await this.ctx.store.get("agents", code.agentId)
+			: await this.agents.createOwned({
+					name: code.clientName ?? client.name,
+					ownerId: member.id,
+					createdBy: { type: "member", id: member.id, name: member.name },
+				});
+		if (!agent) {
+			throw invalidGrant("The agent is not available");
+		}
 		await this.ctx.store.deleteMany("oauth_grants", {
 			where: [{ field: "refreshTokenExpiresAt", op: "lte", value: iso(now) }],
 		});
@@ -566,6 +629,7 @@ export class OAuthService {
 			clientId: client.id,
 			clientName: code.clientName ?? client.name,
 			memberId: code.memberId,
+			agentId: agent.id,
 			...tokens.fields,
 			createdAt: iso(now),
 		};
@@ -573,6 +637,13 @@ export class OAuthService {
 			grant.resource = code.resource;
 		}
 		await this.ctx.store.insert("oauth_grants", grant);
+		await this.activity.record({
+			agentId: agent.id,
+			type: "oauth_connected",
+			actor: { type: "member", id: member.id, name: member.name },
+			credential: { type: "oauth", id: grant.id },
+			outcome: "ok",
+		});
 		return tokens.response;
 	}
 

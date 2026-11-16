@@ -1,4 +1,3 @@
-import type { Actor } from "@/lib/domain/types";
 import {
 	ConflictError,
 	ForbiddenError,
@@ -7,18 +6,14 @@ import {
 } from "@/lib/errors";
 import {
 	ADMIN,
+	agentActor,
 	createTestContext,
 	EDITOR,
 	type TestContext,
 	VIEWER,
 } from "../helpers";
 
-const AGENT: Actor = {
-	type: "agent",
-	id: "agt_bot",
-	name: "Ops bot",
-	role: "editor",
-};
+const AGENT = agentActor();
 
 describe("DraftService", () => {
 	let t: TestContext;
@@ -250,7 +245,32 @@ describe("DraftService", () => {
 		await expect(
 			t.services.drafts.create(VIEWER, { title: "Errors", message: "x" }),
 		).rejects.toBeInstanceOf(ForbiddenError);
-		expect(await t.services.drafts.list()).toHaveLength(0);
+		const draft = await t.services.drafts.create(AGENT, {
+			title: "Errors",
+			message: "x",
+		});
+		await expect(
+			t.services.drafts.approve(AGENT, draft.id, draft.content),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		await expect(
+			t.services.drafts.update(AGENT, draft.id, draft.content),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		await expect(
+			t.services.drafts.discard(AGENT, draft.id),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		expect(await t.services.drafts.get(draft.id)).toMatchObject({
+			state: "pending",
+		});
+		const own = await t.services.drafts.create(EDITOR, {
+			title: "Mine",
+			message: "x",
+		});
+		await t.services.drafts.approve(EDITOR, own.id, own.content);
+		expect(
+			await t.store.find("agent_activity", {
+				where: [{ field: "agentId", op: "eq", value: EDITOR.id }],
+			}),
+		).toEqual([]);
 	});
 
 	it("saves edits while the draft waits for review", async () => {

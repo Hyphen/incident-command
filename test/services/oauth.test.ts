@@ -1,4 +1,8 @@
 import { pkceChallenge } from "@/lib/crypto";
+import {
+	DEFAULT_AGENT_PERMISSIONS,
+	permissionsForRole,
+} from "@/lib/domain/permissions";
 import type { Actor, Role } from "@/lib/domain/types";
 import {
 	ForbiddenError,
@@ -16,7 +20,7 @@ import {
 	REFRESH_TOKEN_TTL_MS,
 	UNUSED_CLIENT_TTL_MS,
 } from "@/lib/services/oauth";
-import { createTestContext, type TestContext } from "../helpers";
+import { agentActor, createTestContext, type TestContext } from "../helpers";
 
 const RESOURCE = "https://status.acme.dev/api/mcp";
 const REDIRECT = "http://localhost:33418/callback";
@@ -282,9 +286,13 @@ describe("OAuthService", () => {
 			t.services.oauth.authenticate(tokens.access_token),
 		).resolves.toEqual({
 			type: "agent",
-			id: expect.stringMatching(/^ogr_/),
+			id: expect.stringMatching(/^agt_/),
 			name: "Ed Editor via Claude Code",
-			role: "editor",
+			permissions: [...DEFAULT_AGENT_PERMISSIONS],
+			credential: {
+				type: "oauth",
+				id: expect.stringMatching(/^ogr_/),
+			},
 		});
 		expect(await t.services.oauth.list(actor)).toEqual([
 			{
@@ -305,7 +313,7 @@ describe("OAuthService", () => {
 		// Only a member can approve an agent.
 		await expect(
 			t.services.oauth.approve(
-				{ type: "agent", id: "agt_x", name: "Bot", role: "admin" },
+				agentActor(["agents.manage"], { id: "agt_x", name: "Bot" }),
 				authorization(client.client_id),
 				RESOURCE,
 			),
@@ -383,7 +391,9 @@ describe("OAuthService", () => {
 		const tokens = await exchange(t, client_id, code, { resource: undefined });
 		await expect(
 			t.services.oauth.authenticate(tokens.access_token),
-		).resolves.toMatchObject({ role: "viewer" });
+		).resolves.toMatchObject({
+			permissions: ["status.read", "drafts.read"],
+		});
 		await expect(
 			t.services.oauth.token({
 				grant_type: "refresh_token",
@@ -510,7 +520,9 @@ describe("OAuthService", () => {
 		).resolves.toBeUndefined();
 		await expect(
 			t.services.oauth.authenticate(next.access_token),
-		).resolves.toMatchObject({ role: "editor" });
+		).resolves.toMatchObject({
+			permissions: [...DEFAULT_AGENT_PERMISSIONS],
+		});
 		await expectOAuthError(refresh(), "invalid_grant");
 
 		const concurrent = await Promise.allSettled([
@@ -544,10 +556,14 @@ describe("OAuthService", () => {
 		}) as typeof get);
 		await expect(
 			t.services.oauth.authenticate(tokens.access_token),
-		).resolves.toMatchObject({ role: "editor" });
+		).resolves.toMatchObject({
+			permissions: [...DEFAULT_AGENT_PERMISSIONS],
+		});
 		await expect(
 			t.services.oauth.authenticate(refreshed?.access_token),
-		).resolves.toMatchObject({ role: "editor" });
+		).resolves.toMatchObject({
+			permissions: [...DEFAULT_AGENT_PERMISSIONS],
+		});
 		await expectOAuthError(refresh(tokens.refresh_token), "invalid_grant");
 	});
 
@@ -598,15 +614,25 @@ describe("OAuthService", () => {
 		}
 	});
 
-	it("uses the current role of the member", async () => {
+	it("limits an OAuth agent to the current role of the member", async () => {
 		const { member, actor } = await addMember(t, "editor", "Ed Editor");
 		const { tokens } = await connect(t, actor);
+		const connected = await t.services.oauth.authenticate(tokens.access_token);
+		if (!connected || connected.type !== "agent") {
+			throw new Error("Expected an agent");
+		}
+		const agent = await t.services.agents.get(SYSTEM_ACTOR, connected.id);
+		await t.services.agents.update(SYSTEM_ACTOR, agent.id, {
+			permissions: permissionsForRole("editor"),
+			revision: agent.revision,
+		});
 		await t.services.members.update(SYSTEM_ACTOR, member.id, {
 			role: "viewer",
 		});
-		await expect(
-			t.services.oauth.authenticate(tokens.access_token),
-		).resolves.toMatchObject({ role: "viewer" });
+		const limited = await t.services.oauth.authenticate(tokens.access_token);
+		expect(limited && limited.type === "agent" && limited.permissions).toEqual(
+			permissionsForRole("viewer"),
+		);
 	});
 
 	it("lists every connection for an admin and their own for a member", async () => {

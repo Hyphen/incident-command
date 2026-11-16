@@ -1,4 +1,6 @@
 import type {
+	Agent,
+	AgentActivity,
 	AgentToken,
 	Incident,
 	Invite,
@@ -24,7 +26,9 @@ export interface CollectionMap {
 	members: Member;
 	invites: Invite;
 	sessions: Session;
+	agents: Agent;
 	agent_tokens: AgentToken;
+	agent_activity: AgentActivity;
 	oauth_clients: OAuthClient;
 	oauth_codes: OAuthCode;
 	oauth_grants: OAuthGrant;
@@ -44,7 +48,9 @@ export const COLLECTIONS: readonly CollectionName[] = [
 	"members",
 	"invites",
 	"sessions",
+	"agents",
 	"agent_tokens",
+	"agent_activity",
 	"oauth_clients",
 	"oauth_codes",
 	"oauth_grants",
@@ -73,13 +79,16 @@ export const INDEXES: Record<CollectionName, readonly IndexDefinition[]> = {
 		{ field: "email", unique: true },
 	],
 	sessions: [{ field: "memberId" }, { field: "expiresAt" }],
-	agent_tokens: [{ field: "tokenHash", unique: true }],
+	agents: [{ field: "ownerId" }],
+	agent_tokens: [{ field: "tokenHash", unique: true }, { field: "agentId" }],
+	agent_activity: [{ field: "agentId" }, { field: "createdAt" }],
 	oauth_clients: [{ field: "createdAt" }],
 	oauth_codes: [{ field: "memberId" }, { field: "expiresAt" }],
 	oauth_grants: [
 		{ field: "accessTokenHash", unique: true },
 		{ field: "refreshTokenHash", unique: true },
 		{ field: "memberId" },
+		{ field: "agentId" },
 		{ field: "refreshTokenExpiresAt" },
 	],
 	subscribers: [

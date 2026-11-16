@@ -1,8 +1,8 @@
 import type { z } from "zod";
 import type { Config } from "../config";
-import { hasRole } from "../domain/status";
-import type { Actor, AuthorRef, Role } from "../domain/types";
-import { ForbiddenError, ValidationError } from "../errors";
+import { can, type Permission, PERMISSIONS } from "../domain/permissions";
+import type { Actor, AuthorRef } from "../domain/types";
+import { PermissionDeniedError, ValidationError } from "../errors";
 import type { Notifier } from "../notifications/notifier";
 import type { DocumentStore } from "../store/types";
 
@@ -20,10 +20,16 @@ export const SYSTEM_ACTOR: Actor = {
 	role: "admin",
 };
 
-export function requireRole(actor: Actor, role: Role): void {
-	if (!hasRole(actor.role, role)) {
-		throw new ForbiddenError(`This action requires the ${role} role`);
+export function requirePermission(actor: Actor, permission: Permission): void {
+	if (can(actor, permission)) {
+		return;
 	}
+	const spec = PERMISSIONS[permission];
+	const message =
+		actor.type === "agent"
+			? `This agent does not have the permission "${spec.label}" (${permission}).`
+			: `This action requires the ${spec.role} role`;
+	throw new PermissionDeniedError(message, permission);
 }
 
 export function authorRef(actor: Actor): AuthorRef {

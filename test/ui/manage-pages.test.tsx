@@ -1,5 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import AccountPage from "@/app/manage/(portal)/account/page";
+import AgentPage from "@/app/manage/(portal)/agents/[id]/page";
+import AgentsLoading from "@/app/manage/(portal)/agents/loading";
+import NewAgentPage from "@/app/manage/(portal)/agents/new/page";
 import AgentsPage from "@/app/manage/(portal)/agents/page";
 import DraftPage from "@/app/manage/(portal)/drafts/[id]/page";
 import DraftsPage from "@/app/manage/(portal)/drafts/page";
@@ -19,8 +22,10 @@ import AuthorizePage from "@/app/manage/authorize/page";
 import InvitePage from "@/app/manage/invite/page";
 import LoginPage from "@/app/manage/login/page";
 import SetupPage from "@/app/manage/setup/page";
-import type { Actor } from "@/lib/domain/types";
+import { SESSION_COOKIE } from "@/lib/auth";
+import { sha256 } from "@/lib/crypto";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
+import { agentActor } from "../helpers";
 import {
 	AGENT_REDIRECT,
 	authorizationQuery,
@@ -33,7 +38,7 @@ import {
 	setupApp,
 	signIn,
 } from "./app";
-import { setPathname, setRequestHeaders } from "./next-state";
+import { cookieJar, setPathname, setRequestHeaders } from "./next-state";
 
 const flash = (value: Record<string, string> = {}) => ({
 	searchParams: params(flashQueryParams(value)),
@@ -43,12 +48,7 @@ const rawFlash = (value: Record<string, string> = {}) => ({
 	searchParams: params(value),
 });
 
-const AGENT: Actor = {
-	type: "agent",
-	id: "agt_bot",
-	name: "Ops bot",
-	role: "editor",
-};
+const AGENT = agentActor();
 
 describe("login and setup", () => {
 	it("sends visitors to setup until an admin exists", async () => {
@@ -191,6 +191,7 @@ describe("agent consent page", () => {
 		const form = screen.getByRole("button", { name: "Allow" }).closest("form");
 		expect(Object.fromEntries(new FormData(form as HTMLFormElement))).toEqual({
 			...query,
+			choice: "new",
 			name: "Claude Code",
 		});
 		expect(screen.getByRole("textbox", { name: "Agent name" })).toHaveValue(
@@ -200,6 +201,40 @@ describe("agent consent page", () => {
 		expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute(
 			"formnovalidate",
 		);
+	});
+
+	it("offers a new agent or an agent the member already owns", async () => {
+		const { app } = await setupApp();
+		const first = await register(app);
+		const { actor } = await signIn(app, "editor");
+		const approved = await app.services.oauth.approve(
+			actor,
+			first,
+			"http://localhost/api/mcp",
+			{ name: "Existing" },
+		);
+		await app.services.oauth.token({
+			grant_type: "authorization_code",
+			client_id: first.client_id,
+			code: new URL(approved).searchParams.get("code") ?? "",
+			redirect_uri: AGENT_REDIRECT,
+			code_verifier: "v".repeat(43),
+		});
+		const again = render(await consent(first));
+		expect(screen.getByRole("radio", { name: "Existing agent" })).toBeChecked();
+		expect(screen.getByRole("combobox")).toHaveValue(
+			(await app.services.agents.list(actor))[0]?.id,
+		);
+		again.unmount();
+		const other = await register(app);
+		const fresh = render(await consent(other));
+		expect(screen.getByRole("radio", { name: "New agent" })).toBeChecked();
+		fresh.unmount();
+		await signIn(app, "admin");
+		render(await consent(other));
+		expect(
+			screen.getByText("You can attach this connection to any agent."),
+		).toBeInTheDocument();
 	});
 
 	it("explains a request that it cannot send back to the agent", async () => {
@@ -925,8 +960,8 @@ describe("admin pages", () => {
 				`claude mcp add --transport http incident-command ${endpoint} --header "Authorization: Bearer <token>"`,
 			),
 		).toBeInTheDocument();
-		expect(screen.getByText("No connected agents yet.")).toBeInTheDocument();
-		expect(screen.getByText("No API tokens yet.")).toBeInTheDocument();
+		expect(screen.getByText("No agents yet.")).toBeInTheDocument();
+		expect(screen.getByText("No activity yet.")).toBeInTheDocument();
 		empty.unmount();
 
 		const editor = await signIn(app, "editor");
@@ -934,18 +969,23 @@ describe("admin pages", () => {
 			connectAgent(app, admin, "Claude Code"),
 		);
 		await connectAgent(app, editor.actor, "Cursor");
-		const used = await services.agents.create(actor, {
+		const usedAgent = await services.agents.create(actor, {
 			name: "Used bot",
 			description: "Pager bridge",
+		});
+		const used = await services.agents.createToken(actor, usedAgent.id, {
 			expiresInDays: 30,
 		});
 		await services.agents.authenticate(used.token);
-		const revoked = await services.agents.create(actor, {
+		const revokedAgent = await services.agents.create(actor, {
 			name: "Revoked bot",
 		});
-		await services.agents.revoke(actor, revoked.agent.id);
-		await services.agents.create(actor, {
+		const revoked = await services.agents.createToken(actor, revokedAgent.id, {});
+		await services.agents.revokeToken(actor, revoked.credentialId);
+		const expiredAgent = await services.agents.create(actor, {
 			name: "Expired bot",
+		});
+		await services.agents.createToken(actor, expiredAgent.id, {
 			expiresInDays: 1,
 		});
 		clock.advance(2 * 86_400_000);
@@ -954,7 +994,8 @@ describe("admin pages", () => {
 		vi.useRealTimers();
 		expect(screen.getByText("Claude Code")).toBeInTheDocument();
 		expect(screen.getByText("Cursor")).toBeInTheDocument();
-		expect(screen.getByText(/^Editor User · Connected/)).toBeInTheDocument();
+		expect(screen.getByText("OAuth: Editor User")).toBeInTheDocument();
+		expect(screen.getByText("OAuth: Admin User")).toBeInTheDocument();
 		expect(screen.getAllByRole("button", { name: "Disconnect" })).toHaveLength(
 			2,
 		);
@@ -972,14 +1013,205 @@ describe("admin pages", () => {
 		const editor = await signIn(app, "editor");
 		await connectAgent(app, admin.actor, "Admin agent");
 		await connectAgent(app, editor.actor, "Editor agent");
+		const [owned] = await app.services.agents.list(editor.actor);
+		const { client_id } = await app.services.oauth.register({
+			client_name: "Extra",
+			redirect_uris: [AGENT_REDIRECT],
+		});
+		const url = await app.services.oauth.approve(
+			admin.actor,
+			authorizationQuery(client_id),
+			"http://localhost/api/mcp",
+			{ agentId: owned?.id ?? "" },
+		);
+		await app.services.oauth.token({
+			grant_type: "authorization_code",
+			client_id,
+			code: new URL(url).searchParams.get("code") ?? "",
+			redirect_uri: AGENT_REDIRECT,
+			code_verifier: "v".repeat(43),
+		});
 		render(await AgentsPage(flash()));
 		expect(screen.getByText("Editor agent")).toBeInTheDocument();
 		expect(screen.queryByText("Admin agent")).not.toBeInTheDocument();
-		expect(screen.queryByText(/Editor User ·/)).not.toBeInTheDocument();
-		expect(screen.getByText("Agents that you connected.")).toBeInTheDocument();
+		expect(screen.getByText("OAuth: Admin User")).toBeInTheDocument();
 		expect(
-			screen.queryByRole("heading", { name: "API tokens" }),
+			screen.queryByRole("link", { name: "New agent" }),
 		).not.toBeInTheDocument();
+		expect(screen.getAllByRole("button", { name: "Disconnect" })).toHaveLength(
+			1,
+		);
+	});
+
+	it("shows agent settings, credentials and activity", async () => {
+		const { app, services, clock } = await setupApp();
+		const admin = await signIn(app, "admin");
+		const agent = await services.agents.create(admin.actor, {
+			name: "Ops bot",
+			description: "Bridge",
+			permissions: [],
+		});
+		const created = render(await NewAgentPage(flash()));
+		expect(screen.getByRole("checkbox", { name: /Read status/ })).toBeChecked();
+		expect(
+			screen.getByRole("checkbox", { name: /Notify subscribers/ }),
+		).not.toBeChecked();
+		created.unmount();
+		const list = render(await AgentsPage(flash()));
+		expect(screen.getByText("No permissions")).toBeInTheDocument();
+		list.unmount();
+		const bare = render(
+			await AgentPage({
+				params: params({ id: agent.id }),
+				searchParams: params({}),
+			}),
+		);
+		expect(screen.getByText("No credentials yet.")).toBeInTheDocument();
+		bare.unmount();
+
+		const { client_id } = await app.services.oauth.register({
+			client_name: "Portal",
+			redirect_uris: [AGENT_REDIRECT],
+		});
+		const approved = await app.services.oauth.approve(
+			admin.actor,
+			authorizationQuery(client_id),
+			"http://localhost/api/mcp",
+			{ agentId: agent.id },
+		);
+		await app.services.oauth.token({
+			grant_type: "authorization_code",
+			client_id,
+			code: new URL(approved).searchParams.get("code") ?? "",
+			redirect_uri: AGENT_REDIRECT,
+			code_verifier: "v".repeat(43),
+		});
+		const active = await services.agents.createToken(admin.actor, agent.id, {
+			expiresInDays: 7,
+		});
+		await services.agents.authenticate(active.token);
+		const revoked = await services.agents.createToken(admin.actor, agent.id, {});
+		await services.agents.revokeToken(admin.actor, revoked.credentialId);
+		await services.agents.createToken(admin.actor, agent.id, {
+			expiresInDays: 1,
+		});
+		clock.advance(2 * 86_400_000);
+		const page = (id: string, query: Record<string, string> = {}) =>
+			AgentPage({
+				params: params({ id }),
+				searchParams: params(query),
+			});
+		const detail = render(await page(agent.id));
+		expect(screen.getByText("active")).toBeInTheDocument();
+		expect(screen.getByText("revoked")).toBeInTheDocument();
+		expect(screen.getByText("expired")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Create token" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+		expect(screen.getByText("Created the agent.")).toBeInTheDocument();
+		expect(screen.getAllByText(/Expires/).length).toBeGreaterThan(0);
+		detail.unmount();
+
+		for (let index = 0; index < 49; index += 1) {
+			await services.activity.record({
+				agentId: agent.id,
+				type: "agent_renamed",
+				actor: { type: "member", id: admin.actor.id, name: admin.actor.name },
+				outcome: "ok",
+			});
+		}
+		const listed = render(await page(agent.id));
+		expect(screen.getByRole("link", { name: "Next" })).toHaveAttribute(
+			"href",
+			`/manage/agents/${agent.id}?page=2`,
+		);
+		listed.unmount();
+		render(await page(agent.id, { page: "2" }));
+		expect(screen.queryByRole("link", { name: "Next" })).not.toBeInTheDocument();
+
+		await expectNotFound(page("agt_missing"));
+		vi.spyOn(services.agents, "get").mockRejectedValueOnce(new Error("kaput"));
+		await expect(page(agent.id)).rejects.toThrow("kaput");
+	});
+
+	it("lets an owner rename an agent and hides credentials they cannot change", async () => {
+		const { app, services } = await setupApp();
+		const admin = await signIn(app, "admin");
+		const editor = await signIn(app, "editor");
+		await connectAgent(app, editor.actor, "Editor agent");
+		const [owned] = await services.agents.list(editor.actor);
+		const { client_id } = await app.services.oauth.register({
+			client_name: "Extra",
+			redirect_uris: [AGENT_REDIRECT],
+		});
+		const url = await app.services.oauth.approve(
+			admin.actor,
+			authorizationQuery(client_id),
+			"http://localhost/api/mcp",
+			{ agentId: owned?.id ?? "" },
+		);
+		await app.services.oauth.token({
+			grant_type: "authorization_code",
+			client_id,
+			code: new URL(url).searchParams.get("code") ?? "",
+			redirect_uri: AGENT_REDIRECT,
+			code_verifier: "v".repeat(43),
+		});
+		const { token } = await app.services.sessions.create(editor.member.id);
+		cookieJar.set(SESSION_COOKIE, token);
+		render(
+			await AgentPage({
+				params: params({ id: owned?.id ?? "" }),
+				searchParams: params({}),
+			}),
+		);
+		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+		expect(screen.getByText("Read status")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Create token" }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Delete" }),
+		).not.toBeInTheDocument();
+		expect(screen.getAllByRole("button", { name: "Disconnect" })).toHaveLength(
+			1,
+		);
+		expect(screen.getByText("OAuth: Admin User")).toBeInTheDocument();
+	});
+
+	it("shows a migrated agent that has no activity yet", async () => {
+		const { app, services } = await setupApp();
+		const { actor } = await signIn(app, "admin");
+		const secret = `icmd_${"b".repeat(32)}`;
+		await app.store.insert("agent_tokens", {
+			id: "agt_legacy",
+			name: "Legacy",
+			tokenHash: sha256(secret),
+			tokenPrefix: secret.slice(0, 11),
+			role: "editor",
+			createdBy: { type: "member", id: actor.id, name: actor.name },
+			createdAt: "2026-11-02T12:00:00.000Z",
+		});
+		await services.agents.migrate();
+		render(
+			await AgentPage({
+				params: params({ id: "agt_legacy" }),
+				searchParams: params({}),
+			}),
+		);
+		expect(screen.getByText(/before permissions/)).toBeInTheDocument();
+		expect(screen.getByText("No activity yet.")).toBeInTheDocument();
+	});
+
+	it("sends a member who cannot manage agents away from the new page", async () => {
+		const { app } = await setupApp();
+		await signIn(app, "editor");
+		expectFlashRedirect(
+			await redirectOf(NewAgentPage(flash())),
+			"/manage",
+			"error",
+			"That page requires the admin role",
+		);
+		render(<AgentsLoading />);
 	});
 
 	it("uses the configured site url for the MCP endpoint", async () => {

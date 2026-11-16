@@ -1,7 +1,9 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import type { Permission } from "../domain/permissions";
 import type { Services } from "../services";
+import { authorRef } from "../services/context";
 import { RESOURCE_METADATA_PATH, requestOrigin } from "./oauth";
-import { createMcpServer } from "./server";
+import { createMcpServer, deniedToolMessage } from "./server";
 
 function jsonRpcError(
 	status: number,
@@ -51,7 +53,33 @@ export async function handleMcpRequest(
 				: challenge,
 		});
 	}
-	const server = createMcpServer(services, actor, origin);
+	const { server, denied } = createMcpServer(services, actor, origin);
+	const blocked = await deniedToolCall(request, denied);
+	if (blocked) {
+		await services.activity.record({
+			agentId: actor.id,
+			type: "tool_call",
+			actor: authorRef(actor),
+			credential: actor.credential,
+			tool: blocked.name,
+			outcome: "denied",
+			code: "forbidden",
+			permission: blocked.permission,
+		});
+		return Response.json({
+			jsonrpc: "2.0",
+			id: blocked.id,
+			result: {
+				content: [
+					{
+						type: "text",
+						text: deniedToolMessage(blocked.permission),
+					},
+				],
+				isError: true,
+			},
+		});
+	}
 	const transport = new WebStandardStreamableHTTPServerTransport({
 		sessionIdGenerator: undefined,
 		enableJsonResponse: true,
@@ -62,4 +90,34 @@ export async function handleMcpRequest(
 	} finally {
 		await server.close();
 	}
+}
+
+async function deniedToolCall(
+	request: Request,
+	denied: ReadonlyMap<string, Permission>,
+): Promise<
+	{ id: unknown; name: string; permission: Permission } | undefined
+> {
+	let body: unknown;
+	try {
+		body = await request.clone().json();
+	} catch {
+		return undefined;
+	}
+	if (!body || typeof body !== "object") {
+		return undefined;
+	}
+	const message = body as {
+		method?: unknown;
+		id?: unknown;
+		params?: { name?: unknown };
+	};
+	if (message.method !== "tools/call" || typeof message.params?.name !== "string") {
+		return undefined;
+	}
+	const permission = denied.get(message.params.name);
+	if (!permission) {
+		return undefined;
+	}
+	return { id: message.id ?? null, name: message.params.name, permission };
 }

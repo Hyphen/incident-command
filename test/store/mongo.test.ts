@@ -169,7 +169,9 @@ describe("MongoStore", () => {
 			.map((info) => info.name)
 			.sort();
 		expect(names).toEqual([
+			"agent_activity",
 			"agent_tokens",
+			"agents",
 			"incidents",
 			"invites",
 			"members",

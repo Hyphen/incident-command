@@ -7,6 +7,7 @@ import {
 	approveDraftAction,
 	changePasswordAction,
 	createAgentAction,
+	createAgentTokenAction,
 	createIncidentAction,
 	createServiceAction,
 	deleteAgentAction,
@@ -25,7 +26,7 @@ import {
 	postIncidentUpdateAction,
 	removeNotificationProviderAction,
 	renewInviteLinkAction,
-	revokeAgentAction,
+	revokeAgentTokenAction,
 	revokeInviteAction,
 	saveDraftAction,
 	setServiceStatusAction,
@@ -39,8 +40,8 @@ import {
 } from "@/app/manage/actions";
 import { subscribeAction, unsubscribeAction } from "@/app/subscribe/actions";
 import { SESSION_COOKIE } from "@/lib/auth";
-import type { Actor } from "@/lib/domain/types";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
+import { agentActor } from "../helpers";
 import {
 	AGENT_REDIRECT,
 	authorizationQuery,
@@ -365,12 +366,7 @@ describe("incident actions", () => {
 });
 
 describe("notification draft actions", () => {
-	const AGENT: Actor = {
-		type: "agent",
-		id: "agt_bot",
-		name: "Ops bot",
-		role: "editor",
-	};
+	const AGENT = agentActor();
 
 	it("saves, approves and discards drafts", async () => {
 		const { app, services, notifier } = await setupApp();
@@ -722,40 +718,58 @@ describe("member actions", () => {
 });
 
 describe("agent actions", () => {
-	it("creates tokens through useActionState and manages them", async () => {
+	it("creates an agent, shows a token once, and removes them", async () => {
 		const { app, services } = await setupApp();
 		const { actor } = await signIn(app, "admin");
-		const state = await createAgentAction(
+		const created = await redirectOf(
+			createAgentAction(
+				form({
+					name: "Bot",
+					description: "",
+					permissions: ["status.read", "drafts.read", "drafts.write"],
+				}),
+			),
+		);
+		expect(created).toMatch(/\/manage\/agents\/agt_/);
+		expect(flashMessage(created, "notice")).toBe("Agent created");
+		const [agent] = await services.agents.list(actor);
+		expect(agent?.permissions).toEqual([
+			"status.read",
+			"drafts.read",
+			"drafts.write",
+		]);
+		expect(
+			flashMessage(
+				await redirectOf(createAgentAction(form({ name: "" }))),
+				"error",
+			),
+		).toBe("Check the form and try again.");
+
+		const state = await createAgentTokenAction(
 			{},
-			form({
-				name: "Bot",
-				role: "editor",
-				description: "",
-				expiresInDays: "30",
-			}),
+			form({ agentId: agent?.id ?? "", expiresInDays: "30" }),
 		);
 		expect(state.token).toMatch(/^icmd_/);
 		expect(state.name).toBe("Bot");
-		const [agent] = await services.agents.list(actor);
-		expect(agent?.expiresAt).toBeDefined();
-		expect(
-			await createAgentAction({}, form({ name: "", role: "editor" })),
-		).toMatchObject({ error: expect.stringMatching(/^name/) });
+		expect(agent && (await services.agents.get(actor, agent.id)).credentials[0]?.expiresAt).toBeDefined();
 
-		vi.spyOn(services.agents, "create").mockRejectedValueOnce(
+		vi.spyOn(services.agents, "createToken").mockRejectedValueOnce(
 			new Error("kaput"),
 		);
 		await expect(
-			createAgentAction({}, form({ name: "Bot", role: "editor" })),
+			createAgentTokenAction({}, form({ agentId: agent?.id ?? "" })),
 		).rejects.toThrow("kaput");
 
+		const credentialId = agent
+			? (await services.agents.get(actor, agent.id)).credentials[0]?.id
+			: "";
 		expectSameFlash(
-			await redirectOf(revokeAgentAction(form({ id: agent?.id ?? "" }))),
+			await redirectOf(revokeAgentTokenAction(form({ id: credentialId ?? "" }))),
 			"/manage/agents?notice=Token revoked",
 		);
 		expectSameFlash(
 			await redirectOf(deleteAgentAction(form({ id: agent?.id ?? "" }))),
-			"/manage/agents?notice=Token deleted",
+			"/manage/agents?notice=Agent deleted",
 		);
 		expect(
 			flashMessage(
@@ -765,7 +779,7 @@ describe("agent actions", () => {
 		).toBe("That item was not found.");
 		expect(
 			flashMessage(
-				await redirectOf(revokeAgentAction(form({ id: "nope" }))),
+				await redirectOf(revokeAgentTokenAction(form({ id: "nope" }))),
 				"error",
 			),
 		).toBe("That item was not found.");

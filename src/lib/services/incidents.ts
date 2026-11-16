@@ -31,7 +31,7 @@ import {
 	authorRef,
 	iso,
 	parse,
-	requireRole,
+	requirePermission,
 	type ServiceContext,
 } from "./context";
 import type { NotificationSettingsService } from "./notification-settings";
@@ -203,8 +203,9 @@ export class IncidentService {
 		input: CreateIncidentInput,
 		options: PublishOptions = {},
 	): Promise<Incident> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "incidents.publish");
 		const data = await this.check(input);
+		this.assertCanNotify(actor, data.notify);
 		const kind = data.kind ?? "incident";
 		const status = data.status ?? initialStatus(kind);
 		const serviceIds = data.serviceIds;
@@ -259,8 +260,9 @@ export class IncidentService {
 		input: IncidentUpdateInput,
 		options: PublishOptions = {},
 	): Promise<Incident> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "incidents.publish");
 		const data = parse(incidentUpdateSchema, input);
+		this.assertCanNotify(actor, data.notify);
 		const author = authorRef(actor);
 		const updateId = options.id ?? createId("upd");
 		const { current, next } = await this.mutate(id, (current) => {
@@ -310,7 +312,12 @@ export class IncidentService {
 	}
 
 	/** Shortcut for posting a closing update. */
-	async resolve(actor: Actor, id: string, message?: string): Promise<Incident> {
+	async resolve(
+		actor: Actor,
+		id: string,
+		message?: string,
+		notify?: boolean,
+	): Promise<Incident> {
 		const incident = await this.load(id);
 		return this.postUpdate(actor, id, {
 			status: incident.kind === "incident" ? "resolved" : "completed",
@@ -319,6 +326,7 @@ export class IncidentService {
 				(incident.kind === "incident"
 					? "This incident has been resolved."
 					: "This maintenance has been completed."),
+			...(notify === undefined ? {} : { notify }),
 		});
 	}
 
@@ -328,7 +336,7 @@ export class IncidentService {
 		id: string,
 		input: EditIncidentInput,
 	): Promise<Incident> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "incidents.edit");
 		const patch = parse(editIncidentSchema, input);
 		const serviceIds = patch.serviceIds
 			? await this.validateServices(patch.serviceIds)
@@ -355,9 +363,15 @@ export class IncidentService {
 	}
 
 	async delete(actor: Actor, id: string): Promise<void> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "incidents.delete");
 		if (!(await this.ctx.store.delete("incidents", id))) {
 			throw new NotFoundError("Incident", id);
+		}
+	}
+
+	private assertCanNotify(actor: Actor, notify: boolean | undefined): void {
+		if (notify !== false) {
+			requirePermission(actor, "notifications.send");
 		}
 	}
 

@@ -40,6 +40,8 @@ const MESSAGE_CODES: Record<string, FlashCode> = {
 		"encryption_key_missing",
 	"Somebody else changed these notification settings. Reload the page.":
 		"notification_settings_changed",
+	"Somebody changed this agent. Examine the new values and save again.":
+		"agent_changed",
 };
 
 const ERROR_CODE_FLASH: Record<ErrorCode, FlashCode> = {

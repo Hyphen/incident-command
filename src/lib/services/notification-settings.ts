@@ -39,7 +39,7 @@ import {
 	type ResolvedProvider,
 } from "../notifications/delivery";
 import { SecretBox } from "../secrets";
-import { iso, parse, requireRole, type ServiceContext } from "./context";
+import { iso, parse, requirePermission, type ServiceContext } from "./context";
 
 /** The most providers that one channel can have. */
 export const MAX_PROVIDERS = 10;
@@ -85,7 +85,7 @@ export class NotificationSettingsService {
 
 	/** Every channel without credentials, for the portal and the MCP server. */
 	async list(actor: Actor): Promise<PublicNotificationChannel[]> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "channels.read");
 		const channels = await this.load();
 		return NOTIFICATION_CHANNELS.map((channel) =>
 			this.toPublic(channels[channel]),
@@ -97,7 +97,7 @@ export class NotificationSettingsService {
 		channel: NotificationChannel,
 		input: UpdateNotificationChannelInput,
 	): Promise<PublicNotificationChannel> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "channels.write");
 		const id = parse(notificationChannelSchema, channel);
 		const patch = parse(updateNotificationChannelSchema, input);
 		const from = this.sender(id, patch.from);
@@ -119,7 +119,7 @@ export class NotificationSettingsService {
 		channel: NotificationChannel,
 		input: AddNotificationProviderInput,
 	): Promise<PublicNotificationProvider> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "channels.providers");
 		const id = parse(notificationChannelSchema, channel);
 		const data = parse(addNotificationProviderSchema, input);
 		const definition = PROVIDERS[data.type];
@@ -157,7 +157,7 @@ export class NotificationSettingsService {
 		providerId: string,
 		input: UpdateNotificationProviderInput,
 	): Promise<PublicNotificationProvider> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "channels.providers");
 		const id = parse(notificationChannelSchema, channel);
 		const data = parse(updateNotificationProviderSchema, input);
 		const from = this.sender(id, data.from);
@@ -200,7 +200,7 @@ export class NotificationSettingsService {
 		channel: NotificationChannel,
 		providerId: string,
 	): Promise<void> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "channels.providers");
 		const id = parse(notificationChannelSchema, channel);
 		await this.mutate(id, (current) => {
 			this.findProvider(current, providerId);
@@ -220,7 +220,7 @@ export class NotificationSettingsService {
 		providerId: string,
 		direction: MoveDirection,
 	): Promise<void> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "channels.providers");
 		const id = parse(notificationChannelSchema, channel);
 		const step = parse(moveDirectionSchema, direction) === "up" ? -1 : 1;
 		await this.mutate(id, (current) => {

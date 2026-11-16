@@ -4,7 +4,7 @@ import {
 	authorRef,
 	iso,
 	parse,
-	requireRole,
+	requirePermission,
 	SYSTEM_ACTOR,
 } from "@/lib/services/context";
 import { EDITOR, VIEWER } from "../helpers";
@@ -18,11 +18,13 @@ describe("service context helpers", () => {
 		expect(parse(schema, { name: "ok" })).toEqual({ name: "ok" });
 	});
 
-	it("checks roles and builds author refs", () => {
-		expect(() => requireRole(VIEWER, "editor")).toThrow(
+	it("checks permissions and builds author refs", () => {
+		expect(() => requirePermission(VIEWER, "incidents.publish")).toThrow(
 			/requires the editor role/,
 		);
-		expect(() => requireRole(EDITOR, "editor")).not.toThrow();
+		expect(() =>
+			requirePermission(EDITOR, "incidents.publish"),
+		).not.toThrow();
 		expect(authorRef(EDITOR)).toEqual({
 			type: "member",
 			id: EDITOR.id,
