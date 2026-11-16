@@ -33,7 +33,7 @@ function LastUsed({ iso }: { iso: string | undefined }) {
 
 function tokenState(credential: PublicCredential): string {
 	if (credential.type !== "token") {
-		return "OAuth";
+		return "connected";
 	}
 	if (credential.active) {
 		return "active";
@@ -123,8 +123,17 @@ export default async function AgentsPage({
 											<li key={credential.id}>
 												{credential.type === "oauth"
 													? `OAuth: ${credential.label}`
-													: credential.label}{" "}
-												· {tokenState(credential)}
+													: credential.label}
+												{" · "}
+												<span
+													className={
+														credential.active
+															? "text-operational"
+															: "text-major"
+													}
+												>
+													{tokenState(credential)}
+												</span>
 											</li>
 										))}
 									</ul>
