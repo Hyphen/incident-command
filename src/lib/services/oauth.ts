@@ -432,7 +432,9 @@ export class OAuthService {
 	}
 
 	/** Resolves an access token to the actor of its agent, or `undefined`. */
-	async authenticate(token: string | undefined): Promise<AgentActor | undefined> {
+	async authenticate(
+		token: string | undefined,
+	): Promise<AgentActor | undefined> {
 		if (!token?.startsWith(ACCESS_TOKEN_PREFIX)) {
 			return undefined;
 		}

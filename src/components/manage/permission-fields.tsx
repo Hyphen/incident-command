@@ -1,7 +1,4 @@
-import {
-	PERMISSIONS,
-	permissionGroups,
-} from "@/lib/domain/permissions";
+import { PERMISSIONS, permissionGroups } from "@/lib/domain/permissions";
 
 /** Checkboxes for the permissions an agent can hold. */
 export function PermissionFields({

@@ -751,7 +751,10 @@ describe("agent actions", () => {
 		);
 		expect(state.token).toMatch(/^icmd_/);
 		expect(state.name).toBe("Bot");
-		expect(agent && (await services.agents.get(actor, agent.id)).credentials[0]?.expiresAt).toBeDefined();
+		expect(
+			agent &&
+				(await services.agents.get(actor, agent.id)).credentials[0]?.expiresAt,
+		).toBeDefined();
 
 		vi.spyOn(services.agents, "createToken").mockRejectedValueOnce(
 			new Error("kaput"),
@@ -764,8 +767,15 @@ describe("agent actions", () => {
 			? (await services.agents.get(actor, agent.id)).credentials[0]?.id
 			: "";
 		expectSameFlash(
-			await redirectOf(revokeAgentTokenAction(form({ id: credentialId ?? "" }))),
-			"/manage/agents?notice=Token revoked",
+			await redirectOf(
+				revokeAgentTokenAction(
+					form({
+						id: credentialId ?? "",
+						next: `/manage/agents/${agent?.id ?? ""}`,
+					}),
+				),
+			),
+			`/manage/agents/${agent?.id}?notice=Token revoked`,
 		);
 		expectSameFlash(
 			await redirectOf(deleteAgentAction(form({ id: agent?.id ?? "" }))),
@@ -777,12 +787,14 @@ describe("agent actions", () => {
 				"error",
 			),
 		).toBe("That item was not found.");
-		expect(
-			flashMessage(
-				await redirectOf(revokeAgentTokenAction(form({ id: "nope" }))),
-				"error",
+		const offSite = await redirectOf(
+			revokeAgentTokenAction(
+				form({ id: "nope", next: "https://evil.example/manage/agents" }),
 			),
-		).toBe("That item was not found.");
+		);
+		expect(offSite.startsWith("/manage/agents?")).toBe(true);
+		expect(offSite).not.toContain("evil.example");
+		expect(flashMessage(offSite, "error")).toBe("That item was not found.");
 	});
 });
 
@@ -836,14 +848,14 @@ describe("connected agent actions", () => {
 		await expect(
 			services.oauth.authenticate(tokens.access_token),
 		).resolves.toBeUndefined();
-		expect(
-			flashMessage(
-				await redirectOf(
-					disconnectAgentAction(form({ id: connection?.id ?? "" })),
-				),
-				"error",
+		const offSite = await redirectOf(
+			disconnectAgentAction(
+				form({ id: connection?.id ?? "", next: "//evil.example" }),
 			),
-		).toBe("That item was not found.");
+		);
+		expect(offSite.startsWith("/manage/agents?")).toBe(true);
+		expect(offSite).not.toContain("evil.example");
+		expect(flashMessage(offSite, "error")).toBe("That item was not found.");
 	});
 });
 

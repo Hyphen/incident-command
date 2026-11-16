@@ -980,7 +980,11 @@ describe("admin pages", () => {
 		const revokedAgent = await services.agents.create(actor, {
 			name: "Revoked bot",
 		});
-		const revoked = await services.agents.createToken(actor, revokedAgent.id, {});
+		const revoked = await services.agents.createToken(
+			actor,
+			revokedAgent.id,
+			{},
+		);
 		await services.agents.revokeToken(actor, revoked.credentialId);
 		const expiredAgent = await services.agents.create(actor, {
 			name: "Expired bot",
@@ -1090,7 +1094,11 @@ describe("admin pages", () => {
 			expiresInDays: 7,
 		});
 		await services.agents.authenticate(active.token);
-		const revoked = await services.agents.createToken(admin.actor, agent.id, {});
+		const revoked = await services.agents.createToken(
+			admin.actor,
+			agent.id,
+			{},
+		);
 		await services.agents.revokeToken(admin.actor, revoked.credentialId);
 		await services.agents.createToken(admin.actor, agent.id, {
 			expiresInDays: 1,
@@ -1105,7 +1113,9 @@ describe("admin pages", () => {
 		expect(screen.getByText("active")).toBeInTheDocument();
 		expect(screen.getByText("revoked")).toBeInTheDocument();
 		expect(screen.getByText("expired")).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Create token" })).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "Create token" }),
+		).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
 		expect(screen.getByText("Created the agent.")).toBeInTheDocument();
 		expect(screen.getAllByText(/Expires/).length).toBeGreaterThan(0);
@@ -1126,7 +1136,9 @@ describe("admin pages", () => {
 		);
 		listed.unmount();
 		render(await page(agent.id, { page: "2" }));
-		expect(screen.queryByRole("link", { name: "Next" })).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("link", { name: "Next" }),
+		).not.toBeInTheDocument();
 
 		await expectNotFound(page("agt_missing"));
 		vi.spyOn(services.agents, "get").mockRejectedValueOnce(new Error("kaput"));

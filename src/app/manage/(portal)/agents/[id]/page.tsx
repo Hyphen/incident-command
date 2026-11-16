@@ -16,7 +16,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
 import { activitySentence } from "@/lib/domain/activity-text";
-import { can, PERMISSIONS } from "@/lib/domain/permissions";
+import { can, permissionLabel } from "@/lib/domain/permissions";
 import { isAppError } from "@/lib/errors";
 import type { PublicCredential } from "@/lib/services/agents";
 
@@ -65,7 +65,9 @@ export default async function AgentPage({
 				<form action={updateAgentAction} className="space-y-4">
 					<input type="hidden" name="id" value={agent.id} />
 					<input type="hidden" name="revision" value={agent.revision} />
-					{manage && <input type="hidden" name="editPermissions" value="true" />}
+					{manage && (
+						<input type="hidden" name="editPermissions" value="true" />
+					)}
 					<Field label="Name" htmlFor="agent-name">
 						<input
 							id="agent-name"
@@ -90,7 +92,7 @@ export default async function AgentPage({
 					) : (
 						<ul className="space-y-1 text-sm">
 							{agent.permissions.map((permission) => (
-								<li key={permission}>{PERMISSIONS[permission]!.label}</li>
+								<li key={permission}>{permissionLabel(permission)}</li>
 							))}
 						</ul>
 					)}
@@ -139,20 +141,18 @@ export default async function AgentPage({
 										)}
 									</p>
 								</div>
-								{credential.type === "token" &&
-									credential.active &&
-									manage && (
-										<form action={revokeAgentTokenAction}>
-											<input type="hidden" name="id" value={credential.id} />
-											<input type="hidden" name="next" value={path} />
-											<ConfirmButton
-												message={`Revoke this token for ${agent.name}? It will stop working immediately.`}
-												className={buttonClass.secondary}
-											>
-												Revoke
-											</ConfirmButton>
-										</form>
-									)}
+								{credential.type === "token" && credential.active && manage && (
+									<form action={revokeAgentTokenAction}>
+										<input type="hidden" name="id" value={credential.id} />
+										<input type="hidden" name="next" value={path} />
+										<ConfirmButton
+											message={`Revoke this token for ${agent.name}? It will stop working immediately.`}
+											className={buttonClass.secondary}
+										>
+											Revoke
+										</ConfirmButton>
+									</form>
+								)}
 								{credential.type === "oauth" &&
 									(manage || credential.memberId === actor.id) && (
 										<form action={disconnectAgentAction}>
@@ -171,7 +171,10 @@ export default async function AgentPage({
 				)}
 				{manage && (
 					<div className="mt-4 border-t border-border pt-4">
-						<CreateTokenForm action={createAgentTokenAction} agentId={agent.id} />
+						<CreateTokenForm
+							action={createAgentTokenAction}
+							agentId={agent.id}
+						/>
 					</div>
 				)}
 			</Card>

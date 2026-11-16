@@ -11,7 +11,11 @@ import { buttonClass, Card, EmptyState } from "@/components/manage/ui";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
 import { activitySentence } from "@/lib/domain/activity-text";
-import { can, PERMISSIONS } from "@/lib/domain/permissions";
+import {
+	can,
+	type Permission,
+	permissionLabel,
+} from "@/lib/domain/permissions";
 import { publicMcpEndpoint } from "@/lib/mcp/oauth";
 import type { PublicCredential } from "@/lib/services/agents";
 
@@ -31,15 +35,12 @@ function LastUsed({ iso }: { iso: string | undefined }) {
 	);
 }
 
-function permissionSummary(permissions: readonly string[]): string {
+function permissionSummary(permissions: readonly Permission[]): string {
 	if (permissions.length === 0) {
 		return "No permissions";
 	}
 	return permissions
-		.map(
-			(permission) =>
-				PERMISSIONS[permission as keyof typeof PERMISSIONS]!.label,
-		)
+		.map((permission) => permissionLabel(permission))
 		.join(", ");
 }
 

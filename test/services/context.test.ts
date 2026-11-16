@@ -22,9 +22,7 @@ describe("service context helpers", () => {
 		expect(() => requirePermission(VIEWER, "incidents.publish")).toThrow(
 			/requires the editor role/,
 		);
-		expect(() =>
-			requirePermission(EDITOR, "incidents.publish"),
-		).not.toThrow();
+		expect(() => requirePermission(EDITOR, "incidents.publish")).not.toThrow();
 		expect(authorRef(EDITOR)).toEqual({
 			type: "member",
 			id: EDITOR.id,

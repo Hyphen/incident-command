@@ -618,7 +618,7 @@ describe("OAuthService", () => {
 		const { member, actor } = await addMember(t, "editor", "Ed Editor");
 		const { tokens } = await connect(t, actor);
 		const connected = await t.services.oauth.authenticate(tokens.access_token);
-		if (!connected || connected.type !== "agent") {
+		if (connected?.type !== "agent") {
 			throw new Error("Expected an agent");
 		}
 		const agent = await t.services.agents.get(SYSTEM_ACTOR, connected.id);

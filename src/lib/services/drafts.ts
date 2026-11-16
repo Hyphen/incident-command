@@ -13,7 +13,12 @@ import type {
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import type { Condition } from "../store/types";
 import type { ActivityService } from "./activity";
-import { authorRef, iso, requirePermission, type ServiceContext } from "./context";
+import {
+	authorRef,
+	iso,
+	requirePermission,
+	type ServiceContext,
+} from "./context";
 import { type IncidentService, newIncidentId } from "./incidents";
 
 /** The portal path where a person reviews a notification draft. */

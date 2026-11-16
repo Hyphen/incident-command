@@ -18,7 +18,9 @@ function entry(
 
 describe("activitySentence", () => {
 	it("names each activity for a person", () => {
-		expect(activitySentence(entry("tool_call"))).toBe("Called create_incident.");
+		expect(activitySentence(entry("tool_call"))).toBe(
+			"Called create_incident.",
+		);
 		expect(activitySentence(entry("tool_call", "denied"))).toBe(
 			"Denied create_incident.",
 		);

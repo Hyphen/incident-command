@@ -1,6 +1,11 @@
 import { type Config, loadConfig } from "@/lib/config";
 import { permissionsForRole } from "@/lib/domain/permissions";
-import type { Actor, AgentActor, Settings, Subscriber } from "@/lib/domain/types";
+import type {
+	Actor,
+	AgentActor,
+	Settings,
+	Subscriber,
+} from "@/lib/domain/types";
 import type {
 	DeliveryChannel,
 	DeliveryChannels,

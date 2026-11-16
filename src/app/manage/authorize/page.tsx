@@ -91,7 +91,11 @@ export default async function AuthorizePage({
 							/>
 							Existing agent
 						</label>
-						<select name="agentId" defaultValue={known ? preferred : choices[0]?.id} className={inputClass}>
+						<select
+							name="agentId"
+							defaultValue={known ? preferred : choices[0]?.id}
+							className={inputClass}
+						>
 							{choices.map((agent) => (
 								<option key={agent.id} value={agent.id}>
 									{agent.name}
@@ -103,7 +107,9 @@ export default async function AuthorizePage({
 						</p>
 					</fieldset>
 				)}
-				{choices.length === 0 && <input type="hidden" name="choice" value="new" />}
+				{choices.length === 0 && (
+					<input type="hidden" name="choice" value="new" />
+				)}
 				<Field
 					label="Agent name"
 					htmlFor="agent-name"

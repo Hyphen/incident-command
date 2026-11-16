@@ -9,8 +9,8 @@ import {
 } from "../domain/permissions";
 import {
 	type CreateAgentInput,
-	createAgentSchema,
 	type CreateAgentTokenInput,
+	createAgentSchema,
 	createAgentTokenSchema,
 	type UpdateAgentInput,
 	updateAgentSchema,
@@ -18,8 +18,8 @@ import {
 import type {
 	Actor,
 	Agent,
-	AgentActor,
 	AgentActivity,
+	AgentActor,
 	AgentToken,
 	AuthorRef,
 	OAuthGrant,
@@ -80,11 +80,11 @@ export interface PublicAgent {
 /** Manages agents and the API tokens that call the MCP server. */
 export class AgentService {
 	private readonly ctx: ServiceContext;
-	private readonly activity: ActivityService;
+	private readonly activityLog: ActivityService;
 
 	constructor(ctx: ServiceContext, activity: ActivityService) {
 		this.ctx = ctx;
-		this.activity = activity;
+		this.activityLog = activity;
 	}
 
 	async list(actor: Actor): Promise<PublicAgent[]> {
@@ -212,7 +212,7 @@ export class AgentService {
 			);
 		}
 		if (saved.name !== current.name) {
-			await this.activity.record({
+			await this.activityLog.record({
 				agentId: id,
 				type: "agent_renamed",
 				actor: authorRef(actor),
@@ -222,12 +222,14 @@ export class AgentService {
 		if (data.permissions) {
 			const previous = new Set(current.permissions);
 			const selected = new Set(permissions);
-			const added = permissions.filter((permission) => !previous.has(permission));
+			const added = permissions.filter(
+				(permission) => !previous.has(permission),
+			);
 			const removed = current.permissions.filter(
 				(permission) => !selected.has(permission),
 			);
 			if (added.length > 0 || removed.length > 0) {
-				await this.activity.record({
+				await this.activityLog.record({
 					agentId: id,
 					type: "permissions_changed",
 					actor: authorRef(actor),
@@ -264,7 +266,7 @@ export class AgentService {
 			);
 		}
 		await this.ctx.store.insert("agent_tokens", credential);
-		await this.activity.record({
+		await this.activityLog.record({
 			agentId,
 			type: "token_created",
 			actor: authorRef(actor),
@@ -289,7 +291,7 @@ export class AgentService {
 		const next = { ...credential, revokedAt };
 		await this.ctx.store.update("agent_tokens", next);
 		if (!credential.revokedAt && credential.agentId) {
-			await this.activity.record({
+			await this.activityLog.record({
 				agentId: credential.agentId,
 				type: "token_revoked",
 				actor: authorRef(actor),
@@ -338,19 +340,21 @@ export class AgentService {
 		options: { limit?: number; offset?: number } = {},
 	): Promise<AgentActivity[]> {
 		await this.get(actor, id);
-		return this.activity.entries(id, options);
+		return this.activityLog.entries(id, options);
 	}
 
 	async recentActivity(actor: Actor, limit = 20): Promise<AgentActivity[]> {
 		const agents = await this.list(actor);
-		return this.activity.recent(
+		return this.activityLog.recent(
 			agents.map((agent) => agent.id),
 			limit,
 		);
 	}
 
 	/** Resolves a bearer token to an agent actor, or `undefined` when it is not valid. */
-	async authenticate(token: string | undefined): Promise<AgentActor | undefined> {
+	async authenticate(
+		token: string | undefined,
+	): Promise<AgentActor | undefined> {
 		if (!token?.startsWith(TOKEN_PREFIX)) {
 			return undefined;
 		}
@@ -439,7 +443,7 @@ export class AgentService {
 		if (input.migratedFrom) agent.migratedFrom = input.migratedFrom;
 		await this.ctx.store.insert("agents", agent);
 		if (!input.migratedFrom) {
-			await this.activity.record({
+			await this.activityLog.record({
 				agentId: agent.id,
 				type: "agent_created",
 				actor: input.createdBy,
@@ -449,7 +453,10 @@ export class AgentService {
 		return agent;
 	}
 
-	private async touchToken(credential: AgentToken, now: Date): Promise<boolean> {
+	private async touchToken(
+		credential: AgentToken,
+		now: Date,
+	): Promise<boolean> {
 		const lastUsed = credential.lastUsedAt
 			? new Date(credential.lastUsedAt).getTime()
 			: 0;
@@ -479,7 +486,9 @@ export class AgentService {
 		);
 	}
 
-	private async adoptLegacyToken(token: AgentToken): Promise<Agent | undefined> {
+	private async adoptLegacyToken(
+		token: AgentToken,
+	): Promise<Agent | undefined> {
 		if (token.agentId) {
 			return this.ctx.store.get("agents", token.agentId);
 		}
@@ -500,7 +509,9 @@ export class AgentService {
 		return agent;
 	}
 
-	private async adoptLegacyGrant(grant: OAuthGrant): Promise<Agent | undefined> {
+	private async adoptLegacyGrant(
+		grant: OAuthGrant,
+	): Promise<Agent | undefined> {
 		if (grant.agentId) {
 			return this.ctx.store.get("agents", grant.agentId);
 		}
@@ -571,7 +582,7 @@ export class AgentService {
 				where: [{ field: "revision", op: "eq", value: current.revision }],
 			});
 			if (saved) {
-				await this.activity.record({
+				await this.activityLog.record({
 					agentId: id,
 					type: "owner_removed",
 					actor: { type: "system", id: "system", name: "System" },

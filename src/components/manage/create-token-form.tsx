@@ -44,7 +44,11 @@ export function CreateTokenForm({
 						className={inputClass}
 					/>
 				</Field>
-				<button type="submit" disabled={pending} className={buttonClass.primary}>
+				<button
+					type="submit"
+					disabled={pending}
+					className={buttonClass.primary}
+				>
 					{pending ? "Creating…" : "Create token"}
 				</button>
 			</form>

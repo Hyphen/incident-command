@@ -153,6 +153,11 @@ export const PERMISSIONS = {
 
 export type Permission = keyof typeof PERMISSIONS;
 
+/** Returns the label of one permission. */
+export function permissionLabel(permission: Permission): string {
+	return (PERMISSIONS[permission] as PermissionSpec).label;
+}
+
 export const PERMISSION_LIST = Object.keys(PERMISSIONS) as Permission[];
 
 /** Permissions that an agent can hold, in catalog order. */
@@ -192,7 +197,9 @@ export function permissionsInEffect(
 	role: Role,
 ): Permission[] {
 	const selected = new Set(stored);
-	return permissionsForRole(role).filter((permission) => selected.has(permission));
+	return permissionsForRole(role).filter((permission) =>
+		selected.has(permission),
+	);
 }
 
 /** The old role, without the permission to notify subscribers. */

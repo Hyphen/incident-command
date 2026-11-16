@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { Config } from "../config";
-import { can, type Permission, PERMISSIONS } from "../domain/permissions";
+import { can, PERMISSIONS, type Permission } from "../domain/permissions";
 import type { Actor, AuthorRef } from "../domain/types";
 import { PermissionDeniedError, ValidationError } from "../errors";
 import type { Notifier } from "../notifications/notifier";

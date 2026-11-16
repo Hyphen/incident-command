@@ -95,9 +95,7 @@ export async function handleMcpRequest(
 async function deniedToolCall(
 	request: Request,
 	denied: ReadonlyMap<string, Permission>,
-): Promise<
-	{ id: unknown; name: string; permission: Permission } | undefined
-> {
+): Promise<{ id: unknown; name: string; permission: Permission } | undefined> {
 	let body: unknown;
 	try {
 		body = await request.clone().json();
@@ -112,7 +110,10 @@ async function deniedToolCall(
 		id?: unknown;
 		params?: { name?: unknown };
 	};
-	if (message.method !== "tools/call" || typeof message.params?.name !== "string") {
+	if (
+		message.method !== "tools/call" ||
+		typeof message.params?.name !== "string"
+	) {
 		return undefined;
 	}
 	const permission = denied.get(message.params.name);

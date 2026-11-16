@@ -1,9 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import {
-	type Permission,
-	permissionsForRole,
-} from "@/lib/domain/permissions";
+import { type Permission, permissionsForRole } from "@/lib/domain/permissions";
 import type { Role } from "@/lib/domain/types";
 import { bearerToken, handleMcpRequest } from "@/lib/mcp/handler";
 import { ADMIN, createTestContext, type TestContext } from "../helpers";
@@ -39,7 +36,11 @@ async function connect(t: TestContext, token: string) {
 	return { client, call };
 }
 
-async function tokenFor(t: TestContext, permissions: readonly Permission[], name: string) {
+async function tokenFor(
+	t: TestContext,
+	permissions: readonly Permission[],
+	name: string,
+) {
 	const agent = await t.services.agents.create(ADMIN, {
 		name,
 		permissions: [...permissions],
@@ -387,9 +388,8 @@ describe("MCP handler", () => {
 		});
 
 		const helper = (await call("create_agent", { name: "Helper" })).data;
-		const created = (
-			await call("create_agent_token", { agentId: helper.id })
-		).data;
+		const created = (await call("create_agent_token", { agentId: helper.id }))
+			.data;
 		expect(created.token).toMatch(/^icmd_/);
 		expect((await call("list_agents")).data).toHaveLength(2);
 		expect(
@@ -459,12 +459,7 @@ describe("MCP handler", () => {
 	it("denies a tool the agent cannot call and keeps secrets out of the log", async () => {
 		const token = await tokenFor(
 			t,
-			[
-				"status.read",
-				"drafts.read",
-				"drafts.write",
-				"members.manage",
-			] as const,
+			["status.read", "drafts.read", "drafts.write", "members.manage"] as const,
 			"draft bot",
 		);
 		const { client } = await connect(t, token);

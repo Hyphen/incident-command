@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { can, type Permission, PERMISSIONS } from "../domain/permissions";
+import { can, PERMISSIONS, type Permission } from "../domain/permissions";
 import {
 	eventStatusSchema,
 	impactSchema,
@@ -772,7 +772,9 @@ export function createMcpServer(
 			readOnly: true,
 		},
 		async (args) =>
-			services.agents.activity(actor, args.agentId, { limit: args.limit ?? 50 }),
+			services.agents.activity(actor, args.agentId, {
+				limit: args.limit ?? 50,
+			}),
 	);
 
 	tool(

@@ -398,19 +398,25 @@ export async function createAgentTokenAction(
 	const { actor, services } = await requireMemberForAction("admin");
 	return formState(async () => {
 		const agentId = text(form, "agentId");
-		const { token, agent } = await services.agents.createToken(
-			actor,
-			agentId,
-			{ expiresInDays: integer(form, "expiresInDays") },
-		);
+		const { token, agent } = await services.agents.createToken(actor, agentId, {
+			expiresInDays: integer(form, "expiresInDays"),
+		});
 		revalidatePath(`/manage/agents/${agentId}`);
 		return { token, name: agent.name };
 	});
 }
 
+/** Keeps a return path only when that path is an agents page on this site. */
+function agentReturnPath(value: string): string {
+	if (/^\/manage\/agents(?:\/[a-z0-9_]+)?$/.test(value)) {
+		return value;
+	}
+	return "/manage/agents";
+}
+
 export async function revokeAgentTokenAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("admin");
-	const next = text(form, "next") || "/manage/agents";
+	const next = agentReturnPath(text(form, "next"));
 	await attempt(next, () =>
 		services.agents.revokeToken(actor, text(form, "id")),
 	);
@@ -469,7 +475,7 @@ export async function denyAgentAction(form: FormData): Promise<void> {
 
 export async function disconnectAgentAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction();
-	const next = text(form, "next") || "/manage/agents";
+	const next = agentReturnPath(text(form, "next"));
 	await attempt(next, () => services.oauth.disconnect(actor, text(form, "id")));
 	redirect(flash(next, "agent_disconnected"));
 }

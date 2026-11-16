@@ -44,15 +44,15 @@ describe("AgentService", () => {
 		const created = await t.services.agents.createToken(ADMIN, agent.id, {});
 		expect(created.token.startsWith(TOKEN_PREFIX)).toBe(true);
 		expect(created.credentialId.startsWith("tok_")).toBe(true);
-		await expect(t.services.agents.authenticate(created.token)).resolves.toEqual(
-			{
-				type: "agent",
-				id: agent.id,
-				name: "Ops bot",
-				permissions: ["status.read", "drafts.read", "drafts.write"],
-				credential: { type: "token", id: created.credentialId },
-			},
-		);
+		await expect(
+			t.services.agents.authenticate(created.token),
+		).resolves.toEqual({
+			type: "agent",
+			id: agent.id,
+			name: "Ops bot",
+			permissions: ["status.read", "drafts.read", "drafts.write"],
+			credential: { type: "token", id: created.credentialId },
+		});
 		expect((await t.services.agents.list(ADMIN))[0]?.lastUsedAt).toBe(NOW);
 
 		t.clock.advance(30_000);
@@ -112,17 +112,22 @@ describe("AgentService", () => {
 		const created = await t.services.agents.createToken(ADMIN, agent.id, {});
 		const update = t.store.update.bind(t.store);
 		let raced = false;
-		vi.spyOn(t.store, "update").mockImplementation(async (collection, doc, options) => {
-			if (!raced && collection === "agent_tokens") {
-				raced = true;
-				const current = await t.store.get("agent_tokens", created.credentialId);
-				await update("agent_tokens", {
-					...current,
-					revokedAt: NOW,
-				} as never);
-			}
-			return update(collection, doc, options);
-		});
+		vi.spyOn(t.store, "update").mockImplementation(
+			async (collection, doc, options) => {
+				if (!raced && collection === "agent_tokens") {
+					raced = true;
+					const current = await t.store.get(
+						"agent_tokens",
+						created.credentialId,
+					);
+					await update("agent_tokens", {
+						...current,
+						revokedAt: NOW,
+					} as never);
+				}
+				return update(collection, doc, options);
+			},
+		);
 		await expect(
 			t.services.agents.authenticate(created.token),
 		).resolves.toBeUndefined();
@@ -134,12 +139,12 @@ describe("AgentService", () => {
 	it("reports active state", () => {
 		const now = new Date(NOW);
 		expect(isAgentActive({ revokedAt: "x" }, now)).toBe(false);
-		expect(
-			isAgentActive({ expiresAt: "2026-11-01T00:00:00.000Z" }, now),
-		).toBe(false);
-		expect(
-			isAgentActive({ expiresAt: "2026-12-01T00:00:00.000Z" }, now),
-		).toBe(true);
+		expect(isAgentActive({ expiresAt: "2026-11-01T00:00:00.000Z" }, now)).toBe(
+			false,
+		);
+		expect(isAgentActive({ expiresAt: "2026-12-01T00:00:00.000Z" }, now)).toBe(
+			true,
+		);
 		expect(isAgentActive({}, now)).toBe(true);
 	});
 
@@ -223,31 +228,39 @@ describe("AgentService", () => {
 		expect(
 			(await t.services.agents.choices(owner)).map((agent) => agent.name),
 		).toEqual(["Mine"]);
-		expect(await t.services.agents.choices(agentActor(["status.read"]))).toEqual(
-			[],
-		);
 		expect(
-			(await t.services.agents.choices(ADMIN)).map((agent) => agent.name).sort(),
+			await t.services.agents.choices(agentActor(["status.read"])),
+		).toEqual([]);
+		expect(
+			(await t.services.agents.choices(ADMIN))
+				.map((agent) => agent.name)
+				.sort(),
 		).toEqual(["Mine", "Team"]);
 		await expect(
 			t.services.agents.requireChoice(owner, team.id),
 		).rejects.toBeInstanceOf(NotFoundError);
-		await expect(t.services.agents.requireChoice(ADMIN, team.id)).resolves.toMatchObject(
-			{ id: team.id },
-		);
+		await expect(
+			t.services.agents.requireChoice(ADMIN, team.id),
+		).resolves.toMatchObject({ id: team.id });
 		await expect(t.services.agents.get(owner, team.id)).rejects.toBeInstanceOf(
 			NotFoundError,
 		);
-		expect(await t.services.agents.list(agentActor(["status.read"]))).toEqual([]);
-		expect(await t.services.oauth.list(agentActor(["status.read"]))).toEqual([]);
+		expect(await t.services.agents.list(agentActor(["status.read"]))).toEqual(
+			[],
+		);
+		expect(await t.services.oauth.list(agentActor(["status.read"]))).toEqual(
+			[],
+		);
 		expect(
 			await t.services.agents.recentActivity(agentActor(["status.read"])),
 		).toEqual([]);
-		expect(await t.services.agents.list(agentActor(["agents.read"]))).toHaveLength(
-			2,
-		);
+		expect(
+			await t.services.agents.list(agentActor(["agents.read"])),
+		).toHaveLength(2);
 		await t.services.agents.releaseOwner(owner.id);
-		expect((await t.services.agents.get(ADMIN, owned.id)).ownerId).toBeUndefined();
+		expect(
+			(await t.services.agents.get(ADMIN, owned.id)).ownerId,
+		).toBeUndefined();
 		expect(
 			(await t.store.find("agent_activity")).some(
 				(row) => row.type === "owner_removed",
@@ -314,9 +327,11 @@ describe("AgentService", () => {
 		expect(tokenAgent.permissions).toEqual(legacyRolePermissions("editor"));
 		expect(tokenAgent.migratedFrom).toBe("token");
 		expect(tokenAgent.description).toBe("Old token");
-		await expect(t.services.agents.authenticate(secret)).resolves.toMatchObject({
-			id: "agt_legacy",
-		});
+		await expect(t.services.agents.authenticate(secret)).resolves.toMatchObject(
+			{
+				id: "agt_legacy",
+			},
+		);
 		const oauthAgent = await t.services.agents.get(ADMIN, "agt_legacygrant");
 		expect(oauthAgent).toMatchObject({
 			name: "Cursor",
@@ -406,12 +421,14 @@ describe("AgentService", () => {
 			createdAt: NOW,
 		});
 		const get = t.store.get.bind(t.store);
-		vi.spyOn(t.store, "get").mockImplementation(async (collection, id, options) => {
-			if (collection === "agents" && id === "agt_gone") {
-				return undefined;
-			}
-			return get(collection, id, options);
-		});
+		vi.spyOn(t.store, "get").mockImplementation(
+			async (collection, id, options) => {
+				if (collection === "agents" && id === "agt_gone") {
+					return undefined;
+				}
+				return get(collection, id, options);
+			},
+		);
 		await expect(t.services.agents.migrate()).rejects.toBeInstanceOf(
 			ConflictError,
 		);
@@ -426,27 +443,33 @@ describe("AgentService", () => {
 		});
 		const update = t.store.update.bind(t.store);
 		let failed = false;
-		vi.spyOn(t.store, "update").mockImplementation(async (collection, doc, options) => {
-			if (!failed && collection === "agents") {
-				failed = true;
-				return undefined;
-			}
-			return update(collection, doc, options);
-		});
+		vi.spyOn(t.store, "update").mockImplementation(
+			async (collection, doc, options) => {
+				if (!failed && collection === "agents") {
+					failed = true;
+					return undefined;
+				}
+				return update(collection, doc, options);
+			},
+		);
 		await t.services.agents.releaseOwner(owner.id);
-		expect((await t.services.agents.get(ADMIN, owned.id)).ownerId).toBeUndefined();
+		expect(
+			(await t.services.agents.get(ADMIN, owned.id)).ownerId,
+		).toBeUndefined();
 		failed = false;
 		const again = await t.services.agents.createOwned({
 			name: "Stuck",
 			ownerId: owner.id,
 			createdBy: { type: "member", id: owner.id, name: owner.name },
 		});
-		vi.spyOn(t.store, "update").mockImplementation(async (collection, doc, options) => {
-			if (collection === "agents") {
-				return undefined;
-			}
-			return update(collection, doc, options);
-		});
+		vi.spyOn(t.store, "update").mockImplementation(
+			async (collection, doc, options) => {
+				if (collection === "agents") {
+					return undefined;
+				}
+				return update(collection, doc, options);
+			},
+		);
 		await t.services.agents.releaseOwner(owner.id);
 		expect((await t.store.get("agents", again.id))?.ownerId).toBe(owner.id);
 	});
