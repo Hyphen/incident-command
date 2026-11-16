@@ -673,6 +673,25 @@ describe("OAuthService", () => {
 		await expect(
 			t.services.oauth.disconnect(admin.actor, "ogr_unknown"),
 		).rejects.toBeInstanceOf(NotFoundError);
+
+		await t.store.insert("oauth_grants", {
+			id: "ogr_loose",
+			clientId: "ocl_x",
+			clientName: "Loose",
+			memberId: editor.member.id,
+			accessTokenHash: "loose-access",
+			accessTokenExpiresAt: "2026-12-02T12:00:00.000Z",
+			refreshTokenHash: "loose-refresh",
+			refreshTokenExpiresAt: "2026-12-02T12:00:00.000Z",
+			createdAt: "2026-11-02T12:00:00.000Z",
+		});
+		await t.services.oauth.disconnect(editor.actor, "ogr_loose");
+		expect(await t.store.get("oauth_grants", "ogr_loose")).toBeUndefined();
+		expect(
+			(await t.store.find("agent_activity")).some(
+				(row) => row.credential?.id === "ogr_loose",
+			),
+		).toBe(false);
 	});
 
 	it("disconnects the agents of a member after a password reset or removal", async () => {
@@ -717,6 +736,16 @@ describe("OAuthService", () => {
 			t.services.oauth.authenticate(tokens.access_token),
 		).resolves.toBeUndefined();
 		await expect(t.services.oauth.list(admin.actor)).resolves.toEqual([]);
+		const [grant] = await t.store.find("oauth_grants");
+		const visible = await t.services.agents.get(
+			admin.actor,
+			grant?.agentId ?? "",
+		);
+		expect(visible.credentials[0]).toMatchObject({
+			label: "Claude Code",
+			type: "oauth",
+		});
+		expect(visible.credentials[0]?.memberName).toBeUndefined();
 	});
 
 	it("rejects a code when the member or the chosen agent is gone", async () => {

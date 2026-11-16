@@ -182,6 +182,26 @@ describe("AgentService", () => {
 			permissions: ["status.read", "incidents.publish", "notifications.send"],
 			revision: 2,
 		});
+		const reduced = await t.services.agents.update(ADMIN, agent.id, {
+			permissions: ["status.read"],
+			revision: saved.revision,
+		});
+		expect(reduced.permissions).toEqual(["status.read"]);
+		expect(
+			(await t.store.find("agent_activity")).some(
+				(row) =>
+					row.type === "permissions_changed" &&
+					row.added?.length === 0 &&
+					row.removed?.includes("notifications.send"),
+			),
+		).toBe(true);
+		const before = await t.store.count("agent_activity");
+		const same = await t.services.agents.update(ADMIN, agent.id, {
+			permissions: ["status.read"],
+			revision: reduced.revision,
+		});
+		expect(same.revision).toBe(reduced.revision + 1);
+		expect(await t.store.count("agent_activity")).toBe(before);
 		await expect(
 			t.services.agents.update(ADMIN, agent.id, {
 				name: "Again",
@@ -535,6 +555,14 @@ describe("AgentService", () => {
 			createdBy: { type: "member", id: ADMIN.id, name: ADMIN.name },
 			createdAt: NOW,
 		});
+		await t.store.insert("agent_tokens", {
+			id: "agt_norole",
+			name: "Plain",
+			tokenHash: "hash-norole",
+			tokenPrefix: "icmd_norole",
+			createdBy: { type: "member", id: ADMIN.id, name: ADMIN.name },
+			createdAt: NOW,
+		});
 		await t.store.insert("oauth_grants", {
 			id: "plain_grant",
 			clientId: "ocl_x",
@@ -550,6 +578,9 @@ describe("AgentService", () => {
 		expect((await t.services.agents.get(ADMIN, "agt_blank")).name).toBe(
 			"Agent",
 		);
+		expect(
+			(await t.services.agents.get(ADMIN, "agt_norole")).permissions,
+		).toEqual(legacyRolePermissions("editor"));
 		expect((await t.services.agents.get(ADMIN, "agt_plain_grant")).name).toBe(
 			"Agent",
 		);

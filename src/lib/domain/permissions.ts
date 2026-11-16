@@ -262,9 +262,7 @@ export function grantablePermissions(
 		if (!can(actor, permission)) {
 			const spec = PERMISSIONS[permission];
 			throw new PermissionDeniedError(
-				actor.type === "agent"
-					? `This agent does not have the permission "${spec.label}" (${permission}).`
-					: `This action requires the ${spec.role} role`,
+				`This agent does not have the permission "${spec.label}" (${permission}).`,
 				permission,
 			);
 		}

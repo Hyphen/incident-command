@@ -848,7 +848,7 @@ describe("agent actions", () => {
 describe("connected agent actions", () => {
 	it("sends the decision of the member to the agent", async () => {
 		const { app } = await setupApp({ SITE_URL: "https://status.acme.dev" });
-		await signIn(app, "editor");
+		const { actor } = await signIn(app, "editor");
 		const { client_id } = await app.services.oauth.register({
 			client_name: "Claude Code",
 			redirect_uris: [AGENT_REDIRECT],
@@ -868,6 +868,26 @@ describe("connected agent actions", () => {
 		expect(await app.store.find("oauth_codes")).toEqual([
 			expect.objectContaining({ clientName: "On-call agent" }),
 		]);
+		const owned = await app.services.agents.createOwned({
+			name: "Existing",
+			ownerId: actor.id,
+			createdBy: { type: "member", id: actor.id, name: actor.name },
+		});
+		const attached = new URL(
+			await redirectOf(
+				approveAgentAction(
+					form({
+						...fields,
+						choice: "existing",
+						agentId: owned.id,
+					}),
+				),
+			),
+		);
+		expect(attached.searchParams.get("code")).toMatch(/^[\w-]{43}$/);
+		expect(await app.store.find("oauth_codes")).toEqual(
+			expect.arrayContaining([expect.objectContaining({ agentId: owned.id })]),
+		);
 
 		const denied = new URL(await redirectOf(denyAgentAction(form(fields))));
 		expect(denied.searchParams.get("error")).toBe("access_denied");

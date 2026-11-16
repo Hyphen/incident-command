@@ -537,5 +537,46 @@ describe("MCP handler", () => {
 		expect(logged).not.toContain(password);
 		expect(logged).not.toContain(token);
 		expect(logged).toContain("create_incident");
+
+		const nameless = await handleMcpRequest(
+			new Request("http://localhost/api/mcp", {
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${token}`,
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					jsonrpc: "2.0",
+					method: "tools/call",
+					params: { name: "create_incident", arguments: {} },
+				}),
+			}),
+			t.services,
+		);
+		expect(await nameless.json()).toMatchObject({
+			id: null,
+			result: { isError: true },
+		});
+	});
+
+	it("records a denial when a tool needs one more permission", async () => {
+		const { call } = await connect(
+			t,
+			await tokenFor(t, ["incidents.publish"], "quiet publisher"),
+		);
+		const result = await call("create_incident", {
+			title: "Quiet",
+			message: "No send",
+		});
+		expect(result.isError).toBe(true);
+		expect(result.text).toContain("notifications.send");
+		expect(await t.store.find("agent_activity")).toContainEqual(
+			expect.objectContaining({
+				type: "tool_call",
+				tool: "create_incident",
+				outcome: "denied",
+				permission: "notifications.send",
+			}),
+		);
 	});
 });

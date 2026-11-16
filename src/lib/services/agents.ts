@@ -478,17 +478,8 @@ export class AgentService {
 				],
 			},
 		);
-		if (updated) {
-			return true;
-		}
-		const current = await this.ctx.store.get("agent_tokens", credential.id, {
-			consistent: true,
-		});
-		return Boolean(
-			current &&
-				isAgentActive(current, now) &&
-				current.tokenHash === credential.tokenHash,
-		);
+		// A failed write means the token was revoked, replaced, or deleted.
+		return updated !== undefined;
 	}
 
 	private async adoptLegacyToken(
