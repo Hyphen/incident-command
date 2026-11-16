@@ -273,6 +273,58 @@ describe("DraftService", () => {
 		).toEqual([]);
 	});
 
+	it("stores a review of an old OAuth draft on the migrated agent", async () => {
+		await t.store.insert("agents", {
+			id: "agt_oldgrant",
+			name: "Migrated",
+			permissions: ["status.read"],
+			createdBy: { type: "member", id: EDITOR.id, name: EDITOR.name },
+			migratedFrom: "oauth",
+			revision: 1,
+			createdAt: "2026-11-02T12:00:00.000Z",
+			updatedAt: "2026-11-02T12:00:00.000Z",
+		});
+		const legacy = agentActor(["drafts.write"], {
+			id: "ogr_oldgrant",
+			name: "Old grant",
+		});
+		const draft = await t.services.drafts.create(legacy, {
+			title: "Old",
+			message: "x",
+		});
+		await t.services.drafts.approve(EDITOR, draft.id, draft.content);
+		expect(
+			await t.store.find("agent_activity", {
+				where: [{ field: "agentId", op: "eq", value: "agt_oldgrant" }],
+			}),
+		).toEqual([
+			expect.objectContaining({
+				type: "draft_approved",
+				agentId: "agt_oldgrant",
+			}),
+		]);
+
+		const gone = agentActor(["drafts.write"], {
+			id: "ogr_gone",
+			name: "Gone",
+		});
+		const orphan = await t.services.drafts.create(gone, {
+			title: "Gone",
+			message: "x",
+		});
+		await t.services.drafts.discard(EDITOR, orphan.id);
+		expect(
+			await t.store.find("agent_activity", {
+				where: [{ field: "agentId", op: "eq", value: "ogr_gone" }],
+			}),
+		).toEqual([
+			expect.objectContaining({
+				type: "draft_discarded",
+				agentId: "ogr_gone",
+			}),
+		]);
+	});
+
 	it("saves edits while the draft waits for review", async () => {
 		const draft = await t.services.drafts.create(AGENT, {
 			title: "API errors",

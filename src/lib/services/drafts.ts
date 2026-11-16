@@ -201,10 +201,16 @@ export class DraftService {
 		return saved;
 	}
 
-	/**
-	 * Checks the content with the same rules that publication uses, so an
-	 * approved draft does not fail later.
-	 */
+	/** Returns the migrated agent id for a draft from an old OAuth grant. */
+	private async reviewAgentId(createdById: string): Promise<string> {
+		if (!createdById.startsWith("ogr_")) {
+			return createdById;
+		}
+		const id = `agt_${createdById.slice(4)}`;
+		const agent = await this.ctx.store.get("agents", id);
+		return agent ? agent.id : createdById;
+	}
+
 	private async recordReview(
 		actor: Actor,
 		draft: NotificationDraft,
@@ -214,7 +220,7 @@ export class DraftService {
 			return;
 		}
 		await this.activity.record({
-			agentId: draft.createdBy.id,
+			agentId: await this.reviewAgentId(draft.createdBy.id),
 			type,
 			actor: authorRef(actor),
 			target: { type: "draft", id: draft.id },

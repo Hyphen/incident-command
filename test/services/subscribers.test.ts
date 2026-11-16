@@ -97,9 +97,12 @@ describe("SubscriberService", () => {
 			email: "ops@acme.dev",
 		});
 		expect(email.confirmed).toBe(true);
-		expect((await t.services.subscribers.list(ADMIN)).map((s) => s.id)).toEqual(
-			[email.id, hook.id],
-		);
+		const listed = await t.services.subscribers.list(ADMIN);
+		expect(listed.map((subscriber) => subscriber.id)).toEqual([
+			email.id,
+			hook.id,
+		]);
+		expect(listed[0]).not.toHaveProperty("token");
 		await expect(
 			t.services.subscribers.addEmail(ADMIN, { email: "ops@acme.dev" }),
 		).rejects.toBeInstanceOf(ConflictError);

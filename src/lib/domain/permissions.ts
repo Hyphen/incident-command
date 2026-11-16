@@ -158,6 +158,16 @@ export function permissionLabel(permission: Permission): string {
 	return (PERMISSIONS[permission] as PermissionSpec).label;
 }
 
+/** Returns the labels of the given permissions. */
+export function permissionSummary(permissions: readonly Permission[]): string {
+	if (permissions.length === 0) {
+		return "No permissions";
+	}
+	return permissions
+		.map((permission) => permissionLabel(permission))
+		.join(", ");
+}
+
 export const PERMISSION_LIST = Object.keys(PERMISSIONS) as Permission[];
 
 /** Permissions that an agent can hold, in catalog order. */

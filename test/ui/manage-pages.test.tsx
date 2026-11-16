@@ -225,6 +225,14 @@ describe("agent consent page", () => {
 		expect(screen.getByRole("combobox")).toHaveValue(
 			(await app.services.agents.list(actor))[0]?.id,
 		);
+		expect(
+			screen.getByRole("option", {
+				name: "Existing — Read status, Read drafts, Write drafts",
+			}),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(/A new agent can read the status page/),
+		).toBeInTheDocument();
 		again.unmount();
 		const other = await register(app);
 		const fresh = render(await consent(other));

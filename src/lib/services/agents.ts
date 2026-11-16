@@ -185,6 +185,11 @@ export class AgentService {
 		if (data.permissions && !can(actor, "agents.manage")) {
 			requirePermission(actor, "agents.manage");
 		}
+		if (data.revision !== current.revision) {
+			throw new ConflictError(
+				"Somebody changed this agent. Examine the new values and save again.",
+			);
+		}
 		const permissions = data.permissions
 			? grantablePermissions(actor, data.permissions)
 			: normalizePermissions(current.permissions);

@@ -11,11 +11,7 @@ import { buttonClass, Card, EmptyState } from "@/components/manage/ui";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
 import { activitySentence } from "@/lib/domain/activity-text";
-import {
-	can,
-	type Permission,
-	permissionLabel,
-} from "@/lib/domain/permissions";
+import { can, permissionSummary } from "@/lib/domain/permissions";
 import { publicMcpEndpoint } from "@/lib/mcp/oauth";
 import type { PublicCredential } from "@/lib/services/agents";
 
@@ -33,15 +29,6 @@ function LastUsed({ iso }: { iso: string | undefined }) {
 	) : (
 		"Never used"
 	);
-}
-
-function permissionSummary(permissions: readonly Permission[]): string {
-	if (permissions.length === 0) {
-		return "No permissions";
-	}
-	return permissions
-		.map((permission) => permissionLabel(permission))
-		.join(", ");
 }
 
 function tokenState(credential: PublicCredential): string {

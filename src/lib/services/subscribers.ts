@@ -90,11 +90,12 @@ export class SubscriberService {
 			: false;
 	}
 
-	async list(actor: Actor): Promise<Subscriber[]> {
+	async list(actor: Actor): Promise<Omit<Subscriber, "token">[]> {
 		requirePermission(actor, "subscribers.read");
-		return this.ctx.store.find("subscribers", {
+		const subscribers = await this.ctx.store.find("subscribers", {
 			sort: [{ field: "createdAt", direction: "desc" }],
 		});
+		return subscribers.map(({ token: _token, ...subscriber }) => subscriber);
 	}
 
 	/** Every subscriber that should receive notifications. */

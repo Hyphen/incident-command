@@ -4,7 +4,11 @@ import { buttonClass, Field, Flash, inputClass } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { getApp } from "@/lib/app";
 import { requireMember } from "@/lib/auth";
-import { can } from "@/lib/domain/permissions";
+import {
+	can,
+	permissionSummary,
+	permissionsInEffect,
+} from "@/lib/domain/permissions";
 import { ROLE_LABELS } from "@/lib/domain/status";
 import { resolveFlash } from "@/lib/flash";
 import {
@@ -98,7 +102,9 @@ export default async function AuthorizePage({
 						>
 							{choices.map((agent) => (
 								<option key={agent.id} value={agent.id}>
-									{agent.name}
+									{`${agent.name} — ${permissionSummary(
+										permissionsInEffect(agent.permissions, member.role),
+									)}`}
 								</option>
 							))}
 						</select>
@@ -125,9 +131,9 @@ export default async function AuthorizePage({
 					/>
 				</Field>
 				<p className="text-muted">
-					The agent can read the status page and write drafts. It cannot publish
-					or notify subscribers. An admin can change its permissions. You are
-					signed in as {member.email} ({ROLE_LABELS[member.role]}).
+					A new agent can read the status page and write drafts. It cannot
+					publish or notify subscribers. An admin can change its permissions.
+					You are signed in as {member.email} ({ROLE_LABELS[member.role]}).
 					{can(actor, "agents.manage")
 						? " You can attach this connection to any agent."
 						: ""}
