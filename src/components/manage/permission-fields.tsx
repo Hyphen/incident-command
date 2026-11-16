@@ -1,4 +1,8 @@
-import { PERMISSIONS, permissionGroups } from "@/lib/domain/permissions";
+import {
+	PERMISSIONS,
+	type PermissionSpec,
+	permissionGroups,
+} from "@/lib/domain/permissions";
 
 /** Checkboxes for the permissions an agent can hold. */
 export function PermissionFields({
@@ -15,7 +19,7 @@ export function PermissionFields({
 				<fieldset key={group.group} className="space-y-2" disabled={disabled}>
 					<legend className="text-sm font-medium">{group.group}</legend>
 					{group.permissions.map((permission) => {
-						const spec = PERMISSIONS[permission];
+						const spec: PermissionSpec = PERMISSIONS[permission];
 						return (
 							<label
 								key={permission}

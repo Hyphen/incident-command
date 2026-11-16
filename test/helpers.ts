@@ -1,8 +1,8 @@
 import { type Config, loadConfig } from "@/lib/config";
 import { permissionsForRole } from "@/lib/domain/permissions";
 import type {
-	Actor,
 	AgentActor,
+	MemberActor,
 	Settings,
 	Subscriber,
 } from "@/lib/domain/types";
@@ -72,19 +72,19 @@ export class Clock {
 	}
 }
 
-export const ADMIN: Actor = {
+export const ADMIN: MemberActor = {
 	type: "member",
 	id: "mem_admin",
 	name: "Ada Admin",
 	role: "admin",
 };
-export const EDITOR: Actor = {
+export const EDITOR: MemberActor = {
 	type: "member",
 	id: "mem_editor",
 	name: "Ed Editor",
 	role: "editor",
 };
-export const VIEWER: Actor = {
+export const VIEWER: MemberActor = {
 	type: "member",
 	id: "mem_viewer",
 	name: "Vi Viewer",

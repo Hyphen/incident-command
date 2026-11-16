@@ -225,8 +225,8 @@ export class AgentService {
 			});
 		}
 		if (data.permissions) {
-			const previous = new Set(current.permissions);
-			const selected = new Set(permissions);
+			const previous = new Set<string>(current.permissions);
+			const selected = new Set<string>(permissions);
 			const added = permissions.filter(
 				(permission) => !previous.has(permission),
 			);

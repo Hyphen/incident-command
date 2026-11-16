@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { Config } from "../config";
 import { can, PERMISSIONS, type Permission } from "../domain/permissions";
-import type { Actor, AuthorRef } from "../domain/types";
+import type { Actor, AuthorRef, MemberActor } from "../domain/types";
 import { PermissionDeniedError, ValidationError } from "../errors";
 import type { Notifier } from "../notifications/notifier";
 import type { DocumentStore } from "../store/types";
@@ -13,7 +13,7 @@ export interface ServiceContext {
 	now: () => Date;
 }
 
-export const SYSTEM_ACTOR: Actor = {
+export const SYSTEM_ACTOR: MemberActor = {
 	type: "system",
 	id: "system",
 	name: "System",
