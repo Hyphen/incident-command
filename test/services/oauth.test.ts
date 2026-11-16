@@ -718,4 +718,35 @@ describe("OAuthService", () => {
 		).resolves.toBeUndefined();
 		await expect(t.services.oauth.list(admin.actor)).resolves.toEqual([]);
 	});
+
+	it("rejects a code when the member or the chosen agent is gone", async () => {
+		const { actor } = await addMember(t, "editor", "Ed Editor");
+		const { client_id } = await register(t);
+		const code = await approve(t, actor, client_id);
+		await t.store.delete("members", actor.id);
+		await expectOAuthError(exchange(t, client_id, code), "invalid_grant");
+
+		const admin = await addMember(t, "admin", "Ada Admin");
+		const agent = await t.services.agents.create(admin.actor, { name: "Bot" });
+		const chosenClient = await register(t);
+		const chosenUrl = await t.services.oauth.approve(
+			admin.actor,
+			authorization(chosenClient.client_id),
+			RESOURCE,
+			{ agentId: agent.id },
+		);
+		const chosen = new URL(chosenUrl).searchParams.get("code") ?? "";
+		await t.store.delete("agents", agent.id);
+		await expectOAuthError(
+			exchange(t, chosenClient.client_id, chosen),
+			"invalid_grant",
+		);
+
+		const { tokens } = await connect(t, admin.actor);
+		const connected = await t.services.oauth.authenticate(tokens.access_token);
+		await t.store.delete("agents", connected?.id ?? "");
+		await expect(
+			t.services.oauth.authenticate(tokens.access_token),
+		).resolves.toBeUndefined();
+	});
 });

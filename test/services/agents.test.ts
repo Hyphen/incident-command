@@ -244,6 +244,12 @@ describe("AgentService", () => {
 		await expect(
 			t.services.agents.requireChoice(ADMIN, team.id),
 		).resolves.toMatchObject({ id: team.id });
+		await expect(
+			t.services.agents.requireChoice(agentActor(["status.read"]), team.id),
+		).rejects.toBeInstanceOf(NotFoundError);
+		await expect(
+			t.services.agents.requireChoice(agentActor(["agents.manage"]), team.id),
+		).resolves.toMatchObject({ id: team.id });
 		await expect(t.services.agents.get(owner, team.id)).rejects.toBeInstanceOf(
 			NotFoundError,
 		);
@@ -508,5 +514,119 @@ describe("AgentService", () => {
 		expect(
 			(await t.store.find("agent_activity")).map((row) => row.type),
 		).toEqual(["agent_renamed"]);
+	});
+
+	it("names a legacy credential that has no name", async () => {
+		await t.store.insert("members", {
+			id: "mem_ed",
+			email: "ed@acme.dev",
+			name: "Ed",
+			role: "viewer",
+			passwordHash: "x",
+			createdAt: NOW,
+			updatedAt: NOW,
+		});
+		await t.store.insert("agent_tokens", {
+			id: "agt_blank",
+			name: "",
+			tokenHash: "hash-blank",
+			tokenPrefix: "icmd_blank0",
+			role: "viewer",
+			createdBy: { type: "member", id: ADMIN.id, name: ADMIN.name },
+			createdAt: NOW,
+		});
+		await t.store.insert("oauth_grants", {
+			id: "plain_grant",
+			clientId: "ocl_x",
+			clientName: "",
+			memberId: "mem_ed",
+			accessTokenHash: "a",
+			accessTokenExpiresAt: "2026-12-02T12:00:00.000Z",
+			refreshTokenHash: "b",
+			refreshTokenExpiresAt: "2026-12-02T12:00:00.000Z",
+			createdAt: NOW,
+		});
+		await t.services.agents.migrate();
+		expect((await t.services.agents.get(ADMIN, "agt_blank")).name).toBe(
+			"Agent",
+		);
+		expect((await t.services.agents.get(ADMIN, "agt_plain_grant")).name).toBe(
+			"Agent",
+		);
+	});
+
+	it("stops when a save or a delete loses the row", async () => {
+		const agent = await t.services.agents.create(ADMIN, { name: "Bot" });
+		const created = await t.services.agents.createToken(ADMIN, agent.id, {});
+		await t.store.delete("agents", agent.id);
+		await expect(
+			t.services.agents.authenticate(created.token),
+		).resolves.toBeUndefined();
+
+		const update = t.store.update.bind(t.store);
+		vi.spyOn(t.store, "update").mockImplementation(
+			async (collection, doc, options) =>
+				collection === "agents" ? undefined : update(collection, doc, options),
+		);
+		const current = await t.services.agents.create(ADMIN, { name: "Live" });
+		await expect(
+			t.services.agents.update(ADMIN, current.id, {
+				name: "Next",
+				revision: current.revision,
+			}),
+		).rejects.toBeInstanceOf(ConflictError);
+		vi.restoreAllMocks();
+
+		const remove = t.store.delete.bind(t.store);
+		vi.spyOn(t.store, "delete").mockImplementation(async (collection, id) =>
+			collection === "agents" ? false : remove(collection, id),
+		);
+		await expect(
+			t.services.agents.delete(ADMIN, current.id),
+		).rejects.toBeInstanceOf(NotFoundError);
+		vi.restoreAllMocks();
+
+		await t.store.insert("agent_tokens", {
+			id: "tok_orphan",
+			tokenHash: "hash-orphan",
+			tokenPrefix: "icmd_orf000",
+			createdBy: { type: "member", id: ADMIN.id, name: ADMIN.name },
+			createdAt: NOW,
+		});
+		await expect(
+			t.services.agents.revokeToken(ADMIN, "tok_orphan"),
+		).rejects.toBeInstanceOf(NotFoundError);
+	});
+
+	it("leaves an owner that changed before the clear", async () => {
+		const owner = member("mem_ed");
+		const owned = await t.services.agents.createOwned({
+			name: "Mine",
+			ownerId: owner.id,
+			createdBy: { type: "member", id: owner.id, name: owner.name },
+		});
+		const get = t.store.get.bind(t.store);
+		vi.spyOn(t.store, "get").mockImplementation(
+			async (collection, id, options) => {
+				const row = await get(collection, id, options);
+				if (collection === "agents" && options?.consistent && row) {
+					return { ...row, ownerId: "mem_other" } as typeof row;
+				}
+				return row;
+			},
+		);
+		await t.services.agents.releaseOwner(owner.id);
+		expect((await get("agents", owned.id))?.ownerId).toBe(owner.id);
+
+		vi.spyOn(t.store, "get").mockImplementation(
+			async (collection, id, options) => {
+				if (collection === "agents" && options?.consistent) {
+					return undefined;
+				}
+				return get(collection, id, options);
+			},
+		);
+		await t.services.agents.releaseOwner(owner.id);
+		expect((await get("agents", owned.id))?.ownerId).toBe(owner.id);
 	});
 });

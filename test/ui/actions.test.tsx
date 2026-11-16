@@ -31,6 +31,7 @@ import {
 	saveDraftAction,
 	setServiceStatusAction,
 	setupAction,
+	updateAgentAction,
 	updateBrandingAction,
 	updateGeneralSettingsAction,
 	updateMemberAction,
@@ -762,6 +763,52 @@ describe("agent actions", () => {
 		await expect(
 			createAgentTokenAction({}, form({ agentId: agent?.id ?? "" })),
 		).rejects.toThrow("kaput");
+
+		const id = agent?.id ?? "";
+		const current = agent ? await services.agents.get(actor, id) : undefined;
+		expectSameFlash(
+			await redirectOf(
+				updateAgentAction(
+					form({
+						id,
+						name: "Renamed",
+						description: "",
+						editPermissions: "true",
+						permissions: ["status.read"],
+						revision: String(current?.revision ?? ""),
+					}),
+				),
+			),
+			`/manage/agents/${id}?notice=Agent saved`,
+		);
+		const renamed = await services.agents.get(actor, id);
+		expect(renamed).toMatchObject({
+			name: "Renamed",
+			permissions: ["status.read"],
+		});
+		expect(renamed.description).toBeUndefined();
+		expectSameFlash(
+			await redirectOf(
+				updateAgentAction(
+					form({
+						id,
+						name: "Renamed",
+						description: "Bridge",
+						revision: String(renamed.revision),
+					}),
+				),
+			),
+			`/manage/agents/${id}?notice=Agent saved`,
+		);
+		const described = await services.agents.get(actor, id);
+		expect(described.description).toBe("Bridge");
+		expect(described.permissions).toEqual(["status.read"]);
+		expect(
+			flashMessage(
+				await redirectOf(updateAgentAction(form({ id, name: "Nope" }))),
+				"error",
+			),
+		).toBe("Check the form and try again.");
 
 		const credentialId = agent
 			? (await services.agents.get(actor, agent.id)).credentials[0]?.id

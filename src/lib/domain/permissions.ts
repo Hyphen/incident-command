@@ -184,10 +184,6 @@ export const DEFAULT_AGENT_PERMISSIONS = [
 
 const AGENT_PERMISSION_SET = new Set<string>(AGENT_PERMISSIONS);
 
-export function isPermission(value: string): value is Permission {
-	return Object.hasOwn(PERMISSIONS, value);
-}
-
 /** Drops unknown and person-only values. Keeps catalog order. */
 export function normalizePermissions(values: readonly string[]): Permission[] {
 	const selected = new Set(values);

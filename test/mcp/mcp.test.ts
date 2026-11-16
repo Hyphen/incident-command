@@ -61,6 +61,26 @@ describe("MCP handler", () => {
 		expect(bearerToken(null)).toBeUndefined();
 	});
 
+	it("continues when a denied-tool check cannot read a call", async () => {
+		const token = await tokenFor(t, ["status.read"], "Reader");
+		const send = (body: string) =>
+			handleMcpRequest(
+				new Request("http://localhost/api/mcp", {
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${token}`,
+						"content-type": "application/json",
+					},
+					body,
+				}),
+				t.services,
+			);
+		for (const body of ["not-json", "null", "1"]) {
+			const response = await send(body);
+			expect(response).toBeInstanceOf(Response);
+		}
+	});
+
 	it("rejects non-POST requests", async () => {
 		const response = await handleMcpRequest(
 			new Request("http://localhost/api/mcp"),
@@ -392,10 +412,29 @@ describe("MCP handler", () => {
 			.data;
 		expect(created.token).toMatch(/^icmd_/);
 		expect((await call("list_agents")).data).toHaveLength(2);
+		const renamed = (
+			await call("update_agent", {
+				id: helper.id,
+				name: "Helper 2",
+				description: "",
+				revision: helper.revision,
+			})
+		).data;
+		expect(renamed.name).toBe("Helper 2");
+		expect(
+			(await call("list_agent_activity", { agentId: helper.id })).data.length,
+		).toBeGreaterThan(0);
+		expect(
+			(await call("list_agent_activity", { agentId: helper.id, limit: 1 }))
+				.data,
+		).toHaveLength(1);
 		expect(
 			(await call("revoke_agent_token", { id: created.credentialId })).data
 				.revokedAt,
 		).toBeDefined();
+		expect((await call("delete_agent", { id: helper.id })).data).toEqual({
+			deleted: helper.id,
+		});
 
 		expect(
 			(
