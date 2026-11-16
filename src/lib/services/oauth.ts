@@ -388,8 +388,12 @@ export class OAuthService {
 		if (selected?.agentId) {
 			const agent = await this.agents.requireChoice(actor, selected.agentId);
 			record.agentId = agent.id;
-		} else if (selected?.name) {
-			record.clientName = parse(createAgentSchema.shape.name, selected.name);
+		} else if (typeof choice === "string" || (selected && "name" in selected)) {
+			// A missing choice uses the client name later. A supplied name must be valid.
+			record.clientName = parse(
+				createAgentSchema.shape.name,
+				selected?.name ?? "",
+			);
 		}
 		if (request.resource) {
 			record.resource = request.resource;

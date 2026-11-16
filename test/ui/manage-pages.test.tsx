@@ -241,7 +241,7 @@ describe("agent consent page", () => {
 		await signIn(app, "admin");
 		render(await consent(other));
 		expect(
-			screen.getByText("You can attach this connection to any agent."),
+			screen.getByText(/You can attach this connection to any agent/),
 		).toBeInTheDocument();
 	});
 
@@ -618,7 +618,7 @@ describe("notification draft pages", () => {
 			screen.getByRole("link", { name: "Deleted incident" }),
 		).toBeInTheDocument();
 		expect(
-			screen.getAllByText(/New incident · Drafted by Ops bot/),
+			screen.getAllByText(/New incident · Drafted by Test agent/),
 		).toHaveLength(1);
 		expect(screen.getAllByText(/Incident update · Drafted by/)).toHaveLength(2);
 		expect(screen.getAllByText("Waiting for review")).toHaveLength(4);
@@ -720,7 +720,7 @@ describe("notification draft pages", () => {
 			screen.getByRole("heading", { level: 1, name: "API errors" }),
 		).toBeInTheDocument();
 		expect(
-			screen.getByText(/Incident update · Drafted by Ops bot/),
+			screen.getByText(/Incident update · Drafted by Test agent/),
 		).toBeInTheDocument();
 		// An update without a status keeps the status that the incident has at approval.
 		expect(screen.getByLabelText("Status")).toHaveValue("");
@@ -1006,8 +1006,8 @@ describe("admin pages", () => {
 		vi.useRealTimers();
 		expect(screen.getByText("Claude Code")).toBeInTheDocument();
 		expect(screen.getByText("Cursor")).toBeInTheDocument();
-		expect(screen.getByText("OAuth: Editor User")).toBeInTheDocument();
-		expect(screen.getByText("OAuth: Admin User")).toBeInTheDocument();
+		expect(screen.getByText(/OAuth: Editor User/)).toBeInTheDocument();
+		expect(screen.getByText(/OAuth: Admin User/)).toBeInTheDocument();
 		expect(screen.getAllByRole("button", { name: "Disconnect" })).toHaveLength(
 			2,
 		);
@@ -1046,7 +1046,7 @@ describe("admin pages", () => {
 		render(await AgentsPage(flash()));
 		expect(screen.getByText("Editor agent")).toBeInTheDocument();
 		expect(screen.queryByText("Admin agent")).not.toBeInTheDocument();
-		expect(screen.getByText("OAuth: Admin User")).toBeInTheDocument();
+		expect(screen.getByText(/OAuth: Admin User/)).toBeInTheDocument();
 		expect(
 			screen.queryByRole("link", { name: "New agent" }),
 		).not.toBeInTheDocument();
@@ -1070,7 +1070,7 @@ describe("admin pages", () => {
 		).not.toBeChecked();
 		created.unmount();
 		const list = render(await AgentsPage(flash()));
-		expect(screen.getByText("No permissions")).toBeInTheDocument();
+		expect(screen.getByText(/No permissions/)).toBeInTheDocument();
 		list.unmount();
 		const bare = render(
 			await AgentPage({

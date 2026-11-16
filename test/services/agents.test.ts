@@ -95,9 +95,11 @@ describe("AgentService", () => {
 		const expiring = await t.services.agents.createToken(ADMIN, agent.id, {
 			expiresInDays: 1,
 		});
-		expect(expiring.agent.credentials[0]?.expiresAt).toBe(
-			"2026-11-03T12:00:01.000Z",
-		);
+		expect(
+			expiring.agent.credentials.find(
+				(credential) => credential.id === expiring.credentialId,
+			)?.expiresAt,
+		).toBe("2026-11-03T12:00:01.000Z");
 		await expect(
 			t.services.agents.authenticate(expiring.token),
 		).resolves.toMatchObject({ id: agent.id });
