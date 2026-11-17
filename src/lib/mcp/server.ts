@@ -34,7 +34,9 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
 - To give affected services different statuses, use serviceStatuses, for example
   [{"serviceId": "svc_api", "status": "major_outage"}, {"serviceId": "svc_web", "status": "degraded_performance"}].
   It works with create_incident, post_incident_update and draft_notification. Each entry replaces
-  serviceStatus and the automatic status for that service only.
+  serviceStatus and the automatic status for that service only. An entry applies even when a different
+  open incident affects the service. When you resolve, do not list a service that must go back to
+  operational: resolution restores it, but keeps it as it is while a different open incident affects it.
 - Schedule planned work with schedule_maintenance (statuses: scheduled -> in_progress -> verifying -> completed).
 - When a person must review a notification first, use draft_notification and give that person the reviewUrl.
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
@@ -441,7 +443,7 @@ export function createMcpServer(
 		{
 			title: "Post incident update",
 			description:
-				"Adds a timeline update to an incident or maintenance, optionally changing its status and the status of each affected service.",
+				"Adds a timeline update to an incident or maintenance. It can also change the status and the status of each affected service.",
 			inputSchema: {
 				id,
 				message: z.string(),

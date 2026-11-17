@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import AccountPage from "@/app/manage/(portal)/account/page";
 import AgentPage from "@/app/manage/(portal)/agents/[id]/page";
 import AgentsLoading from "@/app/manage/(portal)/agents/loading";
@@ -18,6 +18,7 @@ import BrandingPage from "@/app/manage/(portal)/settings/branding/page";
 import NotificationsSettingsPage from "@/app/manage/(portal)/settings/notifications/page";
 import SettingsPage from "@/app/manage/(portal)/settings/page";
 import SubscribersPage from "@/app/manage/(portal)/subscribers/page";
+import { createIncidentAction } from "@/app/manage/actions";
 import AuthorizePage from "@/app/manage/authorize/page";
 import InvitePage from "@/app/manage/invite/page";
 import LoginPage from "@/app/manage/login/page";
@@ -611,8 +612,24 @@ describe("incident pages", () => {
 
 		render(await NewIncidentPage(flash()));
 		const own = screen.getByRole("combobox", { name: "Status of API" });
-		expect(own).toHaveAttribute("name", `serviceStatus:${api.id}`);
 		expect(own).toHaveValue("");
+		// A status of a service that is not selected has no effect, also when no service is selected.
+		fireEvent.change(screen.getByLabelText("Title"), {
+			target: { value: "Errors" },
+		});
+		fireEvent.change(screen.getByLabelText("Message"), {
+			target: { value: "Looking" },
+		});
+		fireEvent.change(own, { target: { value: "major_outage" } });
+		const declared = await redirectOf(
+			createIncidentAction(
+				new FormData(own.closest("form") as HTMLFormElement),
+			),
+		);
+		expect(declared).toContain("notice=incident_declared");
+		const [incident] = await services.incidents.list();
+		expect(incident?.serviceIds).toEqual([]);
+		expect((await services.catalog.get(api.id)).status).toBe("operational");
 	});
 
 	it("renders incident management for editors", async () => {

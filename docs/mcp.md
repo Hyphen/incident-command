@@ -186,7 +186,7 @@ Results are JSON in a text content block. Expected failures (validation, not fou
 }
 ```
 
-Each service in `serviceStatuses` must be an affected service. For a new incident, put the service in `serviceIds`. For an update, use `edit_incident` first to add the service to the incident. An entry also applies when a different open incident affects the service.
+Each service in `serviceStatuses` must be an affected service. For a new incident, put the service in `serviceIds`. For an update, use `edit_incident` first to add the service to the incident. An entry also applies when a different open incident affects the service. Thus, when you resolve an incident, do not list a service that must go back to `operational`. Resolution restores that service, but keeps it as it is while a different open incident affects it.
 
 Every status change is recorded and drives the 90-day uptime bars. Partial outages count as 30% downtime, major outages as 100%; degraded performance and maintenance do not count as downtime.
 

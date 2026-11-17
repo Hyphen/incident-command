@@ -102,12 +102,14 @@ export function ServiceStatusSelect({
 function OwnStatusSelect({
 	service,
 	value,
+	className = "block",
 }: {
 	service: Service;
 	value?: ServiceStatus;
+	className?: string;
 }) {
 	return (
-		<div className="w-full shrink-0 sm:w-56">
+		<div className={`w-full shrink-0 sm:w-56 ${className}`}>
 			<Select
 				name={`serviceStatus:${service.id}`}
 				aria-label={`Status of ${service.name}`}
@@ -134,6 +136,10 @@ function statusOf(
 /** The hint for the status select of each service. */
 const OWN_STATUS_HINT =
 	"The status of a service replaces the status for all affected services, for that service only.";
+
+/** The hint for the status select in each row of the service picker. */
+const PICKER_STATUS_HINT =
+	"Select a service to give it its own status. That status replaces the status for all affected services, for that service only.";
 
 /**
  * A status select for each affected service of an incident. It also shows
@@ -204,7 +210,7 @@ export function ServicePicker({
 					{services.map((service) => (
 						<div
 							key={service.id}
-							className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm sm:flex-nowrap"
+							className="group flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm sm:flex-nowrap"
 						>
 							<label className="flex min-w-0 flex-1 items-center gap-2">
 								<input
@@ -222,9 +228,12 @@ export function ServicePicker({
 								)}
 							</label>
 							{withStatus && (
+								// Only a selected service uses its status, so the select
+								// shows only while the checkbox is selected.
 								<OwnStatusSelect
 									service={service}
 									value={statusOf(statuses, service.id)}
+									className="hidden group-has-[input:checked]:block"
 								/>
 							)}
 						</div>
@@ -232,7 +241,7 @@ export function ServicePicker({
 				</div>
 			)}
 			{withStatus && services.length > 0 && (
-				<p className="text-xs text-muted">{OWN_STATUS_HINT}</p>
+				<p className="text-xs text-muted">{PICKER_STATUS_HINT}</p>
 			)}
 		</fieldset>
 	);
