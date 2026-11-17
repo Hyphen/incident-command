@@ -26,3 +26,8 @@ export const SVG_LOGO = new TextEncoder().encode(
 export const SVG_SCRIPT = new TextEncoder().encode(
 	'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
 );
+
+/** The header of an ICO file with one image. */
+export const ICO_FAVICON = Uint8Array.from([
+	0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
+]);

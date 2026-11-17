@@ -10,11 +10,11 @@ There are three levels of customization, from no code to full control.
 
 - **Theme:** pick a preset: `default` (light, follows system dark mode), `midnight`, `ocean`, `sunset` or `mono`.
 - **Brand color:** any hex color. The readable foreground (black or white) is computed automatically.
-- **Logo:** upload a PNG, JPEG, WebP, GIF or SVG file, or set a logo URL. The maximum size of a file is 512 KB. The uploaded file replaces the URL on the page.
-- **Favicon URL.**
+- **Logo:** upload a PNG, JPEG, WebP, GIF or SVG file. The maximum size of a file is 512 KB.
+- **Favicon:** upload an ICO, PNG, JPEG, WebP, GIF or SVG file. The maximum size of a file is 512 KB.
 - **Custom CSS:** inlined on every page after the theme, so it can override any token or style. `<` is escaped so the stylesheet can never break out of its `<style>` tag.
 
-Set the logo URL with the `update_settings` MCP tool. Upload the logo file in the portal.
+The app stores the logo and the favicon in the database. It loads them into memory at startup and serves them from `/brand/logo` and `/brand/favicon`. Thus the status page shows your brand when your website or the database is down. The `update_settings` MCP tool cannot upload a file. Upload the files in the portal.
 
 The status page and the manage portal show "Powered by Incident Command" at the bottom. This line stays on the page.
 

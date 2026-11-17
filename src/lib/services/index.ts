@@ -72,6 +72,7 @@ export function createServices(ctx: ServiceContext): Services {
 			if (ctx.config.seedDemo && (await ctx.store.count("services")) === 0) {
 				await seedDemo(ctx);
 			}
+			await settings.warm();
 		},
 	};
 }

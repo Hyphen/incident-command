@@ -192,8 +192,6 @@ export const updateSettingsSchema = z.object({
 	siteName: z.string().trim().min(1).max(120).optional(),
 	description: z.string().trim().max(500).optional(),
 	siteUrl: patchUrl,
-	logoUrl: patchUrl,
-	faviconUrl: patchUrl,
 	supportUrl: patchUrl,
 	theme: z
 		.string()

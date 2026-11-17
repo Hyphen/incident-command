@@ -39,7 +39,7 @@ export function PortalFrame({
 	children,
 }: {
 	member: PublicMember;
-	settings: Pick<Settings, "siteName" | "logoUrl" | "logoUpdatedAt">;
+	settings: Pick<Settings, "siteName" | "logoUpdatedAt">;
 	children: ReactNode;
 }) {
 	const logoSrc = publicLogoSrc(settings);
@@ -151,7 +151,7 @@ export function AuthLayout({
 	title,
 	children,
 }: {
-	settings: Pick<Settings, "siteName" | "logoUrl" | "logoUpdatedAt">;
+	settings: Pick<Settings, "siteName" | "logoUpdatedAt">;
 	title: string;
 	children: ReactNode;
 }) {

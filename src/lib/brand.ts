@@ -1,11 +1,25 @@
-import type { Settings } from "./domain/types";
+import type { BrandAssetKind, Settings } from "./domain/types";
 
-/** The logo src for a page. An uploaded logo replaces the logo URL. */
-export function publicLogoSrc(
-	settings: Pick<Settings, "logoUpdatedAt" | "logoUrl">,
+/** The URL of an uploaded file. A new file has a new version, thus a new URL. */
+function brandAssetSrc(
+	kind: BrandAssetKind,
+	version: string | undefined,
 ): string | undefined {
-	if (settings.logoUpdatedAt) {
-		return `/brand/logo?v=${encodeURIComponent(settings.logoUpdatedAt)}`;
-	}
-	return settings.logoUrl;
+	return version
+		? `/brand/${kind}?v=${encodeURIComponent(version)}`
+		: undefined;
+}
+
+/** The logo src for a page, or undefined when no logo is stored. */
+export function publicLogoSrc(
+	settings: Pick<Settings, "logoUpdatedAt">,
+): string | undefined {
+	return brandAssetSrc("logo", settings.logoUpdatedAt);
+}
+
+/** The favicon src for a page, or undefined when no favicon is stored. */
+export function publicFaviconSrc(
+	settings: Pick<Settings, "faviconUpdatedAt">,
+): string | undefined {
+	return brandAssetSrc("favicon", settings.faviconUpdatedAt);
 }
