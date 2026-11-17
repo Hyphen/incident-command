@@ -444,6 +444,7 @@ export interface NotificationDraft {
 	createdBy: AuthorRef;
 	reviewedBy?: AuthorRef;
 	reviewedAt?: string;
+	publishedAt?: string;
 	createdAt: string;
 	updatedAt: string;
 }

@@ -113,6 +113,7 @@ export type DraftContentInput = Omit<
 
 /** A new notification draft. With `incidentId`, the draft is an update to that incident. */
 export type NotificationDraftInput = DraftContentInput & {
+	requestId?: string;
 	incidentId?: string;
 	kind?: IncidentKind;
 };

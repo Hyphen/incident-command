@@ -186,6 +186,8 @@ Use a notification draft when a person must approve a notification before subscr
 
 The status page and subscribers see nothing until a person approves the draft. The service checks a draft with the same rules as `create_incident`, `schedule_maintenance` and `post_incident_update`. Thus, an approved draft does not fail because of invalid input. The published update shows the editor who approved it as the author. Only one review of a draft can succeed. If two editors review a draft at the same time, the second review gets a `conflict` error.
 
+For safe retries, pass a UUID in `requestId` to `draft_notification`. Use a new UUID for each draft. With the same agent and UUID, a retry returns the first draft, including any review decision. After approval, `draft.publishedAt` tells you when the status page received the update.
+
 An agent publishes only when it has `incidents.publish`. It notifies subscribers only when it has `notifications.send`. Without that permission, pass `notify: false` or use `draft_notification`.
 
 ## Attribution and notifications

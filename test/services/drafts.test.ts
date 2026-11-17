@@ -30,6 +30,40 @@ describe("DraftService", () => {
 	const statusOf = async (id: string) =>
 		(await t.services.catalog.get(id)).status;
 
+	it("keeps one draft per agent when requests arrive together", async () => {
+		const input = {
+			requestId: crypto.randomUUID(),
+			title: "API errors",
+			message: "Some requests fail.",
+		};
+		const [first, retry] = await Promise.all([
+			t.services.drafts.create(AGENT, input),
+			t.services.drafts.create(AGENT, input),
+		]);
+		expect(first.id).toBe(retry.id);
+		const other = await t.services.drafts.create(
+			{ ...AGENT, id: "agt_other" },
+			input,
+		);
+		expect(other.id).not.toBe(first.id);
+		expect(await t.services.drafts.list()).toHaveLength(2);
+	});
+
+	it("reports a storage failure when no other request saved the draft", async () => {
+		const input = {
+			requestId: crypto.randomUUID(),
+			title: "API errors",
+			message: "Some requests fail.",
+		};
+		for (const error of [
+			new ConflictError("write conflict"),
+			new Error("unavailable"),
+		]) {
+			vi.spyOn(t.store, "insert").mockRejectedValueOnce(error);
+			await expect(t.services.drafts.create(AGENT, input)).rejects.toBe(error);
+		}
+	});
+
 	it("holds a new incident until a person approves it", async () => {
 		const draft = await t.services.drafts.create(AGENT, {
 			title: "  API errors  ",

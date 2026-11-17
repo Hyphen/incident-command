@@ -510,6 +510,12 @@ export function createMcpServer(
 			description:
 				"Saves a notification for a person to review. Nothing is published or sent until a person approves it. Give the reviewUrl to that person. With incidentId, the draft is an update to that incident. Without incidentId, the draft declares a new incident or maintenance. On approval, the update is published on the status page and subscribers are notified.",
 			inputSchema: {
+				requestId: z
+					.uuid()
+					.optional()
+					.describe(
+						"Use one request ID per draft. A retry with the same ID returns the first draft for this agent.",
+					),
 				incidentId: z
 					.string()
 					.min(1)
