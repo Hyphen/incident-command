@@ -122,7 +122,9 @@ describe("SettingsService", () => {
 	it("accepts a GIF, a WebP and an SVG logo", async () => {
 		const t = createTestContext();
 		await t.services.settings.saveLogo(ADMIN, GIF_LOGO);
-		expect((await t.services.settings.getLogo())?.contentType).toBe("image/gif");
+		expect((await t.services.settings.getLogo())?.contentType).toBe(
+			"image/gif",
+		);
 		await t.services.settings.saveLogo(ADMIN, WEBP_LOGO);
 		expect((await t.services.settings.getLogo())?.contentType).toBe(
 			"image/webp",
@@ -154,7 +156,9 @@ describe("SettingsService", () => {
 		await expect(save(exact)).resolves.toMatchObject({
 			logoUpdatedAt: "2026-11-02T12:00:00.000Z",
 		});
-		expect((await t.services.settings.getLogo())?.contentType).toBe("image/png");
+		expect((await t.services.settings.getLogo())?.contentType).toBe(
+			"image/png",
+		);
 	});
 
 	it("removes a logo that was never uploaded", async () => {

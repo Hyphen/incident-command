@@ -149,7 +149,7 @@ A person reviews drafts. An agent cannot approve a draft. An agent cannot change
 | `delete_agent`                | `agents.manage`       | Delete an agent and its credentials.                                                |
 | `list_agent_activity`         | `agents.read`         | Recent activity for one agent.                                                      |
 | `get_settings`                | `settings.read`       | Status page settings and branding.                                                  |
-| `update_settings`             | `settings.write`      | Change name, URLs, theme, brand color, custom CSS, subscriptions and the uptime window. Upload a logo in the portal. |
+| `update_settings`             | `settings.write`      | Change name, URLs, theme, brand color, CSS and uptime. Upload a logo.               |
 | `get_notification_settings`   | `channels.read`       | The webhook, email and text messaging channels and their providers. No credentials. |
 | `update_notification_channel` | `channels.write`      | Turn a channel on or off, or set its delivery strategy or sender.                   |
 | `list_subscribers`            | `subscribers.read`    | Webhook, email and text message subscribers.                                        |

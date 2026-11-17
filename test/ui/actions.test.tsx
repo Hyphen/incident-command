@@ -1062,7 +1062,10 @@ describe("subscriber and settings actions", () => {
 			faviconUrl: "",
 			customCss: "",
 		});
-		uploaded.set("logo", new File([PNG_LOGO], "logo.png", { type: "image/png" }));
+		uploaded.set(
+			"logo",
+			new File([PNG_LOGO], "logo.png", { type: "image/png" }),
+		);
 		expectSameFlash(
 			await redirectOf(updateBrandingAction(uploaded)),
 			"/manage/settings/branding?notice=Branding saved",
