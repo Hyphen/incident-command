@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import {
+	IncidentMetricsCard,
+	StatTile,
+	UptimeCard,
+} from "@/components/manage/overview";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { ButtonLink, Card, EmptyState } from "@/components/manage/ui";
 import { EventStatusBadge, StatusBadge } from "@/components/status/badges";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
 import { hasRole, OVERALL_STATUS_COPY } from "@/lib/domain/status";
+import { formatUptime } from "@/lib/domain/uptime";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Overview" };
@@ -17,7 +23,11 @@ export default async function DashboardPage({
 }) {
 	const flash = await searchParams;
 	const { member, services, app } = await requireMember();
-	const summary = await services.status.summary();
+	const [overview, drafts] = await Promise.all([
+		services.status.overview(),
+		services.drafts.list({ pending: true }),
+	]);
+	const { summary, metrics } = overview;
 	const open = [
 		...summary.activeIncidents,
 		...summary.activeMaintenance,
@@ -48,32 +58,51 @@ export default async function DashboardPage({
 				)
 			}
 		>
-			<div className="grid gap-4 sm:grid-cols-3">
-				<Card>
-					<p className="text-sm text-muted">Current status</p>
-					<div className="mt-2">
-						<StatusBadge status={summary.overall} />
-					</div>
-					<p className="mt-2 text-sm">
-						{OVERALL_STATUS_COPY[summary.overall].title}
-					</p>
-				</Card>
-				<Card>
-					<p className="text-sm text-muted">Open incidents</p>
-					<p className="mt-2 text-3xl font-semibold">
-						{summary.activeIncidents.length}
-					</p>
-				</Card>
-				<Card>
-					<p className="text-sm text-muted">Services affected</p>
-					<p className="mt-2 text-3xl font-semibold">
-						{affected.length}
-						<span className="text-base font-normal text-muted">
-							{" "}
-							/ {summary.services.length}
-						</span>
-					</p>
-				</Card>
+			{drafts.length > 0 && (
+				<p className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-maintenance/40 bg-maintenance/10 px-4 py-3 text-sm">
+					<span>
+						{drafts.length === 1
+							? "1 notification draft waits for review."
+							: `${drafts.length} notification drafts wait for review.`}
+					</span>
+					<Link href="/manage/drafts" className="font-medium hover:underline">
+						Review drafts →
+					</Link>
+				</p>
+			)}
+			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				<StatTile
+					label="Current status"
+					value={<StatusBadge status={summary.overall} />}
+					detail={OVERALL_STATUS_COPY[summary.overall].title}
+				/>
+				<StatTile
+					label="Uptime"
+					value={formatUptime(summary.uptime.uptime)}
+					detail={`Last ${summary.window.days} days`}
+				/>
+				<StatTile
+					label="Open incidents"
+					value={summary.activeIncidents.length}
+					detail={`Maintenance: ${summary.activeMaintenance.length} active, ${summary.upcomingMaintenance.length} scheduled`}
+				/>
+				<StatTile
+					label="Services affected"
+					value={
+						<>
+							{affected.length}
+							<span className="text-base font-normal text-muted">
+								{" "}
+								/ {summary.services.length}
+							</span>
+						</>
+					}
+					detail={
+						affected.length === 0
+							? "All services are operational"
+							: affected.map((service) => service.name).join(", ")
+					}
+				/>
 			</div>
 			<Card title="Open incidents and maintenance">
 				{open.length === 0 ? (
@@ -106,6 +135,12 @@ export default async function DashboardPage({
 					</ul>
 				)}
 			</Card>
+			<UptimeCard
+				periods={overview.periods}
+				days={summary.uptime.days}
+				services={overview.services}
+			/>
+			<IncidentMetricsCard metrics={metrics} now={summary.generatedAt} />
 		</ManagePage>
 	);
 }

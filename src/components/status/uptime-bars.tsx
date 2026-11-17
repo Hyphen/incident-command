@@ -6,6 +6,20 @@ import { STATUS_BG } from "./badges";
 /** Days older than this are hidden on small screens. */
 export const MOBILE_DAYS = 30;
 
+/**
+ * The start and end labels under the uptime bars. Small screens show only
+ * the last `MOBILE_DAYS` days.
+ */
+export function UptimeAxis({ days }: { days: number }) {
+	return (
+		<>
+			<span className="hidden sm:inline">{days} days ago</span>
+			<span className="sm:hidden">{Math.min(days, MOBILE_DAYS)} days ago</span>
+			<span>Today</span>
+		</>
+	);
+}
+
 export function UptimeBars({ days }: { days: DayStatus[] }) {
 	return (
 		<ol

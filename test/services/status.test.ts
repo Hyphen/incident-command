@@ -107,6 +107,63 @@ describe("StatusService", () => {
 		);
 	});
 
+	it("adds uptime periods and incident metrics for the overview", async () => {
+		t.clock.set("2026-08-01T00:00:00.000Z");
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
+		await t.services.catalog.create(EDITOR, { name: "Secret", hidden: true });
+		const incident = (title: string, serviceIds: string[] = []) =>
+			t.services.incidents.create(EDITOR, {
+				title,
+				message: title,
+				impact: "critical",
+				serviceIds,
+			});
+		// Older than the period before: not counted.
+		t.clock.set("2026-08-20T10:00:00.000Z");
+		await t.services.incidents.resolve(EDITOR, (await incident("Ancient")).id);
+		// The period before.
+		t.clock.set("2026-09-23T10:00:00.000Z");
+		await t.services.incidents.resolve(EDITOR, (await incident("Old")).id);
+		// This period: one outage of 2h and one open incident.
+		t.clock.set("2026-10-30T10:00:00.000Z");
+		const outage = await incident("Down", [api.id]);
+		t.clock.set("2026-10-30T12:00:00.000Z");
+		await t.services.incidents.resolve(EDITOR, outage.id);
+		t.clock.set("2026-11-02T11:00:00.000Z");
+		const open = await incident("Slow");
+		await t.services.incidents.create(EDITOR, {
+			kind: "maintenance",
+			title: "Upgrade",
+			message: "Upgrade",
+			scheduledStart: "2026-11-05T00:00:00.000Z",
+			scheduledEnd: "2026-11-05T01:00:00.000Z",
+		});
+		t.clock.set("2026-11-02T12:00:00.000Z");
+
+		const overview = await t.services.status.overview();
+		// Each period ends at noon today: 2h of major outage in each period.
+		const expected = [
+			{ days: 7, uptime: expect.closeTo(1 - 2 / (6 * 24 + 12), 10) },
+			{ days: 30, uptime: expect.closeTo(1 - 2 / (29 * 24 + 12), 10) },
+			{ days: 90, uptime: expect.closeTo(1 - 2 / (89 * 24 + 12), 10) },
+		];
+		expect(overview.periods).toEqual(expected);
+		expect(overview.summary.uptime.uptime).toBeCloseTo(1 - 2 / 2148, 10);
+		expect(overview.services.map((row) => row.service.id)).toEqual([api.id]);
+		expect(overview.services[0]?.periods).toEqual(expected);
+		expect(overview.metrics).toMatchObject({
+			days: 30,
+			previousCount: 1,
+			resolved: 1,
+			meanMs: 2 * 3_600_000,
+			longestMs: 2 * 3_600_000,
+		});
+		expect(overview.metrics.incidents.map((i) => i.id)).toEqual([
+			open.id,
+			outage.id,
+		]);
+	});
+
 	it("honors the configured uptime window", async () => {
 		await t.services.settings.update(ADMIN, { uptimeDays: 7 });
 		const summary = await t.services.status.summary();
