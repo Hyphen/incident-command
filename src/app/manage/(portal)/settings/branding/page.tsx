@@ -8,7 +8,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
 import { publicFaviconSrc, publicLogoSrc } from "@/lib/brand";
 import { BRAND_ASSET_TYPES } from "@/lib/domain/brand-asset";
-import { THEMES } from "@/lib/theme";
+import { resolveTheme, THEMES } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Branding" };
@@ -98,6 +98,9 @@ export default async function BrandingPage({
 	const flash = await searchParams;
 	const { services, app } = await requireMember("admin");
 	const settings = await services.settings.get();
+	// The picker selects the preset that the site shows. A stored id can be the
+	// id of a removed preset. With no selection, the form sends no theme.
+	const selectedTheme = resolveTheme(settings.theme);
 	return (
 		<ManagePage title="Settings" flash={flash} health={app.store.health}>
 			<SettingsTabs active="branding" />
@@ -119,7 +122,7 @@ export default async function BrandingPage({
 										type="radio"
 										name="theme"
 										value={theme.id}
-										defaultChecked={settings.theme === theme.id}
+										defaultChecked={selectedTheme === theme.id}
 										className="sr-only"
 									/>
 									<ThemePreview />
