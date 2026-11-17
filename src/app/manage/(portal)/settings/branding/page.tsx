@@ -15,6 +15,37 @@ export const metadata: Metadata = { title: "Branding" };
 
 const fileInputClass = `${inputClass} file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-surface-muted file:px-3 file:py-1 file:text-sm file:font-medium file:text-fg`;
 
+/** The days of the small uptime history in a theme preview. */
+const PREVIEW_DAYS = Array.from({ length: 24 }, (_, day) => ({
+	day,
+	color:
+		day === 13 ? "bg-degraded" : day === 19 ? "bg-major" : "bg-operational",
+}));
+
+/**
+ * A small status card that shows the colors, the corners and the font of a
+ * theme. It takes the tokens from the `data-theme` of its parent.
+ */
+function ThemePreview() {
+	return (
+		<span
+			aria-hidden
+			className="block rounded-card border border-border bg-surface p-2.5"
+		>
+			<span className="flex items-center gap-2">
+				<span className="size-2 shrink-0 rounded-full bg-operational" />
+				<span className="text-xs font-semibold">Operational</span>
+				<span className="ml-auto h-3.5 w-9 rounded-full bg-brand" />
+			</span>
+			<span className="mt-2.5 flex h-4 gap-[2px]">
+				{PREVIEW_DAYS.map((bar) => (
+					<span key={bar.day} className={`flex-1 rounded-[1px] ${bar.color}`} />
+				))}
+			</span>
+		</span>
+	);
+}
+
 /** A file field for the logo or the favicon. It shows the stored file and a control to remove it. */
 function BrandAssetField({
 	kind,
@@ -77,12 +108,12 @@ export default async function BrandingPage({
 				>
 					<fieldset>
 						<legend className="mb-2 text-sm font-medium">Theme</legend>
-						<div className="grid gap-3 sm:grid-cols-3">
+						<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 							{THEMES.map((theme) => (
 								<label
 									key={theme.id}
 									data-theme={theme.id}
-									className="cursor-pointer rounded-card border border-border bg-bg p-3 text-fg has-checked:ring-2 has-checked:ring-brand"
+									className="cursor-pointer rounded-card border border-border bg-bg p-3 font-sans text-fg has-checked:ring-2 has-checked:ring-brand"
 								>
 									<input
 										type="radio"
@@ -91,13 +122,8 @@ export default async function BrandingPage({
 										defaultChecked={settings.theme === theme.id}
 										className="sr-only"
 									/>
-									<span className="flex gap-1" aria-hidden>
-										<span className="size-4 rounded-full bg-brand" />
-										<span className="size-4 rounded-full bg-operational" />
-										<span className="size-4 rounded-full bg-degraded" />
-										<span className="size-4 rounded-full bg-major" />
-									</span>
-									<span className="mt-2 block text-sm font-medium">
+									<ThemePreview />
+									<span className="mt-3 block text-sm font-medium">
 										{theme.name}
 									</span>
 									<span className="block text-xs text-muted">

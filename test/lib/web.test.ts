@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from "node:fs";
 import { GET as serverMetadata } from "@/app/.well-known/oauth-authorization-server/route";
 import { GET as resourceMetadataForPath } from "@/app/.well-known/oauth-protected-resource/api/mcp/route";
 import { GET as resourceMetadata } from "@/app/.well-known/oauth-protected-resource/route";
@@ -429,15 +430,30 @@ describe("format helpers", () => {
 });
 
 describe("theme helpers", () => {
+	it("has a stylesheet for each preset and no stylesheet without a preset", () => {
+		const globals = readFileSync("src/app/globals.css", "utf8");
+		for (const theme of THEMES) {
+			const css = readFileSync(`src/themes/${theme.id}.css`, "utf8");
+			expect(css).toContain(`[data-theme="${theme.id}"]`);
+			expect(globals).toContain(`@import "../themes/${theme.id}.css";`);
+		}
+		expect(readdirSync("src/themes").sort()).toEqual(
+			THEMES.map((theme) => `${theme.id}.css`).sort(),
+		);
+	});
+
 	it("resolves themes and brand colors", () => {
 		expect(THEMES.map((theme) => theme.id)).toEqual([
 			"default",
-			"midnight",
+			"carbon",
+			"terminal",
 			"ocean",
 			"sunset",
 			"mono",
 		]);
 		expect(resolveTheme("ocean")).toBe("ocean");
+		// A stored id of a removed preset resolves to the preset that replaced it.
+		expect(resolveTheme("midnight")).toBe("carbon");
 		expect(resolveTheme("nope")).toBe("default");
 		expect(resolveTheme(undefined)).toBe("default");
 		expect(readableForeground("#ffffff")).toBe("#0b0b0f");

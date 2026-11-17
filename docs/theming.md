@@ -8,7 +8,18 @@ There are three levels of customization, from no code to full control.
 
 **Manage → Settings → Branding**:
 
-- **Theme:** pick a preset: `default` (light, follows system dark mode), `midnight`, `ocean`, `sunset` or `mono`.
+- **Theme:** pick one of six presets. Each preset shows a small preview of its colors, corners and font.
+
+  | Preset     | Look                                                                        |
+  | ---------- | --------------------------------------------------------------------------- |
+  | `default`  | Neutral corporate look: gray page, white cards, navy text and a blue brand. |
+  | `carbon`   | Neutral dark theme with thin borders and a blue accent.                     |
+  | `terminal` | Dark console look with a monospace font and a green accent.                 |
+  | `ocean`    | Cool light theme with navy text and a teal accent.                          |
+  | `sunset`   | Warm light theme with cream surfaces and round corners.                     |
+  | `mono`     | Black and white with sharp corners and no accent color.                     |
+
+  The `default` preset follows the dark mode of the operating system. Each of the other presets has one color scheme. The `carbon` preset replaced the `midnight` preset. A site that has `midnight` in its settings shows `carbon`.
 - **Brand color:** any hex color. The readable foreground (black or white) is computed automatically.
 - **Logo:** upload a PNG, JPEG, WebP, GIF or SVG file. The maximum size of a file is 512 KB.
 - **Favicon:** upload an ICO, PNG, JPEG, WebP, GIF or SVG file. The maximum size of a file is 512 KB.
@@ -73,9 +84,12 @@ The status page and the manage portal show "Powered by Incident Command" at the 
    	--ic-maintenance: #3b6fd8;
    	--ic-nodata: #dbe6d8;
    	--ic-radius: 0.75rem;
+   	--ic-font: ui-sans-serif, system-ui, sans-serif;
    	color-scheme: light;
    }
    ```
+
+   Set each token in the table above. The theme picker shows a preset inside a page that uses a different theme. A token that the preset does not set comes from that theme.
 
 2. Import it in `src/app/globals.css` next to the other presets.
 3. Add `{ id: "forest", name: "Forest", description: "..." }` to `THEMES` in `src/lib/theme.ts`.

@@ -1,19 +1,22 @@
-/* Sunset: warm, friendly tones. */
+/* Sunset: a warm light theme with cream surfaces and a terracotta accent. */
 [data-theme="sunset"] {
-	--ic-bg: #fdf6ef;
+	--ic-bg: #faf5ee;
 	--ic-surface: #fffdfa;
-	--ic-surface-muted: #f9ece0;
-	--ic-fg: #2b1a12;
-	--ic-muted: #7a5b4b;
-	--ic-border: #f0dccb;
-	--ic-brand: #e0531f;
+	--ic-surface-muted: #f6ede2;
+	--ic-fg: #2a1b13;
+	--ic-muted: #735849;
+	--ic-border: #eadbca;
+	--ic-brand: #c2410c;
 	--ic-brand-fg: #ffffff;
-	--ic-operational: #2f9e44;
-	--ic-degraded: #d9a400;
-	--ic-partial: #f0700f;
-	--ic-major: #c92a2a;
-	--ic-maintenance: #3b6fd8;
-	--ic-nodata: #ecdccd;
-	--ic-radius: 1.5rem;
+	--ic-operational: #2e8b47;
+	--ic-degraded: #b98500;
+	--ic-partial: #e8650e;
+	--ic-major: #c62828;
+	--ic-maintenance: #4a6fd0;
+	--ic-nodata: #e8dacb;
+	--ic-radius: 1.125rem;
+	--ic-font:
+		ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+		"Helvetica Neue", Arial, sans-serif;
 	color-scheme: light;
 }
