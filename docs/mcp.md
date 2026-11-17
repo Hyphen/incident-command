@@ -128,7 +128,7 @@ A person reviews drafts. An agent cannot approve a draft. An agent cannot change
 | `set_service_status`          | `services.set_status` | Change a service's status without an incident. Feeds uptime history.                |
 | `delete_service`              | `services.delete`     | Delete a service and its status history.                                            |
 | `create_incident`             | `incidents.publish`   | Declare an incident. Affected services move to a status derived from the impact.    |
-| `post_incident_update`        | `incidents.publish`   | Add a timeline update, optionally changing status and service status.               |
+| `post_incident_update`        | `incidents.publish`   | Add a timeline update. Optionally change the status and the status of each service. |
 | `resolve_incident`            | `incidents.publish`   | Resolve an incident or complete maintenance; restores affected services.            |
 | `edit_incident`               | `incidents.edit`      | Change title, impact, services or the maintenance window without posting an update. |
 | `delete_incident`             | `incidents.delete`    | Delete an incident or maintenance.                                                  |
@@ -171,6 +171,22 @@ Results are JSON in a text content block. Expected failures (validation, not fou
 | Maintenance moves to `in_progress`        | `under_maintenance`                                      |
 | Incident resolved / maintenance completed | `operational`, unless another open incident affects them |
 | Any update with `serviceStatus`           | exactly `serviceStatus`                                  |
+| Any update with `serviceStatuses`         | the status in its entry, for each service in the list    |
+
+`create_incident`, `post_incident_update` and `draft_notification` accept `serviceStatuses`. Use it to give each affected service a different status. Each entry replaces `serviceStatus` and the automatic status for its service only. The other affected services keep `serviceStatus` or the automatic status.
+
+```json
+{
+	"id": "inc_123",
+	"message": "The API is back. The dashboard is still slow.",
+	"serviceStatuses": [
+		{ "serviceId": "svc_api", "status": "operational" },
+		{ "serviceId": "svc_dashboard", "status": "degraded_performance" }
+	]
+}
+```
+
+Each service in `serviceStatuses` must be an affected service. For a new incident, put the service in `serviceIds`. For an update, use `edit_incident` first to add the service to the incident. An entry also applies when a different open incident affects the service. Thus, when you resolve an incident, do not list a service that must go back to `operational`. Resolution restores that service, but keeps it as it is while a different open incident affects it.
 
 Every status change is recorded and drives the 90-day uptime bars. Partial outages count as 30% downtime, major outages as 100%; degraded performance and maintenance do not count as downtime.
 
@@ -180,7 +196,7 @@ Use a notification draft when a person must approve a notification before subscr
 
 1. The agent calls `draft_notification`. Without `incidentId`, the draft declares a new incident or maintenance. With `incidentId`, the draft is an update to that incident.
 2. The tool returns a `reviewUrl`, for example `https://status.example.com/manage/drafts/drf_...`. The agent gives this link to a person.
-3. The person opens the link and signs in, if necessary. The portal then shows the draft. An editor can change the title, status, impact, message, services and maintenance window.
+3. The person opens the link and signs in, if necessary. The portal then shows the draft. An editor can change the title, status, impact, message, services, the status of each service and the maintenance window.
 4. The editor selects **Save draft** to keep the changes, or **Approve and send** to publish the draft. Approval publishes the update on the status page and notifies subscribers. **Discard draft** closes the draft and sends nothing.
 5. The agent calls `get_notification_draft` to read the result. The `state` is `pending`, `approved` or `discarded`. After approval, `incidentId` is the incident that has the published update.
 

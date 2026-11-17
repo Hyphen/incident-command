@@ -308,6 +308,53 @@ describe("incident actions", () => {
 		);
 	});
 
+	it("sets the status of each service from the form", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "editor");
+		const [api, web, db] = await Promise.all(
+			["API", "Web", "DB"].map((name) =>
+				services.catalog.create(SYSTEM_ACTOR, { name }),
+			),
+		);
+		const statusOf = async (id = "") => (await services.catalog.get(id)).status;
+		// The picker sends an empty serviceIds value. DB is not selected, so its status has no effect.
+		const created = await redirectOf(
+			createIncidentAction(
+				form({
+					title: "Errors",
+					message: "Looking",
+					impact: "critical",
+					serviceIds: ["", api?.id ?? "", web?.id ?? ""],
+					[`serviceStatus:${api?.id}`]: "partial_outage",
+					[`serviceStatus:${web?.id}`]: "",
+					[`serviceStatus:${db?.id}`]: "major_outage",
+				}),
+			),
+		);
+		expect(flashMessage(created, "notice")).toBe("Incident declared");
+		const [incident] = await services.incidents.list();
+		expect(incident?.serviceIds).toEqual([api?.id, web?.id]);
+		expect(await statusOf(api?.id)).toBe("partial_outage");
+		expect(await statusOf(web?.id)).toBe("major_outage");
+		expect(await statusOf(db?.id)).toBe("operational");
+
+		// The update form has no picker. Each status with a value counts.
+		await redirectOf(
+			postIncidentUpdateAction(
+				form({
+					id: incident?.id ?? "",
+					message: "Better",
+					status: "",
+					serviceStatus: "",
+					[`serviceStatus:${api?.id}`]: "",
+					[`serviceStatus:${web?.id}`]: "degraded_performance",
+				}),
+			),
+		);
+		expect(await statusOf(api?.id)).toBe("partial_outage");
+		expect(await statusOf(web?.id)).toBe("degraded_performance");
+	});
+
 	it("schedules maintenance from datetime-local inputs", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");
@@ -390,6 +437,7 @@ describe("notification draft actions", () => {
 			message: "We found the cause.",
 			serviceIds: [api.id, ""],
 			serviceStatus: "",
+			[`serviceStatus:${api.id}`]: "partial_outage",
 		};
 		expectSameFlash(
 			await redirectOf(saveDraftAction(form(fields))),
@@ -401,6 +449,7 @@ describe("notification draft actions", () => {
 			impact: "major",
 			message: "We found the cause.",
 			serviceIds: [api.id],
+			serviceStatuses: [{ serviceId: api.id, status: "partial_outage" }],
 		});
 		expect(notifier.incidents).toHaveLength(0);
 
@@ -429,7 +478,12 @@ describe("notification draft actions", () => {
 		expectSameFlash(
 			await redirectOf(
 				saveDraftAction(
-					form({ id: update.id, status: "monitoring", message: "Edited" }),
+					form({
+						id: update.id,
+						status: "monitoring",
+						message: "Edited",
+						[`serviceStatus:${api.id}`]: "degraded_performance",
+					}),
 				),
 			),
 			`/manage/drafts/${update.id}?notice=Draft saved`,
@@ -437,6 +491,7 @@ describe("notification draft actions", () => {
 		expect((await services.drafts.get(update.id)).content).toMatchObject({
 			status: "monitoring",
 			message: "Edited",
+			serviceStatuses: [{ serviceId: api.id, status: "degraded_performance" }],
 		});
 		expectSameFlash(
 			await redirectOf(discardDraftAction(form({ id: update.id }))),

@@ -325,6 +325,50 @@ describe("DraftService", () => {
 		]);
 	});
 
+	it("keeps the status of each service until approval", async () => {
+		const web = (await t.services.catalog.create(ADMIN, { name: "Web" })).id;
+		const created = await t.services.drafts.create(AGENT, {
+			title: "Errors",
+			message: "Looking",
+			impact: "critical",
+			serviceIds: [api, web],
+			serviceStatuses: [{ serviceId: web, status: "degraded_performance" }],
+		});
+		expect(created.content.serviceStatuses).toEqual([
+			{ serviceId: web, status: "degraded_performance" },
+		]);
+		expect(await statusOf(web)).toBe("operational");
+		const { incident } = await t.services.drafts.approve(
+			EDITOR,
+			created.id,
+			created.content,
+		);
+		expect(await statusOf(api)).toBe("major_outage");
+		expect(await statusOf(web)).toBe("degraded_performance");
+
+		const update = await t.services.drafts.create(AGENT, {
+			incidentId: incident.id,
+			message: "API is better",
+			serviceStatuses: [{ serviceId: api, status: "partial_outage" }],
+		});
+		expect(update.content.serviceStatuses).toEqual([
+			{ serviceId: api, status: "partial_outage" },
+		]);
+		expect(await statusOf(api)).toBe("major_outage");
+		await t.services.drafts.approve(EDITOR, update.id, update.content);
+		expect(await statusOf(api)).toBe("partial_outage");
+		expect(await statusOf(web)).toBe("degraded_performance");
+
+		const other = (await t.services.catalog.create(ADMIN, { name: "DB" })).id;
+		await expect(
+			t.services.drafts.create(AGENT, {
+				incidentId: incident.id,
+				message: "DB is down",
+				serviceStatuses: [{ serviceId: other, status: "major_outage" }],
+			}),
+		).rejects.toThrow(/only an affected service can have its own status/);
+	});
+
 	it("saves edits while the draft waits for review", async () => {
 		const draft = await t.services.drafts.create(AGENT, {
 			title: "API errors",

@@ -13,6 +13,7 @@ import {
 	SERVICE_STATUSES,
 	type Service,
 	type ServiceStatus,
+	type ServiceStatusOverride,
 } from "@/lib/domain/types";
 import { toDateTimeInput } from "@/lib/format";
 import { Field, inputClass, Select } from "./ui";
@@ -94,41 +95,153 @@ export function ServiceStatusSelect({
 	);
 }
 
+/**
+ * The status select of one service. The form sends it as
+ * `serviceStatus:<id>`. The empty value uses the status for all services.
+ */
+function OwnStatusSelect({
+	service,
+	value,
+	className = "block",
+}: {
+	service: Service;
+	value?: ServiceStatus;
+	className?: string;
+}) {
+	return (
+		<div className={`w-full shrink-0 sm:w-56 ${className}`}>
+			<Select
+				name={`serviceStatus:${service.id}`}
+				aria-label={`Status of ${service.name}`}
+				defaultValue={value ?? ""}
+			>
+				<option value="">Same as all services</option>
+				{SERVICE_STATUSES.map((status) => (
+					<option key={status} value={status}>
+						{SERVICE_STATUS_LABELS[status]}
+					</option>
+				))}
+			</Select>
+		</div>
+	);
+}
+
+function statusOf(
+	statuses: readonly ServiceStatusOverride[],
+	serviceId: string,
+): ServiceStatus | undefined {
+	return statuses.find((entry) => entry.serviceId === serviceId)?.status;
+}
+
+/** The hint for the status select of each service. */
+const OWN_STATUS_HINT =
+	"The status of a service replaces the status for all affected services, for that service only.";
+
+/** The hint for the status select in each row of the service picker. */
+const PICKER_STATUS_HINT =
+	"Select a service to give it its own status. That status replaces the status for all affected services, for that service only.";
+
+/**
+ * A status select for each affected service of an incident. It also shows
+ * the current status of each service.
+ */
+export function ServiceStatusList({
+	services,
+	values = [],
+}: {
+	services: Service[];
+	values?: readonly ServiceStatusOverride[];
+}) {
+	if (services.length === 0) {
+		return null;
+	}
+	return (
+		<fieldset className="space-y-2">
+			<legend className="text-sm font-medium">Status of each service</legend>
+			<div className="space-y-2">
+				{services.map((service) => (
+					<div
+						key={service.id}
+						className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm sm:flex-nowrap"
+					>
+						<div className="min-w-0 flex-1">
+							<p className="truncate">{service.name}</p>
+							<p className="text-xs text-muted">
+								Now: {SERVICE_STATUS_LABELS[service.status]}
+							</p>
+						</div>
+						<OwnStatusSelect
+							service={service}
+							value={statusOf(values, service.id)}
+						/>
+					</div>
+				))}
+			</div>
+			<p className="text-xs text-muted">{OWN_STATUS_HINT}</p>
+		</fieldset>
+	);
+}
+
 export function ServicePicker({
 	services,
 	selected = [],
+	withStatus = false,
+	statuses = [],
 }: {
 	services: Service[];
 	selected?: string[];
+	/** Adds a status select to each service. Only a selected service uses its status. */
+	withStatus?: boolean;
+	/** The saved status of each service, for `withStatus`. */
+	statuses?: readonly ServiceStatusOverride[];
 }) {
 	return (
 		<fieldset className="space-y-2">
 			<legend className="text-sm font-medium">Affected services</legend>
+			{/* The form sends `serviceIds` also when no service is selected. A
+			    server action then knows that the form has this picker. */}
+			<input type="hidden" name="serviceIds" value="" />
 			{services.length === 0 ? (
 				<p className="text-sm text-muted">No services yet.</p>
 			) : (
-				<div className="grid gap-2 sm:grid-cols-2">
+				<div
+					className={withStatus ? "grid gap-2" : "grid gap-2 sm:grid-cols-2"}
+				>
 					{services.map((service) => (
-						<label
+						<div
 							key={service.id}
-							className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+							className="group flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm sm:flex-nowrap"
 						>
-							<input
-								type="checkbox"
-								name="serviceIds"
-								value={service.id}
-								defaultChecked={selected.includes(service.id)}
-								className="size-4 accent-brand"
-							/>
-							<span className="min-w-0 flex-1 truncate">{service.name}</span>
-							{service.group && (
-								<span className="shrink-0 text-xs text-muted">
-									{service.group}
-								</span>
+							<label className="flex min-w-0 flex-1 items-center gap-2">
+								<input
+									type="checkbox"
+									name="serviceIds"
+									value={service.id}
+									defaultChecked={selected.includes(service.id)}
+									className="size-4 accent-brand"
+								/>
+								<span className="min-w-0 flex-1 truncate">{service.name}</span>
+								{service.group && (
+									<span className="shrink-0 text-xs text-muted">
+										{service.group}
+									</span>
+								)}
+							</label>
+							{withStatus && (
+								// Only a selected service uses its status, so the select
+								// shows only while the checkbox is selected.
+								<OwnStatusSelect
+									service={service}
+									value={statusOf(statuses, service.id)}
+									className="hidden group-has-[input:checked]:block"
+								/>
 							)}
-						</label>
+						</div>
 					))}
 				</div>
+			)}
+			{withStatus && services.length > 0 && (
+				<p className="text-xs text-muted">{PICKER_STATUS_HINT}</p>
 			)}
 		</fieldset>
 	);

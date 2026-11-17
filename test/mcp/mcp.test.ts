@@ -196,7 +196,8 @@ describe("MCP handler", () => {
 				title: "API errors",
 				message: "Investigating",
 				impact: "critical",
-				serviceIds: [api.id],
+				serviceIds: [api.id, web.id],
+				serviceStatuses: [{ serviceId: web.id, status: "partial_outage" }],
 			})
 		).data;
 		expect(incident).toMatchObject({
@@ -215,6 +216,10 @@ describe("MCP handler", () => {
 			status: "major_outage",
 			uptime: "No data",
 		});
+		expect(status.services[1]).toMatchObject({
+			name: "Web",
+			status: "partial_outage",
+		});
 		expect(status.activeIncidents[0]).toMatchObject({
 			id: incident.id,
 			latestUpdate: "Investigating",
@@ -224,7 +229,14 @@ describe("MCP handler", () => {
 			id: incident.id,
 			status: "identified",
 			message: "Bad deploy",
+			serviceStatuses: [{ serviceId: api.id, status: "degraded_performance" }],
 		});
+		expect((await t.services.catalog.get(api.id)).status).toBe(
+			"degraded_performance",
+		);
+		expect((await t.services.catalog.get(web.id)).status).toBe(
+			"partial_outage",
+		);
 		await call("edit_incident", {
 			id: incident.id,
 			title: "API errors after deploy",
@@ -329,12 +341,20 @@ describe("MCP handler", () => {
 				incidentId: incident.id,
 				message: "A fix is ready.",
 				status: "monitoring",
+				serviceStatuses: [
+					{ serviceId: api.id, status: "degraded_performance" },
+				],
 			})
 		).data;
 		expect(update.draft).toMatchObject({
 			action: "update",
 			kind: "incident",
 			incidentId: incident.id,
+			content: {
+				serviceStatuses: [
+					{ serviceId: api.id, status: "degraded_performance" },
+				],
+			},
 		});
 	});
 

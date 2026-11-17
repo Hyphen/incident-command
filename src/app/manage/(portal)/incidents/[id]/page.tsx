@@ -10,6 +10,7 @@ import { ConfirmButton } from "@/components/manage/confirm-button";
 import {
 	ImpactSelect,
 	ServicePicker,
+	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
 	WindowFields,
@@ -47,6 +48,9 @@ export default async function ManageIncidentPage({
 		notFound();
 	}
 	const catalog = await services.catalog.list();
+	const affected = catalog.filter((service) =>
+		incident.serviceIds.includes(service.id),
+	);
 	const canEdit = hasRole(member.role, "editor");
 	const isIncident = incident.kind === "incident";
 	return (
@@ -88,6 +92,7 @@ export default async function ManageIncidentPage({
 									/>
 								</Field>
 								<ServiceStatusSelect hint="Automatic restores services when resolving and starts maintenance mode when in progress." />
+								<ServiceStatusList services={affected} />
 								<Checkbox
 									name="notify"
 									label="Notify subscribers"

@@ -195,6 +195,12 @@ export interface Service {
 	updatedAt: string;
 }
 
+/** The status for one affected service of an incident or maintenance. */
+export interface ServiceStatusOverride {
+	serviceId: string;
+	status: ServiceStatus;
+}
+
 export interface ServiceStatusChange {
 	id: string;
 	serviceId: string;
@@ -426,6 +432,8 @@ export interface DraftContent {
 	message: string;
 	/** Sets the affected services to this status instead of the automatic status. */
 	serviceStatus?: ServiceStatus;
+	/** Statuses for single affected services. Each one replaces `serviceStatus` for its service. */
+	serviceStatuses?: ServiceStatusOverride[];
 }
 
 /**
