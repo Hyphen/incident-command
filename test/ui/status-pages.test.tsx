@@ -17,7 +17,7 @@ import SubscribePage from "@/app/subscribe/page";
 import UnsubscribePage from "@/app/subscribe/unsubscribe/page";
 import { setApp } from "@/lib/app";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
-import { PNG_LOGO } from "../logo-bytes";
+import { ICO_FAVICON, PNG_LOGO } from "../brand-asset-bytes";
 import { expectNotFound, flashQueryParams, params, setupApp } from "./app";
 
 describe("root layout", () => {
@@ -27,9 +27,13 @@ describe("root layout", () => {
 			theme: "ocean",
 			brandColor: "#ffcc00",
 			customCss: "body{color:red}</style><script>alert(1)</script>",
-			faviconUrl: "https://acme.dev/favicon.ico",
 			description: "Acme services",
 		});
+		await services.settings.updateBranding(
+			SYSTEM_ACTOR,
+			{},
+			{ favicon: { bytes: ICO_FAVICON } },
+		);
 		const html = renderToStaticMarkup(
 			await RootLayout({ children: <p>child</p> }),
 		);
@@ -42,7 +46,9 @@ describe("root layout", () => {
 		const metadata = await layoutMetadata();
 		expect(metadata.title).toEqual({ default: "Acme", template: "%s · Acme" });
 		expect(metadata.description).toBe("Acme services");
-		expect(metadata.icons).toEqual({ icon: "https://acme.dev/favicon.ico" });
+		expect(metadata.icons).toEqual({
+			icon: "/brand/favicon?v=2026-11-02T12%3A00%3A00.000Z",
+		});
 		expect(viewport.width).toBe("device-width");
 	});
 
@@ -104,7 +110,6 @@ describe("status page", () => {
 		await services.settings.update(SYSTEM_ACTOR, {
 			siteName: "Acme",
 			description: "Live status for Acme",
-			logoUrl: "https://acme.dev/logo.svg",
 			supportUrl: "https://acme.dev/help",
 		});
 		clock.set("2026-10-01T00:00:00.000Z");
@@ -143,10 +148,6 @@ describe("status page", () => {
 			}),
 		).toBeInTheDocument();
 		expect(screen.getByText("Live status for Acme")).toBeInTheDocument();
-		expect(screen.getByRole("img", { name: "Acme" })).toHaveAttribute(
-			"src",
-			"https://acme.dev/logo.svg",
-		);
 		expect(screen.getByRole("link", { name: "Support" })).toHaveAttribute(
 			"href",
 			"https://acme.dev/help",
@@ -174,13 +175,14 @@ describe("status page", () => {
 		expect(screen.getAllByText("API errors").length).toBeGreaterThan(1);
 	});
 
-	it("shows an uploaded logo instead of the logo URL", async () => {
+	it("shows an uploaded logo in the header", async () => {
 		const { services } = await setupApp();
-		await services.settings.update(SYSTEM_ACTOR, {
-			siteName: "Acme",
-			logoUrl: "https://acme.dev/logo.svg",
-		});
-		await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
+		await services.settings.update(SYSTEM_ACTOR, { siteName: "Acme" });
+		await services.settings.updateBranding(
+			SYSTEM_ACTOR,
+			{},
+			{ logo: { bytes: PNG_LOGO } },
+		);
 		render(await StatusPage());
 		expect(screen.getByRole("img", { name: "Acme" })).toHaveAttribute(
 			"src",

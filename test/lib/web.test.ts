@@ -3,6 +3,7 @@ import { GET as resourceMetadataForPath } from "@/app/.well-known/oauth-protecte
 import { GET as resourceMetadata } from "@/app/.well-known/oauth-protected-resource/route";
 import { POST as mcp } from "@/app/api/mcp/route";
 import { GET as status } from "@/app/api/v1/status/route";
+import { GET as favicon } from "@/app/brand/favicon/route";
 import { GET as logo } from "@/app/brand/logo/route";
 import { GET as feed } from "@/app/feed.xml/route";
 import { GET as health } from "@/app/healthz/route";
@@ -23,6 +24,7 @@ import {
 } from "@/lib/format";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import { fallbackSettings, loadSiteSettings } from "@/lib/site";
+import { CachedStore } from "@/lib/store/cached";
 import {
 	brandStyle,
 	readableForeground,
@@ -30,8 +32,8 @@ import {
 	sanitizeCss,
 	THEMES,
 } from "@/lib/theme";
+import { ICO_FAVICON, JPEG_LOGO, PNG_LOGO } from "../brand-asset-bytes";
 import { Clock, FakeNotifier } from "../helpers";
-import { JPEG_LOGO, PNG_LOGO } from "../logo-bytes";
 
 async function setup(env: Record<string, string> = {}) {
 	const clock = new Clock();
@@ -46,12 +48,16 @@ async function setup(env: Record<string, string> = {}) {
 
 afterEach(() => setApp(undefined));
 
-function logoRequest(version?: string): Request {
-	const url = new URL("https://status.example/brand/logo");
+function assetRequest(kind: "logo" | "favicon", version?: string): Request {
+	const url = new URL(`https://status.example/brand/${kind}`);
 	if (version) {
 		url.searchParams.set("v", version);
 	}
 	return new Request(url);
+}
+
+function logoRequest(version?: string): Request {
+	return assetRequest("logo", version);
 }
 
 describe("API routes", () => {
@@ -104,7 +110,11 @@ describe("API routes", () => {
 		expect(unavailable.headers.get("cache-control")).toBe("no-store");
 		down.mockRestore();
 
-		const saved = await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
+		const saved = await services.settings.updateBranding(
+			SYSTEM_ACTOR,
+			{},
+			{ logo: { bytes: PNG_LOGO } },
+		);
 		const response = await logo(logoRequest(saved.logoUpdatedAt));
 		expect(response.status).toBe(200);
 		expect(response.headers.get("content-type")).toBe("image/png");
@@ -123,8 +133,12 @@ describe("API routes", () => {
 
 	it("refreshes a stale logo instead of caching it", async () => {
 		const { app, services } = await setup();
-		await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
-		const stale = await services.settings.getLogo();
+		await services.settings.updateBranding(
+			SYSTEM_ACTOR,
+			{},
+			{ logo: { bytes: PNG_LOGO } },
+		);
+		const stale = await services.settings.getBrandAsset("logo");
 		const nextAt = "2026-11-02T13:00:00.000Z";
 		await app.store.inner.update("brand_assets", {
 			id: stale?.id ?? "logo",
@@ -160,6 +174,41 @@ describe("API routes", () => {
 		await expect(
 			logo(logoRequest("2020-01-01T00:00:00.000Z")),
 		).rejects.toBeInstanceOf(ValidationError);
+	});
+
+	it("serves the logo and the favicon from memory after a restart", async () => {
+		const first = await setup();
+		const saved = await first.services.settings.updateBranding(
+			SYSTEM_ACTOR,
+			{},
+			{ logo: { bytes: PNG_LOGO }, favicon: { bytes: ICO_FAVICON } },
+		);
+
+		// A new process has an empty cache. It reads the files at startup.
+		const restarted = await createApp({
+			config: loadConfig({}),
+			store: new CachedStore(first.app.store.inner),
+			notifier: new FakeNotifier(),
+		});
+		setApp(restarted);
+		vi.spyOn(restarted.store.inner, "get").mockRejectedValue(new Error("down"));
+
+		const icon = await favicon(assetRequest("favicon", saved.faviconUpdatedAt));
+		expect(icon.status).toBe(200);
+		expect(icon.headers.get("content-type")).toBe("image/x-icon");
+		expect(icon.headers.get("cache-control")).toBe("public, max-age=86400");
+		expect(Buffer.from(await icon.arrayBuffer())).toEqual(
+			Buffer.from(ICO_FAVICON),
+		);
+		const image = await logo(logoRequest(saved.logoUpdatedAt));
+		expect(image.status).toBe(200);
+		expect(Buffer.from(await image.arrayBuffer())).toEqual(
+			Buffer.from(PNG_LOGO),
+		);
+		expect(await loadSiteSettings()).toMatchObject({
+			logoUpdatedAt: saved.logoUpdatedAt,
+			faviconUpdatedAt: saved.faviconUpdatedAt,
+		});
 	});
 
 	it("serves the public status json", async () => {

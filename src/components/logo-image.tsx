@@ -1,4 +1,4 @@
-/** An operator logo. The src is a logo URL or the uploaded file route. */
+/** An operator logo or favicon. The src is the route of the uploaded file. */
 export function LogoImage({
 	src,
 	alt,
@@ -9,7 +9,7 @@ export function LogoImage({
 	className?: string;
 }) {
 	return (
-		// biome-ignore lint/performance/noImgElement: logos are runtime URLs or uploaded files
+		// biome-ignore lint/performance/noImgElement: the image is an uploaded file
 		<img src={src} alt={alt} className={className} />
 	);
 }

@@ -1,14 +1,31 @@
-import { inspectLogo } from "../domain/logo";
+import { inspectBrandAsset } from "../domain/brand-asset";
 import {
 	type UpdateSettingsInput,
 	updateSettingsSchema,
 } from "../domain/schemas";
-import type { Actor, BrandAsset, Settings } from "../domain/types";
+import {
+	type Actor,
+	BRAND_ASSET_KINDS,
+	type BrandAsset,
+	type BrandAssetKind,
+	type Settings,
+} from "../domain/types";
 import type { ReadOptions } from "../store/types";
 import { iso, parse, requirePermission, type ServiceContext } from "./context";
 
 export const SETTINGS_ID = "settings";
-const LOGO_ASSET_ID = "logo";
+
+/** A new file for the logo or favicon, or a request to remove the stored file. */
+export type BrandAssetChange = { bytes: Uint8Array } | { remove: true };
+export type BrandAssetChanges = Partial<
+	Record<BrandAssetKind, BrandAssetChange>
+>;
+
+/** The settings field that holds the version of each stored file. */
+const VERSION_FIELD = {
+	logo: "logoUpdatedAt",
+	favicon: "faviconUpdatedAt",
+} as const satisfies Record<BrandAssetKind, keyof Settings>;
 
 export class SettingsService {
 	private readonly ctx: ServiceContext;
@@ -35,9 +52,23 @@ export class SettingsService {
 		return { ...this.defaults(), ...stored };
 	}
 
-	/** The uploaded logo, or undefined when the admin did not upload one. */
-	async getLogo(options?: ReadOptions): Promise<BrandAsset | undefined> {
-		return this.ctx.store.get("brand_assets", LOGO_ASSET_ID, options);
+	/** The uploaded logo or favicon, or undefined when the admin did not upload one. */
+	async getBrandAsset(
+		kind: BrandAssetKind,
+		options?: ReadOptions,
+	): Promise<BrandAsset | undefined> {
+		return this.ctx.store.get("brand_assets", kind, options);
+	}
+
+	/**
+	 * Reads the settings, the logo and the favicon into the memory cache.
+	 * The pages then show the brand when the store goes offline after startup.
+	 */
+	async warm(): Promise<void> {
+		await Promise.all([
+			this.get(),
+			...BRAND_ASSET_KINDS.map((kind) => this.getBrandAsset(kind)),
+		]);
 	}
 
 	async update(actor: Actor, input: UpdateSettingsInput): Promise<Settings> {
@@ -46,45 +77,45 @@ export class SettingsService {
 	}
 
 	/**
-	 * Saves branding fields. It checks those fields before it stores a logo.
-	 * A file replaces the stored logo. The remove flag deletes the stored logo.
+	 * Saves branding fields and the logo and favicon files.
+	 * It checks the fields and each file before it stores a file.
+	 * A file replaces the stored file. The remove flag deletes the stored file.
 	 */
 	async updateBranding(
 		actor: Actor,
 		input: UpdateSettingsInput,
-		logo?: { bytes: Uint8Array } | { remove: true },
+		assets: BrandAssetChanges = {},
 	): Promise<Settings> {
 		requirePermission(actor, "settings.write");
-		const patch = parse(updateSettingsSchema, input);
-		if (!logo) {
-			return this.apply(patch);
-		}
-		if ("bytes" in logo) {
-			const logoUpdatedAt = await this.putLogo(logo.bytes);
-			return this.apply({ ...patch, logoUpdatedAt });
-		}
-		await this.ctx.store.delete("brand_assets", LOGO_ASSET_ID);
-		return this.apply({ ...patch, logoUpdatedAt: null });
-	}
-
-	/** Stores an uploaded logo and makes the public page use it. */
-	async saveLogo(actor: Actor, bytes: Uint8Array): Promise<Settings> {
-		requirePermission(actor, "settings.write");
-		const logoUpdatedAt = await this.putLogo(bytes);
-		return this.apply({ logoUpdatedAt });
-	}
-
-	/** Checks the file, then stores it. The caller checks permission first. */
-	private async putLogo(bytes: Uint8Array): Promise<string> {
-		const { contentType } = inspectLogo(bytes);
+		const patch: Record<string, unknown> = parse(updateSettingsSchema, input);
 		const updatedAt = iso(this.ctx.now());
-		const asset: BrandAsset = {
-			id: LOGO_ASSET_ID,
-			contentType,
-			data: Buffer.from(bytes).toString("base64"),
-			updatedAt,
-		};
-		const current = await this.ctx.store.get("brand_assets", LOGO_ASSET_ID, {
+		const changes: { kind: BrandAssetKind; asset?: BrandAsset }[] = [];
+		for (const kind of BRAND_ASSET_KINDS) {
+			const change = assets[kind];
+			if (change && "bytes" in change) {
+				const { contentType } = inspectBrandAsset(kind, change.bytes);
+				const data = Buffer.from(change.bytes).toString("base64");
+				changes.push({
+					kind,
+					asset: { id: kind, contentType, data, updatedAt },
+				});
+			} else if (change) {
+				changes.push({ kind });
+			}
+		}
+		for (const { kind, asset } of changes) {
+			if (asset) {
+				await this.putBrandAsset(asset);
+			} else {
+				await this.ctx.store.delete("brand_assets", kind);
+			}
+			patch[VERSION_FIELD[kind]] = asset ? updatedAt : null;
+		}
+		return this.apply(patch);
+	}
+
+	private async putBrandAsset(asset: BrandAsset): Promise<void> {
+		const current = await this.ctx.store.get("brand_assets", asset.id, {
 			consistent: true,
 		});
 		if (current) {
@@ -92,14 +123,6 @@ export class SettingsService {
 		} else {
 			await this.ctx.store.insert("brand_assets", asset);
 		}
-		return updatedAt;
-	}
-
-	/** Deletes the uploaded logo. The page then uses the logo URL, when one is set. */
-	async removeLogo(actor: Actor): Promise<Settings> {
-		requirePermission(actor, "settings.write");
-		await this.ctx.store.delete("brand_assets", LOGO_ASSET_ID);
-		return this.apply({ logoUpdatedAt: null });
 	}
 
 	private async apply(patch: object): Promise<Settings> {

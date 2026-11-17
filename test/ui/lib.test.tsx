@@ -7,11 +7,7 @@ import {
 	secureCookies,
 	startSession,
 } from "@/lib/auth";
-import {
-	LOGO_SIZE_MESSAGE,
-	LOGO_SVG_MESSAGE,
-	LOGO_TYPE_MESSAGE,
-} from "@/lib/domain/logo";
+import { BRAND_ASSET_MESSAGES } from "@/lib/domain/brand-asset";
 import { ConflictError, ValidationError } from "@/lib/errors";
 import {
 	flashCodeForError,
@@ -99,9 +95,8 @@ describe("auth helpers", () => {
 			changed.message,
 		);
 		for (const message of [
-			LOGO_TYPE_MESSAGE,
-			LOGO_SIZE_MESSAGE,
-			LOGO_SVG_MESSAGE,
+			...Object.values(BRAND_ASSET_MESSAGES.logo),
+			...Object.values(BRAND_ASSET_MESSAGES.favicon),
 		]) {
 			const error = new ValidationError(message);
 			expect(readFlash("error", flashCodeForError(error))).toBe(error.message);

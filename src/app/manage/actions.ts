@@ -42,6 +42,7 @@ import {
 } from "@/lib/mcp/oauth";
 import { draftPath } from "@/lib/services/drafts";
 import { invitePath } from "@/lib/services/members";
+import type { BrandAssetChange } from "@/lib/services/settings";
 
 /**
  * Runs an operation for a `useActionState` form. An expected application
@@ -531,29 +532,33 @@ export async function updateGeneralSettingsAction(
 	redirect(flash(GENERAL_PATH, "settings_saved"));
 }
 
+/** The change that the branding form asks for one file. A new file wins over the remove flag. */
+async function brandAssetChange(
+	form: FormData,
+	field: string,
+	removeField: string,
+): Promise<BrandAssetChange | undefined> {
+	const file = form.get(field);
+	if (file instanceof File && file.size > 0) {
+		return { bytes: new Uint8Array(await file.arrayBuffer()) };
+	}
+	return checkbox(form, removeField) ? { remove: true } : undefined;
+}
+
 export async function updateBrandingAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("admin");
 	await attempt(BRANDING_PATH, async () => {
-		const uploaded = form.get("logo");
-		// A new file wins when the form also asks to remove the stored logo.
-		const file =
-			uploaded instanceof File && uploaded.size > 0 ? uploaded : undefined;
-		let logo: { bytes: Uint8Array } | { remove: true } | undefined;
-		if (file) {
-			logo = { bytes: new Uint8Array(await file.arrayBuffer()) };
-		} else if (checkbox(form, "removeLogo")) {
-			logo = { remove: true };
-		}
 		await services.settings.updateBranding(
 			actor,
 			{
 				theme: text(form, "theme"),
 				brandColor: optionalText(form, "brandColor"),
-				logoUrl: optionalText(form, "logoUrl"),
-				faviconUrl: optionalText(form, "faviconUrl"),
 				customCss: optionalText(form, "customCss"),
 			},
-			logo,
+			{
+				logo: await brandAssetChange(form, "logo", "removeLogo"),
+				favicon: await brandAssetChange(form, "favicon", "removeFavicon"),
+			},
 		);
 	});
 	// The root layout and the portal layout show the settings.

@@ -25,8 +25,8 @@ import SetupPage from "@/app/manage/setup/page";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { sha256 } from "@/lib/crypto";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
+import { ICO_FAVICON, PNG_LOGO } from "../brand-asset-bytes";
 import { agentActor } from "../helpers";
-import { PNG_LOGO } from "../logo-bytes";
 import {
 	AGENT_REDIRECT,
 	authorizationQuery,
@@ -113,7 +113,11 @@ describe("login and setup", () => {
 			password: "password123",
 		});
 		expect(await redirectOf(SetupPage(flash()))).toBe("/manage/login");
-		await app.services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
+		await app.services.settings.updateBranding(
+			SYSTEM_ACTOR,
+			{},
+			{ logo: { bytes: PNG_LOGO } },
+		);
 		const page = render(
 			await LoginPage(flash({ error: "invalid_credentials" })),
 		);
@@ -324,7 +328,11 @@ describe("portal layout", () => {
 	it("shows an uploaded logo beside the site name", async () => {
 		const { app, services } = await setupApp();
 		await services.settings.update(SYSTEM_ACTOR, { siteName: "Acme Status" });
-		await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
+		await services.settings.updateBranding(
+			SYSTEM_ACTOR,
+			{},
+			{ logo: { bytes: PNG_LOGO } },
+		);
 		await signIn(app, "admin");
 		render(await PortalLayout({ children: page }));
 		const brand = screen.getByRole("link", { name: "Acme Status" });
@@ -1354,27 +1362,49 @@ describe("admin pages", () => {
 		);
 		expect(screen.getByDisplayValue("sunset")).toBeChecked();
 		expect(screen.getByLabelText("Brand color")).toHaveValue("#123456");
-		expect(screen.getByLabelText("Logo file")).toBeInTheDocument();
-		expect(
-			screen.queryByRole("checkbox", { name: "Remove the uploaded logo" }),
-		).not.toBeInTheDocument();
+		expect(screen.getByLabelText("Logo")).toHaveAttribute("type", "file");
+		expect(screen.getByLabelText("Favicon")).toHaveAttribute("type", "file");
+		// The admin uploads each file. The form has no URL field.
+		expect(screen.queryByLabelText(/URL/)).not.toBeInTheDocument();
+		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
 		expect(
 			screen.queryByLabelText("Uptime window (days)"),
 		).not.toBeInTheDocument();
 	});
 
-	it("shows the uploaded logo and a control to remove it", async () => {
+	it("shows each uploaded file and a control to remove it", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");
-		await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
-		render(await BrandingPage(flash()));
+		await services.settings.updateBranding(
+			SYSTEM_ACTOR,
+			{},
+			{ logo: { bytes: PNG_LOGO } },
+		);
+		const first = render(await BrandingPage(flash()));
 		expect(
 			screen.getByRole("checkbox", { name: "Remove the uploaded logo" }),
 		).not.toBeChecked();
-		expect(document.querySelector("img")).toHaveAttribute(
-			"src",
-			"/brand/logo?v=2026-11-02T12%3A00%3A00.000Z",
+		expect(
+			screen.getByRole("img", { name: "The current logo" }),
+		).toHaveAttribute("src", "/brand/logo?v=2026-11-02T12%3A00%3A00.000Z");
+		// No favicon is stored, thus the form shows no favicon to remove.
+		expect(
+			screen.queryByRole("checkbox", { name: "Remove the uploaded favicon" }),
+		).not.toBeInTheDocument();
+		first.unmount();
+
+		await services.settings.updateBranding(
+			SYSTEM_ACTOR,
+			{},
+			{ favicon: { bytes: ICO_FAVICON } },
 		);
+		render(await BrandingPage(flash()));
+		expect(
+			screen.getByRole("checkbox", { name: "Remove the uploaded favicon" }),
+		).not.toBeChecked();
+		expect(
+			screen.getByRole("img", { name: "The current favicon" }),
+		).toHaveAttribute("src", "/brand/favicon?v=2026-11-02T12%3A00%3A00.000Z");
 	});
 
 	it("renders the notification channels without an encryption key", async () => {

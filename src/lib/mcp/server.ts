@@ -795,13 +795,11 @@ export function createMcpServer(
 		{
 			title: "Update settings",
 			description:
-				"Updates status page settings and branding. Pass null or an empty string to clear optional values. Upload a logo in the portal. An uploaded logo replaces logoUrl on the page.",
+				"Updates status page settings and branding. Pass null or an empty string to clear optional values. Upload the logo and the favicon in the portal.",
 			inputSchema: {
 				siteName: z.string().optional(),
 				description: z.string().optional(),
 				siteUrl: z.string().nullable().optional(),
-				logoUrl: z.string().nullable().optional(),
-				faviconUrl: z.string().nullable().optional(),
 				supportUrl: z.string().nullable().optional(),
 				theme: z
 					.string()

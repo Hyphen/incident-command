@@ -313,5 +313,20 @@
 		"id": "fls_7n4qlogo3svgzz",
 		"kind": "error",
 		"text": "This SVG logo is not allowed."
+	},
+	"favicon_type": {
+		"id": "fls_k2m9favicon1type",
+		"kind": "error",
+		"text": "Use an ICO, PNG, JPEG, WebP, GIF or SVG favicon."
+	},
+	"favicon_too_large": {
+		"id": "fls_k2m9favicon2size",
+		"kind": "error",
+		"text": "The favicon must be 512 KB or smaller."
+	},
+	"favicon_svg": {
+		"id": "fls_k2m9favicon3svgx",
+		"kind": "error",
+		"text": "This SVG favicon is not allowed."
 	}
 }

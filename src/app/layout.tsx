@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { publicFaviconSrc } from "@/lib/brand";
 import { loadSiteSettings } from "@/lib/site";
 import { brandStyle, resolveTheme, sanitizeCss } from "@/lib/theme";
 import "./globals.css";
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
 	const settings = await loadSiteSettings();
+	const favicon = publicFaviconSrc(settings);
 	return {
 		title: {
 			default: settings.siteName,
@@ -16,7 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
 		description:
 			settings.description ||
 			`Current status and incident history for ${settings.siteName}.`,
-		icons: settings.faviconUrl ? { icon: settings.faviconUrl } : undefined,
+		icons: favicon ? { icon: favicon } : undefined,
 		alternates: { types: { "application/rss+xml": "/feed.xml" } },
 	};
 }

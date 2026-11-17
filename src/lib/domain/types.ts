@@ -99,8 +99,6 @@ export interface Settings {
 	siteName: string;
 	description: string;
 	siteUrl?: string;
-	logoUrl?: string;
-	faviconUrl?: string;
 	supportUrl?: string;
 	theme: string;
 	brandColor?: string;
@@ -109,11 +107,18 @@ export interface Settings {
 	uptimeDays: number;
 	/** Set when an admin uploads a logo. The image is at /brand/logo. */
 	logoUpdatedAt?: string;
+	/** Set when an admin uploads a favicon. The image is at /brand/favicon. */
+	faviconUpdatedAt?: string;
 	updatedAt: string;
 }
 
-/** The logo file an admin uploaded. */
+/** The files an admin can upload for the brand. */
+export const BRAND_ASSET_KINDS = ["logo", "favicon"] as const;
+export type BrandAssetKind = (typeof BRAND_ASSET_KINDS)[number];
+
+/** A logo or favicon file an admin uploaded. */
 export interface BrandAsset {
+	/** The kind of the file. */
 	id: string;
 	contentType: string;
 	/** Base64-encoded image bytes. */

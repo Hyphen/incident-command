@@ -1,20 +1,20 @@
 import {
-	LOGO_MAX_BYTES,
-	LOGO_SIZE_MESSAGE,
-	LOGO_SVG_MESSAGE,
-	LOGO_TYPE_MESSAGE,
-} from "@/lib/domain/logo";
+	BRAND_ASSET_MAX_BYTES,
+	BRAND_ASSET_MESSAGES,
+} from "@/lib/domain/brand-asset";
+import { BRAND_ASSET_KINDS } from "@/lib/domain/types";
 import { ForbiddenError, ValidationError } from "@/lib/errors";
-import { ADMIN, createTestContext, EDITOR } from "../helpers";
 import {
 	GIF_LOGO,
+	ICO_FAVICON,
 	JPEG_LOGO,
 	PNG_LOGO,
 	RIFF_WAVE,
 	SVG_LOGO,
 	SVG_SCRIPT,
 	WEBP_LOGO,
-} from "../logo-bytes";
+} from "../brand-asset-bytes";
+import { ADMIN, createTestContext, EDITOR } from "../helpers";
 
 describe("SettingsService", () => {
 	it("returns defaults derived from config", async () => {
@@ -37,7 +37,7 @@ describe("SettingsService", () => {
 		const t = createTestContext();
 		const first = await t.services.settings.update(ADMIN, {
 			siteName: "Acme",
-			logoUrl: "https://acme.dev/logo.svg",
+			supportUrl: "https://acme.dev/help",
 			brandColor: "#ff6600",
 			customCss: ".x{}",
 			theme: "midnight",
@@ -46,6 +46,7 @@ describe("SettingsService", () => {
 		});
 		expect(first).toMatchObject({
 			siteName: "Acme",
+			supportUrl: "https://acme.dev/help",
 			brandColor: "#ff6600",
 			theme: "midnight",
 			uptimeDays: 30,
@@ -53,12 +54,12 @@ describe("SettingsService", () => {
 		});
 		expect(first.updatedAt).toBe("2026-11-02T12:00:00.000Z");
 		const second = await t.services.settings.update(ADMIN, {
-			logoUrl: "",
+			supportUrl: "",
 			brandColor: "",
 			customCss: "",
-			faviconUrl: undefined,
+			description: undefined,
 		});
-		expect(second.logoUrl).toBeUndefined();
+		expect(second.supportUrl).toBeUndefined();
 		expect(second.brandColor).toBeUndefined();
 		expect(second.customCss).toBeUndefined();
 		expect(second.siteName).toBe("Acme");
@@ -74,7 +75,7 @@ describe("SettingsService", () => {
 			t.services.settings.update(ADMIN, { brandColor: "red" }),
 		).rejects.toBeInstanceOf(ValidationError);
 		await expect(
-			t.services.settings.update(ADMIN, { logoUrl: "javascript:alert(1)" }),
+			t.services.settings.update(ADMIN, { supportUrl: "javascript:alert(1)" }),
 		).rejects.toBeInstanceOf(ValidationError);
 		await expect(
 			t.services.settings.update(ADMIN, { theme: "Bad Theme" }),
@@ -83,88 +84,166 @@ describe("SettingsService", () => {
 			t.services.settings.update(ADMIN, { uptimeDays: 1 }),
 		).rejects.toBeInstanceOf(ValidationError);
 		await expect(
-			t.services.settings.saveLogo(EDITOR, PNG_LOGO),
+			t.services.settings.updateBranding(
+				EDITOR,
+				{},
+				{ logo: { bytes: PNG_LOGO } },
+			),
 		).rejects.toBeInstanceOf(ForbiddenError);
-		await expect(t.services.settings.removeLogo(EDITOR)).rejects.toBeInstanceOf(
-			ForbiddenError,
-		);
+		await expect(
+			t.services.settings.getBrandAsset("logo"),
+		).resolves.toBeUndefined();
 	});
 
-	it("stores, replaces and removes an uploaded logo", async () => {
+	it("stores, replaces and removes each uploaded file", async () => {
 		const t = createTestContext();
-		const first = await t.services.settings.saveLogo(ADMIN, PNG_LOGO);
+		const { settings } = t.services;
+		const first = await settings.updateBranding(
+			ADMIN,
+			{},
+			{ logo: { bytes: PNG_LOGO } },
+		);
 		expect(first.logoUpdatedAt).toBe("2026-11-02T12:00:00.000Z");
-		await expect(t.services.settings.getLogo()).resolves.toMatchObject({
+		expect(first.faviconUpdatedAt).toBeUndefined();
+		await expect(settings.getBrandAsset("logo")).resolves.toEqual({
 			id: "logo",
 			contentType: "image/png",
 			data: Buffer.from(PNG_LOGO).toString("base64"),
+			updatedAt: "2026-11-02T12:00:00.000Z",
 		});
-		const kept = await t.services.settings.update(ADMIN, { siteName: "Acme" });
+		await expect(settings.getBrandAsset("favicon")).resolves.toBeUndefined();
+		const kept = await settings.update(ADMIN, { siteName: "Acme" });
 		expect(kept).toMatchObject({
 			siteName: "Acme",
 			logoUpdatedAt: first.logoUpdatedAt,
 		});
 
+		// A new favicon and a new logo do not change the other file.
 		t.clock.advance(1000);
-		const replaced = await t.services.settings.saveLogo(ADMIN, JPEG_LOGO);
-		expect(replaced.logoUpdatedAt).toBe("2026-11-02T12:00:01.000Z");
-		expect(replaced.siteName).toBe("Acme");
-		expect((await t.services.settings.getLogo())?.contentType).toBe(
+		const withFavicon = await settings.updateBranding(
+			ADMIN,
+			{},
+			{ favicon: { bytes: ICO_FAVICON } },
+		);
+		expect(withFavicon).toMatchObject({
+			siteName: "Acme",
+			logoUpdatedAt: "2026-11-02T12:00:00.000Z",
+			faviconUpdatedAt: "2026-11-02T12:00:01.000Z",
+		});
+		await expect(settings.getBrandAsset("favicon")).resolves.toEqual({
+			id: "favicon",
+			contentType: "image/x-icon",
+			data: Buffer.from(ICO_FAVICON).toString("base64"),
+			updatedAt: "2026-11-02T12:00:01.000Z",
+		});
+		t.clock.advance(1000);
+		const replaced = await settings.updateBranding(
+			ADMIN,
+			{},
+			{ logo: { bytes: JPEG_LOGO } },
+		);
+		expect(replaced).toMatchObject({
+			logoUpdatedAt: "2026-11-02T12:00:02.000Z",
+			faviconUpdatedAt: "2026-11-02T12:00:01.000Z",
+		});
+		expect((await settings.getBrandAsset("logo"))?.contentType).toBe(
 			"image/jpeg",
 		);
 
-		const removed = await t.services.settings.removeLogo(ADMIN);
+		const removed = await settings.updateBranding(
+			ADMIN,
+			{},
+			{ logo: { remove: true } },
+		);
 		expect(removed.logoUpdatedAt).toBeUndefined();
+		expect(removed.faviconUpdatedAt).toBe("2026-11-02T12:00:01.000Z");
 		expect(removed.siteName).toBe("Acme");
-		await expect(t.services.settings.getLogo()).resolves.toBeUndefined();
+		await expect(settings.getBrandAsset("logo")).resolves.toBeUndefined();
+		expect((await settings.getBrandAsset("favicon"))?.contentType).toBe(
+			"image/x-icon",
+		);
 	});
 
-	it("accepts a GIF, a WebP and an SVG logo", async () => {
+	it("accepts each image type, and an ICO file only for the favicon", async () => {
 		const t = createTestContext();
-		await t.services.settings.saveLogo(ADMIN, GIF_LOGO);
-		expect((await t.services.settings.getLogo())?.contentType).toBe(
-			"image/gif",
-		);
-		await t.services.settings.saveLogo(ADMIN, WEBP_LOGO);
-		expect((await t.services.settings.getLogo())?.contentType).toBe(
-			"image/webp",
-		);
-		await t.services.settings.saveLogo(ADMIN, SVG_LOGO);
-		expect((await t.services.settings.getLogo())?.contentType).toBe(
+		const { settings } = t.services;
+		const images = [
+			[PNG_LOGO, "image/png"],
+			[JPEG_LOGO, "image/jpeg"],
+			[GIF_LOGO, "image/gif"],
+			[WEBP_LOGO, "image/webp"],
+			[SVG_LOGO, "image/svg+xml"],
+		] as const;
+		for (const kind of BRAND_ASSET_KINDS) {
+			for (const [bytes, contentType] of images) {
+				await settings.updateBranding(ADMIN, {}, { [kind]: { bytes } });
+				expect((await settings.getBrandAsset(kind))?.contentType).toBe(
+					contentType,
+				);
+			}
+		}
+		await expect(
+			settings.updateBranding(ADMIN, {}, { logo: { bytes: ICO_FAVICON } }),
+		).rejects.toThrow(BRAND_ASSET_MESSAGES.logo.type);
+		expect((await settings.getBrandAsset("logo"))?.contentType).toBe(
 			"image/svg+xml",
 		);
 	});
 
-	it("rejects a logo that is empty, too large, or not an image", async () => {
-		const t = createTestContext();
-		const save = (bytes: Uint8Array) =>
-			t.services.settings.saveLogo(ADMIN, bytes);
-		await expect(save(Uint8Array.from([]))).rejects.toThrow(LOGO_TYPE_MESSAGE);
-		await expect(save(Uint8Array.from([0]))).rejects.toThrow(LOGO_TYPE_MESSAGE);
-		await expect(save(RIFF_WAVE)).rejects.toThrow(LOGO_TYPE_MESSAGE);
-		await expect(
-			save(new TextEncoder().encode("<html></html>")),
-		).rejects.toThrow(LOGO_TYPE_MESSAGE);
-		await expect(save(SVG_SCRIPT)).rejects.toThrow(LOGO_SVG_MESSAGE);
-		const tooBig = new Uint8Array(LOGO_MAX_BYTES + 1);
-		tooBig.set(PNG_LOGO);
-		await expect(save(tooBig)).rejects.toThrow(LOGO_SIZE_MESSAGE);
-		await expect(t.services.settings.getLogo()).resolves.toBeUndefined();
+	it("rejects a file that is empty, too large, or not an image", async () => {
+		for (const kind of BRAND_ASSET_KINDS) {
+			const t = createTestContext();
+			const { settings } = t.services;
+			const messages = BRAND_ASSET_MESSAGES[kind];
+			const save = (bytes: Uint8Array) =>
+				settings.updateBranding(ADMIN, {}, { [kind]: { bytes } });
+			await expect(save(Uint8Array.from([]))).rejects.toThrow(messages.type);
+			await expect(save(Uint8Array.from([0]))).rejects.toThrow(messages.type);
+			await expect(save(RIFF_WAVE)).rejects.toThrow(messages.type);
+			await expect(
+				save(new TextEncoder().encode("<html></html>")),
+			).rejects.toThrow(messages.type);
+			await expect(save(SVG_SCRIPT)).rejects.toThrow(messages.svg);
+			const tooBig = new Uint8Array(BRAND_ASSET_MAX_BYTES + 1);
+			tooBig.set(PNG_LOGO);
+			await expect(save(tooBig)).rejects.toThrow(messages.size);
+			await expect(settings.getBrandAsset(kind)).resolves.toBeUndefined();
 
-		const exact = new Uint8Array(LOGO_MAX_BYTES);
-		exact.set(PNG_LOGO);
-		await expect(save(exact)).resolves.toMatchObject({
-			logoUpdatedAt: "2026-11-02T12:00:00.000Z",
-		});
-		expect((await t.services.settings.getLogo())?.contentType).toBe(
-			"image/png",
-		);
+			const exact = new Uint8Array(BRAND_ASSET_MAX_BYTES);
+			exact.set(PNG_LOGO);
+			await save(exact);
+			expect((await settings.getBrandAsset(kind))?.contentType).toBe(
+				"image/png",
+			);
+		}
+	});
+
+	it("stores no file when one of the two files is not valid", async () => {
+		const t = createTestContext();
+		const { settings } = t.services;
+		await expect(
+			settings.updateBranding(
+				ADMIN,
+				{ theme: "midnight" },
+				{ logo: { bytes: PNG_LOGO }, favicon: { bytes: RIFF_WAVE } },
+			),
+		).rejects.toThrow(BRAND_ASSET_MESSAGES.favicon.type);
+		await expect(settings.getBrandAsset("logo")).resolves.toBeUndefined();
+		await expect(settings.getBrandAsset("favicon")).resolves.toBeUndefined();
+		expect(await settings.get()).toMatchObject({ theme: "default" });
+		expect((await settings.get()).logoUpdatedAt).toBeUndefined();
 	});
 
 	it("removes a logo that was never uploaded", async () => {
 		const t = createTestContext();
-		const settings = await t.services.settings.removeLogo(ADMIN);
+		const settings = await t.services.settings.updateBranding(
+			ADMIN,
+			{},
+			{ logo: { remove: true } },
+		);
 		expect(settings.logoUpdatedAt).toBeUndefined();
-		await expect(t.services.settings.getLogo()).resolves.toBeUndefined();
+		await expect(
+			t.services.settings.getBrandAsset("logo"),
+		).resolves.toBeUndefined();
 	});
 });
