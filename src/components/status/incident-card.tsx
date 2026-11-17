@@ -29,7 +29,11 @@ export function IncidentCard({
 		incident.status,
 	);
 	return (
-		<article className="relative overflow-hidden rounded-card border border-border bg-surface">
+		<article
+			data-kind={incident.kind}
+			data-status={color}
+			className="ic-incident relative overflow-hidden rounded-card border border-border bg-surface"
+		>
 			<div className={`absolute inset-y-0 left-0 w-1 ${STATUS_BG[color]}`} />
 			<div className="p-5 pl-6">
 				<div className="flex flex-wrap items-start justify-between gap-3">

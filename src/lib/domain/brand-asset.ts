@@ -43,6 +43,29 @@ const ICO = [0x00, 0x00, 0x01, 0x00] as const;
 const UNSAFE_SVG =
 	/<\s*script\b|javascript:|<\s*foreignObject\b|<\s*iframe\b|<\s*embed\b|<\s*object\b|<\s*!ENTITY\b|\bon[a-z]+\s*=/i;
 
+/** The message for text that is not base64 and not the source of an SVG image. */
+export const BRAND_ASSET_ENCODING_MESSAGE =
+	"Send the file as base64 text or as the source of an SVG image.";
+
+const DATA_URL_PREFIX = /^data:[^,]*;base64,/i;
+const BASE64 = /^[A-Za-z0-9+/_-]+={0,2}$/;
+
+/**
+ * Reads the bytes of a file that an agent sends as text.
+ * The text is base64, a base64 data URL, or the source of an SVG image.
+ */
+export function decodeBrandAsset(data: string): Uint8Array {
+	const text = data.trim();
+	if (text.startsWith("<")) {
+		return new TextEncoder().encode(text);
+	}
+	const base64 = text.replace(DATA_URL_PREFIX, "").replace(/\s+/g, "");
+	if (!BASE64.test(base64)) {
+		throw new ValidationError(BRAND_ASSET_ENCODING_MESSAGE);
+	}
+	return Uint8Array.from(Buffer.from(base64, "base64"));
+}
+
 /**
  * Checks that bytes are a small image of a type that the logo or favicon accepts.
  * An SVG must not contain a script or an event handler.

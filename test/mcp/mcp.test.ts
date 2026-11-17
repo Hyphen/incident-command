@@ -3,6 +3,12 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { type Permission, permissionsForRole } from "@/lib/domain/permissions";
 import type { Role } from "@/lib/domain/types";
 import { bearerToken, handleMcpRequest } from "@/lib/mcp/handler";
+import {
+	ICO_FAVICON,
+	PNG_LOGO,
+	SVG_LOGO,
+	SVG_SCRIPT,
+} from "../brand-asset-bytes";
 import { ADMIN, createTestContext, type TestContext } from "../helpers";
 
 type ToolResult = {
@@ -143,7 +149,7 @@ describe("MCP handler", () => {
 		expect(admin).toContain("create_agent_token");
 		expect(admin).toContain("get_notification_settings");
 		expect(admin).toContain("update_notification_channel");
-		expect(admin).toHaveLength(37);
+		expect(admin).toHaveLength(40);
 		expect(admin).toEqual(
 			expect.arrayContaining([
 				"create_agent",
@@ -515,6 +521,127 @@ describe("MCP handler", () => {
 		});
 	});
 
+	it("lets an agent upload and remove the logo and the favicon", async () => {
+		const { client, call } = await connect(
+			t,
+			await tokenFor(t, ["settings.read", "settings.write"], "design bot"),
+		);
+		expect(client.getInstructions()).toContain("get_design_guide");
+		const stored = (kind: "logo" | "favicon") =>
+			t.services.settings.getBrandAsset(kind, { consistent: true });
+		const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
+		const svg = new TextDecoder().decode(SVG_LOGO);
+
+		// The source text of an SVG image.
+		const withLogo = (
+			await call("upload_brand_asset", { kind: "logo", data: `\n${svg}\n` })
+		).data;
+		expect(withLogo.logoUrl).toBe(
+			`http://localhost/brand/logo?v=${encodeURIComponent(withLogo.logoUpdatedAt)}`,
+		);
+		expect(withLogo.faviconUrl).toBeUndefined();
+		expect(await stored("logo")).toMatchObject({
+			contentType: "image/svg+xml",
+			data: base64(SVG_LOGO),
+		});
+
+		// A base64 data URL with a line break, then base64 text.
+		const png = base64(PNG_LOGO);
+		await call("upload_brand_asset", {
+			kind: "favicon",
+			data: `data:image/png;base64,${png.slice(0, 20)}\n${png.slice(20)}`,
+		});
+		expect(await stored("favicon")).toMatchObject({
+			contentType: "image/png",
+			data: png,
+		});
+		await call("upload_brand_asset", {
+			kind: "favicon",
+			data: base64(ICO_FAVICON),
+		});
+		expect(await stored("favicon")).toMatchObject({
+			contentType: "image/x-icon",
+			data: base64(ICO_FAVICON),
+		});
+		const settings = (await call("get_settings")).data;
+		expect(settings.logoUrl).toBe(withLogo.logoUrl);
+		expect(settings.faviconUrl).toBe(
+			`http://localhost/brand/favicon?v=${encodeURIComponent(settings.faviconUpdatedAt)}`,
+		);
+
+		for (const [data, message] of [
+			[
+				"not base64!",
+				"bad_request: Send the file as base64 text or as the source of an SVG image.",
+			],
+			[
+				new TextDecoder().decode(SVG_SCRIPT),
+				"bad_request: This SVG logo is not allowed.",
+			],
+			[
+				base64(ICO_FAVICON),
+				"bad_request: Use a PNG, JPEG, WebP, GIF or SVG logo.",
+			],
+		]) {
+			const failed = await call("upload_brand_asset", { kind: "logo", data });
+			expect(failed.isError).toBe(true);
+			expect(failed.text).toBe(message);
+		}
+		expect(await stored("logo")).toMatchObject({ data: base64(SVG_LOGO) });
+
+		const removed = (await call("remove_brand_asset", { kind: "logo" })).data;
+		expect(removed.logoUrl).toBeUndefined();
+		expect(removed.logoUpdatedAt).toBeUndefined();
+		expect(removed.faviconUrl).toBe(settings.faviconUrl);
+		expect(await stored("logo")).toBeUndefined();
+
+		// The log names the file that changed. It does not hold the file.
+		const log = await t.store.find("agent_activity");
+		for (const tool of ["upload_brand_asset", "remove_brand_asset"]) {
+			expect(log).toContainEqual(
+				expect.objectContaining({
+					tool,
+					outcome: "ok",
+					target: { type: "brand_asset", id: "logo" },
+				}),
+			);
+		}
+		expect(JSON.stringify(log)).not.toContain(png);
+	});
+
+	it("gives the limits of the service in the design guide", async () => {
+		const { call } = await connect(
+			t,
+			await tokenFor(t, ["settings.read", "settings.write"], "design bot"),
+		);
+		const guide = (await call("get_design_guide")).data;
+		expect(guide.themes.map((theme: { id: string }) => theme.id)).toContain(
+			"carbon",
+		);
+		expect(guide.tokens).toContainEqual(
+			expect.objectContaining({ name: "--ic-brand" }),
+		);
+		expect(guide.selectors).toContainEqual(
+			expect.objectContaining({ selector: ".ic-banner" }),
+		);
+
+		// The service accepts a value at each limit and rejects a larger value.
+		const { customCssMaxLength, assetMaxBytes } = guide.limits;
+		const css = (length: number) =>
+			call("update_settings", { customCss: "a".repeat(length) });
+		expect((await css(customCssMaxLength)).isError).toBe(false);
+		expect((await css(customCssMaxLength + 1)).isError).toBe(true);
+		const svg = (length: number) =>
+			call("upload_brand_asset", {
+				kind: "logo",
+				data: "<svg></svg>".padEnd(length, " ").replace(/ $/, "x"),
+			});
+		expect((await svg(assetMaxBytes)).isError).toBe(false);
+		expect((await svg(assetMaxBytes + 1)).text).toBe(
+			"bad_request: The logo must be 512 KB or smaller.",
+		);
+	});
+
 	it("denies a tool the agent cannot call and keeps secrets out of the log", async () => {
 		const token = await tokenFor(
 			t,
@@ -523,6 +650,7 @@ describe("MCP handler", () => {
 		);
 		const { client } = await connect(t, token);
 		expect(client.getInstructions()).toContain("draft_notification");
+		expect(client.getInstructions()).not.toContain("get_design_guide");
 		await client.close();
 		const response = await handleMcpRequest(
 			new Request("http://localhost/api/mcp", {

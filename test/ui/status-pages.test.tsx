@@ -16,6 +16,7 @@ import ConfirmPage from "@/app/subscribe/confirm/page";
 import SubscribePage from "@/app/subscribe/page";
 import UnsubscribePage from "@/app/subscribe/unsubscribe/page";
 import { setApp } from "@/lib/app";
+import { DESIGN_SELECTORS, NO_DATA_STATUS } from "@/lib/design";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import { ICO_FAVICON, PNG_LOGO } from "../brand-asset-bytes";
 import { expectNotFound, flashQueryParams, params, setupApp } from "./app";
@@ -188,6 +189,50 @@ describe("status page", () => {
 			"src",
 			"/brand/logo?v=2026-11-02T12%3A00%3A00.000Z",
 		);
+	});
+
+	it("has each selector of the design guide on the public pages", async () => {
+		const { services, clock } = await setupApp();
+		await services.settings.update(SYSTEM_ACTOR, { description: "Live" });
+		clock.set("2026-10-01T00:00:00.000Z");
+		const api = await services.catalog.create(SYSTEM_ACTOR, {
+			name: "API",
+			group: "Core",
+		});
+		clock.set("2026-11-02T12:00:00.000Z");
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Looking into it",
+			impact: "major",
+			serviceIds: [api.id],
+		});
+		// The header shows the site name, then the logo.
+		render(await StatusPage());
+		await services.settings.updateBranding(
+			SYSTEM_ACTOR,
+			{},
+			{ logo: { bytes: PNG_LOGO } },
+		);
+		render(await StatusPage());
+		render(await IncidentPage({ params: params({ id: incident.id }) }));
+		render(await SubscribePage({ searchParams: params({}) }));
+
+		for (const { selector, attributes } of DESIGN_SELECTORS) {
+			const element = document.querySelector(selector);
+			expect(element, selector).not.toBeNull();
+			for (const name of Object.keys(attributes ?? {})) {
+				expect(element, selector).toHaveAttribute(name);
+			}
+		}
+		for (const selector of [
+			'.ic-banner[data-status="partial_outage"]',
+			'.ic-incident[data-kind="incident"][data-status="partial_outage"]',
+			'.ic-service[data-status="partial_outage"]',
+			'.ic-uptime-day[data-status="operational"]',
+			`.ic-uptime-day[data-status="${NO_DATA_STATUS}"]`,
+		]) {
+			expect(document.querySelector(selector), selector).not.toBeNull();
+		}
 	});
 });
 

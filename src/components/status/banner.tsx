@@ -8,7 +8,8 @@ export function OverallBanner({ status }: { status: ServiceStatus }) {
 	return (
 		<section
 			aria-live="polite"
-			className="relative overflow-hidden rounded-card border border-border bg-surface p-6 sm:p-8"
+			data-status={status}
+			className="ic-banner relative overflow-hidden rounded-card border border-border bg-surface p-6 sm:p-8"
 		>
 			<div className={`absolute inset-x-0 top-0 h-1 ${STATUS_BG[status]}`} />
 			<div className="flex items-center gap-4">

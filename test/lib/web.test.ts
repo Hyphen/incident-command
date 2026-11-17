@@ -12,6 +12,7 @@ import { POST as register } from "@/app/oauth/register/route";
 import { POST as token } from "@/app/oauth/token/route";
 import { createApp, setApp } from "@/lib/app";
 import { loadConfig } from "@/lib/config";
+import { DESIGN_TOKENS } from "@/lib/design";
 import { ValidationError } from "@/lib/errors";
 import { buildRssFeed, escapeXml } from "@/lib/feed";
 import {
@@ -435,6 +436,10 @@ describe("theme helpers", () => {
 		for (const theme of THEMES) {
 			const css = readFileSync(`src/themes/${theme.id}.css`, "utf8");
 			expect(css).toContain(`[data-theme="${theme.id}"]`);
+			// The design guide names only tokens that each preset sets.
+			for (const token of DESIGN_TOKENS) {
+				expect(css, `${theme.id} ${token.name}`).toContain(`${token.name}:`);
+			}
 			expect(globals).toContain(`@import "../themes/${theme.id}.css";`);
 		}
 		expect(readdirSync("src/themes").sort()).toEqual(
