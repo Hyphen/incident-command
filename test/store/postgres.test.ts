@@ -137,7 +137,9 @@ describe("PostgresStore", () => {
 			"SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename",
 		);
 		expect(tables.map((row) => row.tablename)).toEqual([
+			"ic_agent_activity",
 			"ic_agent_tokens",
+			"ic_agents",
 			"ic_incidents",
 			"ic_invites",
 			"ic_members",

@@ -10,7 +10,7 @@ import { StatusIcon } from "@/components/icons";
 import { AddSubscriberForm } from "@/components/manage/add-subscriber-form";
 import { ConfirmButton } from "@/components/manage/confirm-button";
 import { CopyInviteLinkButton } from "@/components/manage/copy-invite-link-button";
-import { CreateAgentForm } from "@/components/manage/create-agent-form";
+import { CreateTokenForm } from "@/components/manage/create-token-form";
 import { statusesFor } from "@/components/manage/incident-fields";
 import { InviteMemberForm } from "@/components/manage/invite-member-form";
 import { eventColorStatus, StatusBadge } from "@/components/status/badges";
@@ -116,7 +116,7 @@ describe("SubmitButton with formAction", () => {
 	});
 });
 
-describe("CreateAgentForm", () => {
+describe("CreateTokenForm", () => {
 	it("shows the token once and copies it", async () => {
 		const action = vi.fn(async () => ({ token: "icmd_secret", name: "Bot" }));
 		const writeText = vi.fn(async () => {});
@@ -124,10 +124,7 @@ describe("CreateAgentForm", () => {
 			value: { writeText },
 			configurable: true,
 		});
-		render(<CreateAgentForm action={action} />);
-		fireEvent.change(screen.getByLabelText("Name"), {
-			target: { value: "Bot" },
-		});
+		render(<CreateTokenForm action={action} agentId="agt_bot" />);
 		await act(async () => {
 			fireEvent.submit(
 				screen
@@ -149,7 +146,7 @@ describe("CreateAgentForm", () => {
 		const action = vi.fn(
 			() => new Promise<{ error: string }>((resolve) => (finish = resolve)),
 		);
-		render(<CreateAgentForm action={action} />);
+		render(<CreateTokenForm action={action} agentId="agt_bot" />);
 		await act(async () => {
 			fireEvent.submit(
 				screen

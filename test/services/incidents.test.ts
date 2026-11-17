@@ -1,6 +1,7 @@
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import {
 	ADMIN,
+	agentActor,
 	createTestContext,
 	EDITOR,
 	type TestContext,
@@ -99,6 +100,23 @@ describe("IncidentService", () => {
 	it("validates status, services and permissions", async () => {
 		await expect(
 			t.services.incidents.create(VIEWER, { title: "x", message: "y" }),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		const publisher = agentActor(["incidents.publish"]);
+		await expect(
+			t.services.incidents.create(publisher, { title: "x", message: "y" }),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		expect(t.notifier.incidents).toHaveLength(0);
+		expect(await t.store.count("incidents")).toBe(0);
+		const quiet = await t.services.incidents.create(publisher, {
+			title: "x",
+			message: "y",
+			notify: false,
+		});
+		expect(t.notifier.incidents).toHaveLength(0);
+		await t.services.incidents.resolve(publisher, quiet.id, "Done", false);
+		expect(t.notifier.incidents).toHaveLength(0);
+		await expect(
+			t.services.incidents.resolve(publisher, quiet.id, "Again"),
 		).rejects.toBeInstanceOf(ForbiddenError);
 		await expect(
 			t.services.incidents.create(EDITOR, {

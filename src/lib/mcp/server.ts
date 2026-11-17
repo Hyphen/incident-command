@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { can, PERMISSIONS, type Permission } from "../domain/permissions";
 import {
 	eventStatusSchema,
 	impactSchema,
@@ -8,24 +9,23 @@ import {
 	roleSchema,
 	serviceStatusSchema,
 } from "../domain/schemas";
-import { hasRole } from "../domain/status";
 import {
-	type Actor,
+	type AgentActor,
 	DELIVERY_STRATEGIES,
 	type Incident,
-	type Role,
 	SUBSCRIBER_TYPES,
 } from "../domain/types";
 import { formatUptime } from "../domain/uptime";
-import { isAppError } from "../errors";
+import { isAppError, isPermissionDenied } from "../errors";
 import type { Services } from "../services";
+import { authorRef } from "../services/context";
 import { draftPath } from "../services/drafts";
 import { invitePath } from "../services/members";
 
 export const MCP_SERVER_NAME = "incident-command";
 export const MCP_SERVER_VERSION = "0.1.0";
 
-const INSTRUCTIONS = `You are connected to an incident command service that powers a public status page.
+const BASE_INSTRUCTIONS = `You are connected to an incident command service that powers a public status page.
 - Use get_status first to understand the current state.
 - Declare incidents with create_incident, keep customers informed with post_incident_update
   (statuses: investigating -> identified -> monitoring -> resolved), and close with resolve_incident.
@@ -36,11 +36,26 @@ const INSTRUCTIONS = `You are connected to an incident command service that powe
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
 - Everything you post is public on the status page and may notify subscribers. Write for customers.`;
 
+function instructionsFor(actor: AgentActor): string {
+	if (!can(actor, "incidents.publish")) {
+		return `${BASE_INSTRUCTIONS}
+- Use draft_notification. A person approves each draft.`;
+	}
+	return BASE_INSTRUCTIONS;
+}
+
 const id = z.string().min(1).describe("The record id");
-const notify = z
-	.boolean()
-	.optional()
-	.describe("Notify subscribers (default true)");
+function notifyField(actor: AgentActor) {
+	const blocked = !can(actor, "notifications.send");
+	return z
+		.boolean()
+		.optional()
+		.describe(
+			blocked
+				? "This agent cannot notify subscribers. Set notify to false. To notify subscribers, use draft_notification."
+				: "Notify subscribers (default true)",
+		);
+}
 const isoDate = z
 	.string()
 	.describe("ISO 8601 timestamp with timezone, e.g. 2026-11-03T02:00:00Z");
@@ -93,21 +108,34 @@ function incidentSummary(incident: Incident) {
 	};
 }
 
+export interface McpServerHandle {
+	server: McpServer;
+	/** Tools this actor cannot call, with the permission each one needs. */
+	denied: ReadonlyMap<string, Permission>;
+}
+
+interface ActivityTarget {
+	type: string;
+	id: string;
+	label?: string;
+}
+
 /**
  * Builds an MCP server exposing tools for the given actor. Tools are only
- * registered when the actor's role allows them, so agents never see tools
- * they cannot call. `origin` is the request origin. Invite links use it when
- * no site URL is set.
+ * registered when the actor's permissions allow them. `origin` is the request
+ * origin. Invite links use it when no site URL is set.
  */
 export function createMcpServer(
 	services: Services,
-	actor: Actor,
+	actor: AgentActor,
 	origin: string,
-): McpServer {
+): McpServerHandle {
 	const server = new McpServer(
 		{ name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
-		{ instructions: INSTRUCTIONS },
+		{ instructions: instructionsFor(actor) },
 	);
+	const denied = new Map<string, Permission>();
+	const notify = notifyField(actor);
 
 	/** A full portal URL. It uses the site URL, or the request origin when no site URL is set. */
 	async function portalUrl(path: string): Promise<string> {
@@ -116,17 +144,22 @@ export function createMcpServer(
 	}
 
 	function tool<S extends z.ZodRawShape>(
-		role: Role,
+		permission: Permission | null,
 		name: string,
 		config: {
 			title: string;
 			description: string;
 			inputSchema: S;
 			readOnly?: boolean;
+			target?: (
+				args: z.infer<z.ZodObject<S>>,
+				value: unknown,
+			) => ActivityTarget | undefined;
 		},
 		handler: ToolHandler<z.infer<z.ZodObject<S>>>,
 	): void {
-		if (!hasRole(actor.role, role)) {
+		if (permission && !can(actor, permission)) {
+			denied.set(name, permission);
 			return;
 		}
 		server.registerTool(
@@ -145,8 +178,32 @@ export function createMcpServer(
 			},
 			(async (args: z.infer<z.ZodObject<S>>) => {
 				try {
-					return result(await handler(args));
+					const value = await handler(args);
+					if (!config.readOnly) {
+						await services.activity.record({
+							agentId: actor.id,
+							type: "tool_call",
+							actor: authorRef(actor),
+							credential: actor.credential,
+							tool: name,
+							target: safeTarget(args, value, config.target),
+							outcome: "ok",
+						});
+					}
+					return result(value);
 				} catch (error) {
+					await services.activity.record({
+						agentId: actor.id,
+						type: "tool_call",
+						actor: authorRef(actor),
+						credential: actor.credential,
+						tool: name,
+						outcome: isPermissionDenied(error) ? "denied" : "error",
+						...(isAppError(error) ? { code: error.code } : {}),
+						...(isPermissionDenied(error)
+							? { permission: error.permission }
+							: {}),
+					});
 					return failure(error);
 				}
 			}) as never,
@@ -156,20 +213,26 @@ export function createMcpServer(
 	// ---- read ---------------------------------------------------------------
 
 	tool(
-		"viewer",
+		null,
 		"whoami",
 		{
 			title: "Who am I",
 			description:
-				"Returns the agent identity and role used for this connection.",
+				"Returns the agent identity, permissions and credential type for this connection.",
 			inputSchema: {},
 			readOnly: true,
 		},
-		async () => actor,
+		async () => ({
+			id: actor.id,
+			name: actor.name,
+			type: "agent" as const,
+			permissions: actor.permissions,
+			credential: actor.credential.type,
+		}),
 	);
 
 	tool(
-		"viewer",
+		"status.read",
 		"get_status",
 		{
 			title: "Get status",
@@ -199,7 +262,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"viewer",
+		"status.read",
 		"list_services",
 		{
 			title: "List services",
@@ -211,7 +274,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"viewer",
+		"status.read",
 		"list_incidents",
 		{
 			title: "List incidents",
@@ -239,7 +302,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"viewer",
+		"status.read",
 		"get_incident",
 		{
 			title: "Get incident",
@@ -253,7 +316,7 @@ export function createMcpServer(
 	// ---- services -----------------------------------------------------------
 
 	tool(
-		"editor",
+		"services.write",
 		"create_service",
 		{
 			title: "Create service",
@@ -274,7 +337,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"editor",
+		"services.write",
 		"update_service",
 		{
 			title: "Update service",
@@ -295,7 +358,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"editor",
+		"services.set_status",
 		"set_service_status",
 		{
 			title: "Set service status",
@@ -307,7 +370,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"editor",
+		"services.delete",
 		"delete_service",
 		{
 			title: "Delete service",
@@ -323,7 +386,7 @@ export function createMcpServer(
 	// ---- incidents ------------------------------------------------------------
 
 	tool(
-		"editor",
+		"incidents.publish",
 		"create_incident",
 		{
 			title: "Create incident",
@@ -352,7 +415,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"editor",
+		"incidents.publish",
 		"post_incident_update",
 		{
 			title: "Post incident update",
@@ -371,19 +434,20 @@ export function createMcpServer(
 	);
 
 	tool(
-		"editor",
+		"incidents.publish",
 		"resolve_incident",
 		{
 			title: "Resolve incident",
 			description:
 				"Resolves an incident (or completes maintenance) and restores affected services.",
-			inputSchema: { id, message: z.string().optional() },
+			inputSchema: { id, message: z.string().optional(), notify },
 		},
-		async (args) => services.incidents.resolve(actor, args.id, args.message),
+		async (args) =>
+			services.incidents.resolve(actor, args.id, args.message, args.notify),
 	);
 
 	tool(
-		"editor",
+		"incidents.edit",
 		"edit_incident",
 		{
 			title: "Edit incident",
@@ -403,7 +467,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"editor",
+		"incidents.delete",
 		"delete_incident",
 		{
 			title: "Delete incident",
@@ -417,7 +481,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"editor",
+		"incidents.publish",
 		"schedule_maintenance",
 		{
 			title: "Schedule maintenance",
@@ -439,7 +503,7 @@ export function createMcpServer(
 	// ---- notification drafts --------------------------------------------------
 
 	tool(
-		"editor",
+		"drafts.write",
 		"draft_notification",
 		{
 			title: "Draft notification",
@@ -495,7 +559,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"viewer",
+		"drafts.read",
 		"get_notification_draft",
 		{
 			title: "Get notification draft",
@@ -513,7 +577,7 @@ export function createMcpServer(
 	// ---- admin ----------------------------------------------------------------
 
 	tool(
-		"admin",
+		"members.read",
 		"list_members",
 		{
 			title: "List members",
@@ -525,7 +589,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
+		"members.manage",
 		"invite_member",
 		{
 			title: "Invite member",
@@ -543,7 +607,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
+		"members.read",
 		"list_invites",
 		{
 			title: "List invites",
@@ -555,7 +619,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
+		"members.manage",
 		"revoke_invite",
 		{
 			title: "Revoke invite",
@@ -569,7 +633,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
+		"members.manage",
 		"update_member",
 		{
 			title: "Update member",
@@ -587,7 +651,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
+		"members.manage",
 		"remove_member",
 		{
 			title: "Remove member",
@@ -601,11 +665,12 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
+		"agents.read",
 		"list_agents",
 		{
 			title: "List agents",
-			description: "Agent tokens that can access this MCP server.",
+			description:
+				"Agents, their permissions and their credentials. Secrets are never returned.",
 			inputSchema: {},
 			readOnly: true,
 		},
@@ -613,37 +678,107 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
-		"create_agent_token",
+		"agents.manage",
+		"create_agent",
 		{
-			title: "Create agent token",
+			title: "Create agent",
 			description:
-				"Creates a bearer token for another agent. The token is shown only once.",
+				"Creates an agent. Omit permissions to use the default: read status, read drafts and write drafts.",
 			inputSchema: {
 				name: z.string(),
 				description: z.string().optional(),
-				role: roleSchema
-					.optional()
-					.describe("viewer | editor (default) | admin"),
-				expiresInDays: z.number().int().optional(),
+				permissions: z.array(z.string()).optional(),
 			},
 		},
 		async (args) => services.agents.create(actor, args),
 	);
 
 	tool(
-		"admin",
+		"agents.manage",
+		"update_agent",
+		{
+			title: "Update agent",
+			description:
+				"Changes the name, description or permissions of an agent. Pass the current revision.",
+			inputSchema: {
+				id,
+				name: z.string().optional(),
+				description: z.string().nullable().optional(),
+				permissions: z.array(z.string()).optional(),
+				revision: z.number().int(),
+			},
+		},
+		async ({ id: agentId, ...patch }) =>
+			services.agents.update(actor, agentId, patch),
+	);
+
+	tool(
+		"agents.manage",
+		"delete_agent",
+		{
+			title: "Delete agent",
+			description: "Deletes an agent and its credentials.",
+			inputSchema: { id },
+		},
+		async (args) => {
+			await services.agents.delete(actor, args.id);
+			return { deleted: args.id };
+		},
+	);
+
+	tool(
+		"agents.manage",
+		"create_agent_token",
+		{
+			title: "Create agent token",
+			description:
+				"Creates a bearer token for an agent. The token is shown only once.",
+			inputSchema: {
+				agentId: z.string().describe("The agent that receives the token"),
+				expiresInDays: z.number().int().optional(),
+			},
+			target: (_args, value) => ({
+				type: "token",
+				id: (value as { credentialId: string }).credentialId,
+			}),
+		},
+		async (args) =>
+			services.agents.createToken(actor, args.agentId, {
+				expiresInDays: args.expiresInDays,
+			}),
+	);
+
+	tool(
+		"agents.manage",
 		"revoke_agent_token",
 		{
 			title: "Revoke agent token",
 			description: "Immediately revokes an agent token.",
 			inputSchema: { id },
 		},
-		async (args) => services.agents.revoke(actor, args.id),
+		async (args) => services.agents.revokeToken(actor, args.id),
 	);
 
 	tool(
-		"admin",
+		"agents.read",
+		"list_agent_activity",
+		{
+			title: "List agent activity",
+			description: "Recent activity for one agent, newest first.",
+			inputSchema: {
+				agentId: z.string(),
+				limit: z.number().int().min(1).max(100).optional(),
+			},
+			readOnly: true,
+		},
+		async (args) =>
+			services.agents.activity(actor, args.agentId, {
+				limit: args.limit ?? 50,
+			}),
+	);
+
+	tool(
+		"settings.read",
 		"get_settings",
 		{
 			title: "Get settings",
@@ -655,7 +790,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
+		"settings.write",
 		"update_settings",
 		{
 			title: "Update settings",
@@ -688,7 +823,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
+		"channels.read",
 		"get_notification_settings",
 		{
 			title: "Get notification settings",
@@ -701,7 +836,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
+		"channels.write",
 		"update_notification_channel",
 		{
 			title: "Update notification channel",
@@ -725,7 +860,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
+		"subscribers.read",
 		"list_subscribers",
 		{
 			title: "List subscribers",
@@ -737,7 +872,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
+		"subscribers.manage",
 		"add_subscriber",
 		{
 			title: "Add subscriber",
@@ -763,7 +898,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"admin",
+		"subscribers.manage",
 		"remove_subscriber",
 		{
 			title: "Remove subscriber",
@@ -776,5 +911,34 @@ export function createMcpServer(
 		},
 	);
 
-	return server;
+	return { server, denied };
+}
+
+function safeTarget(
+	args: unknown,
+	value: unknown,
+	custom?: (args: never, value: unknown) => ActivityTarget | undefined,
+): ActivityTarget | undefined {
+	const picked = custom?.(args as never, value);
+	if (picked) {
+		return picked;
+	}
+	if (isRecord(args) && typeof args.id === "string") {
+		return { type: "record", id: args.id };
+	}
+	if (isRecord(value) && typeof value.id === "string") {
+		const label = typeof value.title === "string" ? value.title : undefined;
+		return { type: "record", id: value.id, ...(label ? { label } : {}) };
+	}
+	return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
+/** Text for a tool call that the actor is not allowed to make. */
+export function deniedToolMessage(permission: Permission): string {
+	const spec = PERMISSIONS[permission];
+	return `forbidden: This agent does not have the permission "${spec.label}" (${permission}).`;
 }

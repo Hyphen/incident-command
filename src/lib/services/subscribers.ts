@@ -7,7 +7,7 @@ import {
 } from "../domain/schemas";
 import type { Actor, Subscriber, SubscriberType } from "../domain/types";
 import { AppError, ForbiddenError, NotFoundError } from "../errors";
-import { iso, parse, requireRole, type ServiceContext } from "./context";
+import { iso, parse, requirePermission, type ServiceContext } from "./context";
 import type { NotificationSettingsService } from "./notification-settings";
 import type { SettingsService } from "./settings";
 
@@ -90,11 +90,12 @@ export class SubscriberService {
 			: false;
 	}
 
-	async list(actor: Actor): Promise<Subscriber[]> {
-		requireRole(actor, "admin");
-		return this.ctx.store.find("subscribers", {
+	async list(actor: Actor): Promise<Omit<Subscriber, "token">[]> {
+		requirePermission(actor, "subscribers.read");
+		const subscribers = await this.ctx.store.find("subscribers", {
 			sort: [{ field: "createdAt", direction: "desc" }],
 		});
+		return subscribers.map(({ token: _token, ...subscriber }) => subscriber);
 	}
 
 	/** Every subscriber that should receive notifications. */
@@ -105,27 +106,27 @@ export class SubscriberService {
 	}
 
 	async addWebhook(actor: Actor, input: { url: string }): Promise<Subscriber> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "subscribers.manage");
 		const { url } = parse(webhookSubscriberSchema, input);
 		return this.insert("webhook", url, true);
 	}
 
 	/** Adds a pre-confirmed phone number for text messages (admins only). */
 	async addSms(actor: Actor, input: { phone: string }): Promise<Subscriber> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "subscribers.manage");
 		const { phone } = parse(smsSubscriberSchema, input);
 		return this.insert("sms", phone, true);
 	}
 
 	/** Adds a pre-confirmed email subscriber (admins only, no opt-in email). */
 	async addEmail(actor: Actor, input: { email: string }): Promise<Subscriber> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "subscribers.manage");
 		const { email } = parse(emailSubscriberSchema, input);
 		return this.insert("email", email, true);
 	}
 
 	async remove(actor: Actor, id: string): Promise<void> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "subscribers.manage");
 		if (!(await this.ctx.store.delete("subscribers", id))) {
 			throw new NotFoundError("Subscriber", id);
 		}

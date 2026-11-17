@@ -1,21 +1,19 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import {
-	createAgentAction,
-	deleteAgentAction,
 	disconnectAgentAction,
-	revokeAgentAction,
+	revokeAgentTokenAction,
 } from "@/app/manage/actions";
 import { ConfirmButton } from "@/components/manage/confirm-button";
 import { CopyButton } from "@/components/manage/copy-button";
-import { CreateAgentForm } from "@/components/manage/create-agent-form";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { buttonClass, Card, EmptyState } from "@/components/manage/ui";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
-import { hasRole, ROLE_LABELS } from "@/lib/domain/status";
-import type { AgentConnection, PublicAgentToken } from "@/lib/domain/types";
+import { activitySentence } from "@/lib/domain/activity-text";
+import { can, permissionSummary } from "@/lib/domain/permissions";
 import { publicMcpEndpoint } from "@/lib/mcp/oauth";
-import { isAgentActive } from "@/lib/services/agents";
+import type { PublicCredential } from "@/lib/services/agents";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Agents" };
@@ -31,6 +29,16 @@ function LastUsed({ iso }: { iso: string | undefined }) {
 	) : (
 		"Never used"
 	);
+}
+
+function tokenState(credential: PublicCredential): string {
+	if (credential.type !== "token") {
+		return "connected";
+	}
+	if (credential.active) {
+		return "active";
+	}
+	return credential.revokedAt ? "revoked" : "expired";
 }
 
 function EndpointBanner({ endpoint }: { endpoint: string }) {
@@ -52,111 +60,9 @@ function EndpointBanner({ endpoint }: { endpoint: string }) {
 	);
 }
 
-function Connections({
-	connections,
-	showMember,
-}: {
-	connections: AgentConnection[];
-	showMember: boolean;
-}) {
-	if (connections.length === 0) {
-		return <EmptyState>No connected agents yet.</EmptyState>;
-	}
-	return (
-		<ul className="divide-y divide-border">
-			{connections.map((connection) => (
-				<li
-					key={connection.id}
-					className="flex flex-wrap items-center justify-between gap-3 py-3"
-				>
-					<div>
-						<p className="font-medium break-words">{connection.clientName}</p>
-						<p className="text-xs text-muted">
-							{showMember && `${connection.memberName} · `}
-							Connected <LocalTime iso={connection.createdAt} /> ·{" "}
-							<LastUsed iso={connection.lastUsedAt} />
-						</p>
-					</div>
-					<form action={disconnectAgentAction}>
-						<input type="hidden" name="id" value={connection.id} />
-						<ConfirmButton
-							message={`Disconnect ${connection.clientName}? It will stop working immediately.`}
-						>
-							Disconnect
-						</ConfirmButton>
-					</form>
-				</li>
-			))}
-		</ul>
-	);
-}
-
-function Tokens({ tokens, now }: { tokens: PublicAgentToken[]; now: Date }) {
-	if (tokens.length === 0) {
-		return <EmptyState>No API tokens yet.</EmptyState>;
-	}
-	return (
-		<ul className="divide-y divide-border">
-			{tokens.map((token) => {
-				const active = isAgentActive(token, now);
-				return (
-					<li
-						key={token.id}
-						className="flex flex-wrap items-center justify-between gap-3 py-3"
-					>
-						<div>
-							<p className="font-medium">
-								{token.name}{" "}
-								<span
-									className={`ml-1 text-xs ${active ? "text-operational" : "text-major"}`}
-								>
-									{active ? "active" : token.revokedAt ? "revoked" : "expired"}
-								</span>
-							</p>
-							<p className="text-xs text-muted">
-								<code className="font-mono">{token.tokenPrefix}…</code> ·{" "}
-								{ROLE_LABELS[token.role]} · <LastUsed iso={token.lastUsedAt} />
-								{token.expiresAt && (
-									<>
-										{" "}
-										· Expires <LocalTime iso={token.expiresAt} />
-									</>
-								)}
-							</p>
-							{token.description && (
-								<p className="text-sm text-muted">{token.description}</p>
-							)}
-						</div>
-						<div className="flex gap-2">
-							{active && (
-								<form action={revokeAgentAction}>
-									<input type="hidden" name="id" value={token.id} />
-									<ConfirmButton
-										message={`Revoke ${token.name}? It will stop working immediately.`}
-										className={buttonClass.secondary}
-									>
-										Revoke
-									</ConfirmButton>
-								</form>
-							)}
-							<form action={deleteAgentAction}>
-								<input type="hidden" name="id" value={token.id} />
-								<ConfirmButton message={`Delete ${token.name}?`}>
-									Delete
-								</ConfirmButton>
-							</form>
-						</div>
-					</li>
-				);
-			})}
-		</ul>
-	);
-}
-
 /**
- * Agents connect to the MCP endpoint with OAuth: a member signs in and
- * approves the agent, and the agent acts as that member. An admin can also
- * make API tokens for agents that cannot sign in.
+ * Agents call the MCP endpoint. Each agent has its own permissions.
+ * A person connects an agent with OAuth, or an admin adds an API token.
  */
 export default async function AgentsPage({
 	searchParams,
@@ -165,11 +71,11 @@ export default async function AgentsPage({
 }) {
 	const flash = await searchParams;
 	const { actor, services, app } = await requireMember();
-	const admin = hasRole(actor.role, "admin");
-	const [settings, connections, tokens] = await Promise.all([
+	const manage = can(actor, "agents.manage");
+	const [settings, agents, activity] = await Promise.all([
 		services.settings.get(),
-		services.oauth.list(actor),
-		admin ? services.agents.list(actor) : undefined,
+		services.agents.list(actor),
+		services.agents.recentActivity(actor, 20),
 	]);
 	const endpoint = await publicMcpEndpoint(settings.siteUrl);
 	const claudeCommand = `claude mcp add --transport http incident-command ${endpoint}`;
@@ -177,37 +83,120 @@ export default async function AgentsPage({
 		<ManagePage title="Agents" flash={flash} health={app.store.health}>
 			<EndpointBanner endpoint={endpoint} />
 			<Card
-				title="Connected agents"
-				description={
-					admin
-						? "Agents that members connected. Each agent acts as its member."
-						: "Agents that you connected."
+				title="Agents"
+				description="An agent is a program that uses this status page through MCP. Each agent has its own permissions."
+				actions={
+					manage ? (
+						<Link href="/manage/agents/new" className={buttonClass.primary}>
+							New agent
+						</Link>
+					) : undefined
 				}
 			>
-				<Connections connections={connections} showMember={admin} />
+				{agents.length === 0 ? (
+					<EmptyState>No agents yet.</EmptyState>
+				) : (
+					<ul className="divide-y divide-border">
+						{agents.map((agent) => (
+							<li
+								key={agent.id}
+								className="flex flex-wrap items-center justify-between gap-3 py-3"
+							>
+								<div className="min-w-0">
+									<p className="font-medium">
+										<Link
+											href={`/manage/agents/${agent.id}`}
+											className="hover:text-brand"
+										>
+											{agent.name}
+										</Link>
+									</p>
+									<p className="text-xs text-muted">
+										{permissionSummary(agent.permissions)} ·{" "}
+										<LastUsed iso={agent.lastUsedAt} />
+									</p>
+									{agent.description && (
+										<p className="text-sm text-muted">{agent.description}</p>
+									)}
+									<ul className="mt-1 space-y-1 text-xs text-muted">
+										{agent.credentials.map((credential) => (
+											<li key={credential.id}>
+												{credential.type === "oauth"
+													? `OAuth: ${credential.label}`
+													: credential.label}
+												{" · "}
+												<span
+													className={
+														credential.active
+															? "text-operational"
+															: "text-major"
+													}
+												>
+													{tokenState(credential)}
+												</span>
+											</li>
+										))}
+									</ul>
+								</div>
+								<div className="flex gap-2">
+									{agent.credentials
+										.filter(
+											(credential) =>
+												credential.type === "token" && credential.active,
+										)
+										.map((credential) => (
+											<form key={credential.id} action={revokeAgentTokenAction}>
+												<input type="hidden" name="id" value={credential.id} />
+												<ConfirmButton
+													message={`Revoke the token for ${agent.name}? It will stop working immediately.`}
+													className={buttonClass.secondary}
+												>
+													Revoke
+												</ConfirmButton>
+											</form>
+										))}
+									{agent.credentials
+										.filter(
+											(credential) =>
+												credential.type === "oauth" &&
+												(manage || credential.memberId === actor.id),
+										)
+										.map((credential) => (
+											<form key={credential.id} action={disconnectAgentAction}>
+												<input type="hidden" name="id" value={credential.id} />
+												<ConfirmButton
+													message={`Disconnect ${agent.name}? It will stop working immediately.`}
+												>
+													Disconnect
+												</ConfirmButton>
+											</form>
+										))}
+								</div>
+							</li>
+						))}
+					</ul>
+				)}
+				<p className="mt-4 text-sm text-muted">Claude Code with a token:</p>
+				<pre className={preClass}>
+					{`${claudeCommand} --header "Authorization: Bearer <token>"`}
+				</pre>
 			</Card>
-			{tokens && (
-				<Card
-					title="API tokens"
-					description="For scripts and agents that cannot sign in. A token has its own role. The agent sends it in the Authorization header."
-				>
-					<div className="space-y-4">
-						<Tokens tokens={tokens} now={new Date()} />
-						<details className="rounded-lg border border-border">
-							<summary className="cursor-pointer px-4 py-3 text-sm font-medium">
-								Create a token
-							</summary>
-							<div className="space-y-4 border-t border-border p-4">
-								<CreateAgentForm action={createAgentAction} />
-								<p className="text-sm text-muted">Claude Code with a token:</p>
-								<pre className={preClass}>
-									{`${claudeCommand} --header "Authorization: Bearer <token>"`}
-								</pre>
-							</div>
-						</details>
-					</div>
-				</Card>
-			)}
+			<Card title="Recent activity">
+				{activity.length === 0 ? (
+					<EmptyState>No activity yet.</EmptyState>
+				) : (
+					<ul className="divide-y divide-border">
+						{activity.map((entry) => (
+							<li key={entry.id} className="py-3 text-sm">
+								<p>{activitySentence(entry)}</p>
+								<p className="text-xs text-muted">
+									<LocalTime iso={entry.createdAt} /> · {entry.outcome}
+								</p>
+							</li>
+						))}
+					</ul>
+				)}
+			</Card>
 		</ManagePage>
 	);
 }

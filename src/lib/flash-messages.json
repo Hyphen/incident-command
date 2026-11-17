@@ -89,6 +89,26 @@
 		"kind": "notice",
 		"text": "Agent disconnected"
 	},
+	"agent_created": {
+		"id": "fls_agent_created01",
+		"kind": "notice",
+		"text": "Agent created"
+	},
+	"agent_saved": {
+		"id": "fls_agent_saved0001",
+		"kind": "notice",
+		"text": "Agent saved"
+	},
+	"agent_deleted": {
+		"id": "fls_agent_deleted01",
+		"kind": "notice",
+		"text": "Agent deleted"
+	},
+	"agent_changed": {
+		"id": "fls_agent_changed01",
+		"kind": "error",
+		"text": "Somebody changed this agent. Examine the new values and save again."
+	},
 	"subscriber_added": {
 		"id": "fls_ozypch0gz4rij1o3",
 		"kind": "notice",

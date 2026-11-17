@@ -159,10 +159,28 @@ export const loginSchema = z.object({
 export const createAgentSchema = z.object({
 	name: z.string().trim().min(1).max(120),
 	description: text(500),
-	role: roleSchema.optional(),
-	expiresInDays: z.number().int().min(1).max(3650).optional(),
+	permissions: z.array(z.string()).optional(),
 });
 export type CreateAgentInput = z.input<typeof createAgentSchema>;
+
+export const updateAgentSchema = z.object({
+	name: z.string().trim().min(1).max(120).optional(),
+	description: z
+		.string()
+		.trim()
+		.max(500)
+		.nullable()
+		.optional()
+		.transform((value) => (value === "" ? null : value)),
+	permissions: z.array(z.string()).optional(),
+	revision: z.number().int().nonnegative(),
+});
+export type UpdateAgentInput = z.input<typeof updateAgentSchema>;
+
+export const createAgentTokenSchema = z.object({
+	expiresInDays: z.number().int().min(1).max(3650).optional(),
+});
+export type CreateAgentTokenInput = z.input<typeof createAgentTokenSchema>;
 
 /** Client metadata for dynamic client registration (RFC 7591). The service ignores other fields. */
 export const registerClientSchema = z.object({

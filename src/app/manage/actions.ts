@@ -352,36 +352,75 @@ export async function deleteMemberAction(form: FormData): Promise<void> {
 
 // ---- agents -----------------------------------------------------------------------
 
-export interface CreateAgentState {
+export interface CreateTokenState {
 	token?: string;
 	name?: string;
 	error?: string;
 }
 
-/** Used with `useActionState` so the token is shown once and never persisted. */
-export async function createAgentAction(
-	_previous: CreateAgentState,
-	form: FormData,
-): Promise<CreateAgentState> {
+export async function createAgentAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("admin");
-	return formState(async () => {
-		const { token, agent } = await services.agents.create(actor, {
+	const agent = await attempt("/manage/agents/new", () =>
+		services.agents.create(actor, {
 			name: text(form, "name"),
 			description: text(form, "description"),
-			role: text(form, "role") as Role,
+			permissions: list(form, "permissions"),
+		}),
+	);
+	revalidatePath("/manage/agents");
+	redirect(flash(`/manage/agents/${agent.id}`, "agent_created"));
+}
+
+export async function updateAgentAction(form: FormData): Promise<void> {
+	const { actor, services } = await requireMemberForAction();
+	const id = text(form, "id");
+	const path = `/manage/agents/${encodeURIComponent(id)}`;
+	await attempt(path, () =>
+		services.agents.update(actor, id, {
+			name: text(form, "name"),
+			description: text(form, "description"),
+			permissions:
+				text(form, "editPermissions") === "true"
+					? list(form, "permissions")
+					: undefined,
+			revision: integer(form, "revision") ?? -1,
+		}),
+	);
+	revalidatePath(path);
+	redirect(flash(path, "agent_saved"));
+}
+
+/** Used with `useActionState` so the token is shown once and never persisted. */
+export async function createAgentTokenAction(
+	_previous: CreateTokenState,
+	form: FormData,
+): Promise<CreateTokenState> {
+	const { actor, services } = await requireMemberForAction("admin");
+	return formState(async () => {
+		const agentId = text(form, "agentId");
+		const { token, agent } = await services.agents.createToken(actor, agentId, {
 			expiresInDays: integer(form, "expiresInDays"),
 		});
-		revalidatePath("/manage/agents");
+		revalidatePath(`/manage/agents/${agentId}`);
 		return { token, name: agent.name };
 	});
 }
 
-export async function revokeAgentAction(form: FormData): Promise<void> {
+/** Keeps a return path only when that path is an agents page on this site. */
+function agentReturnPath(value: string): string {
+	if (/^\/manage\/agents(?:\/[a-z0-9_]+)?$/.test(value)) {
+		return value;
+	}
+	return "/manage/agents";
+}
+
+export async function revokeAgentTokenAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("admin");
-	await attempt("/manage/agents", () =>
-		services.agents.revoke(actor, text(form, "id")),
+	const next = agentReturnPath(text(form, "next"));
+	await attempt(next, () =>
+		services.agents.revokeToken(actor, text(form, "id")),
 	);
-	redirect(flash("/manage/agents", "token_revoked"));
+	redirect(flash(next, "token_revoked"));
 }
 
 export async function deleteAgentAction(form: FormData): Promise<void> {
@@ -389,7 +428,7 @@ export async function deleteAgentAction(form: FormData): Promise<void> {
 	await attempt("/manage/agents", () =>
 		services.agents.delete(actor, text(form, "id")),
 	);
-	redirect(flash("/manage/agents", "token_deleted"));
+	redirect(flash("/manage/agents", "agent_deleted"));
 }
 
 // ---- connected agents -------------------------------------------------------------
@@ -416,7 +455,9 @@ export async function approveAgentAction(form: FormData): Promise<void> {
 				actor,
 				params,
 				resource,
-				optionalText(form, "name"),
+				text(form, "choice") === "existing"
+					? { agentId: text(form, "agentId") }
+					: { name: text(form, "name") },
 			),
 		),
 	);
@@ -434,10 +475,9 @@ export async function denyAgentAction(form: FormData): Promise<void> {
 
 export async function disconnectAgentAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction();
-	await attempt("/manage/agents", () =>
-		services.oauth.disconnect(actor, text(form, "id")),
-	);
-	redirect(flash("/manage/agents", "agent_disconnected"));
+	const next = agentReturnPath(text(form, "next"));
+	await attempt(next, () => services.oauth.disconnect(actor, text(form, "id")));
+	redirect(flash(next, "agent_disconnected"));
 }
 
 // ---- subscribers --------------------------------------------------------------------

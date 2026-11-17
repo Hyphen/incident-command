@@ -1,6 +1,7 @@
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import {
 	ADMIN,
+	agentActor,
 	createTestContext,
 	EDITOR,
 	type TestContext,
@@ -152,6 +153,23 @@ describe("ServiceCatalog", () => {
 	});
 
 	it("enforces roles and validation", async () => {
+		const writer = agentActor(["services.write"]);
+		await expect(
+			t.services.catalog.create(writer, {
+				name: "API",
+				status: "degraded_performance",
+			}),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		const created = await t.services.catalog.create(writer, { name: "API" });
+		expect(created.status).toBe("operational");
+		await expect(
+			t.services.catalog.update(writer, created.id, {
+				status: "partial_outage",
+			}),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		await expect(
+			t.services.catalog.update(writer, created.id, { description: "ok" }),
+		).resolves.toMatchObject({ description: "ok", status: "operational" });
 		await expect(
 			t.services.catalog.create(VIEWER, { name: "x" }),
 		).rejects.toBeInstanceOf(ForbiddenError);

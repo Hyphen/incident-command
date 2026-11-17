@@ -8,7 +8,7 @@ import {
 } from "../domain/schemas";
 import type { Actor, Service, ServiceStatus } from "../domain/types";
 import { NotFoundError } from "../errors";
-import { iso, parse, requireRole, type ServiceContext } from "./context";
+import { iso, parse, requirePermission, type ServiceContext } from "./context";
 
 export class ServiceCatalog {
 	private readonly ctx: ServiceContext;
@@ -36,8 +36,11 @@ export class ServiceCatalog {
 	}
 
 	async create(actor: Actor, input: CreateServiceInput): Promise<Service> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "services.write");
 		const data = parse(createServiceSchema, input);
+		if (data.status !== undefined && data.status !== "operational") {
+			requirePermission(actor, "services.set_status");
+		}
 		const now = iso(this.ctx.now());
 		const service: Service = {
 			id: createId("svc"),
@@ -58,9 +61,12 @@ export class ServiceCatalog {
 		id: string,
 		input: UpdateServiceInput,
 	): Promise<Service> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "services.write");
 		const patch = parse(updateServiceSchema, input);
 		const current = await this.load(id);
+		if (patch.status !== undefined && patch.status !== current.status) {
+			requirePermission(actor, "services.set_status");
+		}
 		const next: Service = {
 			...current,
 			name: patch.name ?? current.name,
@@ -88,7 +94,7 @@ export class ServiceCatalog {
 		id: string,
 		status: ServiceStatus,
 	): Promise<Service> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "services.set_status");
 		const next = parse(serviceStatusSchema, status);
 		return this.applyStatus(await this.load(id), next);
 	}
@@ -121,7 +127,7 @@ export class ServiceCatalog {
 
 	/** Reorders services to match the given id order. Unknown ids are ignored. */
 	async reorder(actor: Actor, ids: readonly string[]): Promise<Service[]> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "services.write");
 		const services = await this.ctx.store.find("services", undefined, {
 			consistent: true,
 		});
@@ -140,7 +146,7 @@ export class ServiceCatalog {
 	}
 
 	async delete(actor: Actor, id: string): Promise<void> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "services.delete");
 		if (!(await this.ctx.store.delete("services", id))) {
 			throw new NotFoundError("Service", id);
 		}

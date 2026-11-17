@@ -1,5 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { type Permission, permissionsForRole } from "@/lib/domain/permissions";
 import type { Role } from "@/lib/domain/types";
 import { bearerToken, handleMcpRequest } from "@/lib/mcp/handler";
 import { ADMIN, createTestContext, type TestContext } from "../helpers";
@@ -35,9 +36,16 @@ async function connect(t: TestContext, token: string) {
 	return { client, call };
 }
 
-async function tokenFor(t: TestContext, role: Role) {
-	return (await t.services.agents.create(ADMIN, { name: `${role} bot`, role }))
-		.token;
+async function tokenFor(
+	t: TestContext,
+	permissions: readonly Permission[],
+	name: string,
+) {
+	const agent = await t.services.agents.create(ADMIN, {
+		name,
+		permissions: [...permissions],
+	});
+	return (await t.services.agents.createToken(ADMIN, agent.id, {})).token;
 }
 
 describe("MCP handler", () => {
@@ -51,6 +59,26 @@ describe("MCP handler", () => {
 		expect(bearerToken("bearer   abc ")).toBe("abc");
 		expect(bearerToken("Basic abc")).toBeUndefined();
 		expect(bearerToken(null)).toBeUndefined();
+	});
+
+	it("continues when a denied-tool check cannot read a call", async () => {
+		const token = await tokenFor(t, ["status.read"], "Reader");
+		const send = (body: string) =>
+			handleMcpRequest(
+				new Request("http://localhost/api/mcp", {
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${token}`,
+						"content-type": "application/json",
+					},
+					body,
+				}),
+				t.services,
+			);
+		for (const body of ["not-json", "null", "1"]) {
+			const response = await send(body);
+			expect(response).toBeInstanceOf(Response);
+		}
 	});
 
 	it("rejects non-POST requests", async () => {
@@ -88,9 +116,12 @@ describe("MCP handler", () => {
 		expect(bad.status).toBe(401);
 	});
 
-	it("only exposes tools allowed for the agent's role", async () => {
+	it("only exposes tools allowed for the agent's permissions", async () => {
 		const names = async (role: Role) => {
-			const { client } = await connect(t, await tokenFor(t, role));
+			const { client } = await connect(
+				t,
+				await tokenFor(t, permissionsForRole(role), `${role} bot`),
+			);
 			const { tools } = await client.listTools();
 			await client.close();
 			return tools.map((tool) => tool.name);
@@ -112,15 +143,27 @@ describe("MCP handler", () => {
 		expect(admin).toContain("create_agent_token");
 		expect(admin).toContain("get_notification_settings");
 		expect(admin).toContain("update_notification_channel");
-		expect(admin).toHaveLength(33);
+		expect(admin).toHaveLength(37);
+		expect(admin).toEqual(
+			expect.arrayContaining([
+				"create_agent",
+				"update_agent",
+				"delete_agent",
+				"list_agent_activity",
+			]),
+		);
 	});
 
 	it("lets an editor agent run an incident end to end", async () => {
-		const { client, call } = await connect(t, await tokenFor(t, "editor"));
+		const { client, call } = await connect(
+			t,
+			await tokenFor(t, permissionsForRole("editor"), "editor bot"),
+		);
 		expect(client.getInstructions()).toContain("incident command");
 		expect((await call("whoami")).data).toMatchObject({
 			type: "agent",
-			role: "editor",
+			permissions: permissionsForRole("editor"),
+			credential: "token",
 		});
 
 		const api = (await call("create_service", { name: "API", group: "Core" }))
@@ -232,7 +275,10 @@ describe("MCP handler", () => {
 	});
 
 	it("lets an agent draft a notification that a person reviews", async () => {
-		const { call } = await connect(t, await tokenFor(t, "editor"));
+		const { call } = await connect(
+			t,
+			await tokenFor(t, permissionsForRole("editor"), "editor bot"),
+		);
 		const api = await t.services.catalog.create(ADMIN, { name: "API" });
 		const drafted = (
 			await call("draft_notification", {
@@ -266,7 +312,10 @@ describe("MCP handler", () => {
 			drafted.draft.id,
 			drafted.draft.content,
 		);
-		const viewer = await connect(t, await tokenFor(t, "viewer"));
+		const viewer = await connect(
+			t,
+			await tokenFor(t, permissionsForRole("viewer"), "viewer bot"),
+		);
 		const checked = (
 			await viewer.call("get_notification_draft", { id: drafted.draft.id })
 		).data;
@@ -290,7 +339,10 @@ describe("MCP handler", () => {
 	});
 
 	it("returns tool errors for expected failures", async () => {
-		const { call } = await connect(t, await tokenFor(t, "editor"));
+		const { call } = await connect(
+			t,
+			await tokenFor(t, permissionsForRole("editor"), "editor bot"),
+		);
 		const missing = await call("get_incident", { id: "inc_missing" });
 		expect(missing).toMatchObject({
 			isError: true,
@@ -306,7 +358,10 @@ describe("MCP handler", () => {
 		vi.spyOn(t.services.status, "summary").mockRejectedValueOnce(
 			new Error("secret db details"),
 		);
-		const { call } = await connect(t, await tokenFor(t, "viewer"));
+		const { call } = await connect(
+			t,
+			await tokenFor(t, permissionsForRole("viewer"), "viewer bot"),
+		);
 		const result = await call("get_status");
 		expect(result).toMatchObject({
 			isError: true,
@@ -317,7 +372,10 @@ describe("MCP handler", () => {
 	});
 
 	it("lets an admin agent manage members, agents, settings and subscribers", async () => {
-		const { call } = await connect(t, await tokenFor(t, "admin"));
+		const { call } = await connect(
+			t,
+			await tokenFor(t, permissionsForRole("admin"), "admin bot"),
+		);
 		const invited = (await call("invite_member", { email: "new@acme.dev" }))
 			.data;
 		expect(invited.invite).toMatchObject({
@@ -349,15 +407,34 @@ describe("MCP handler", () => {
 			deleted: member.id,
 		});
 
-		const created = (
-			await call("create_agent_token", { name: "Helper", role: "viewer" })
-		).data;
+		const helper = (await call("create_agent", { name: "Helper" })).data;
+		const created = (await call("create_agent_token", { agentId: helper.id }))
+			.data;
 		expect(created.token).toMatch(/^icmd_/);
 		expect((await call("list_agents")).data).toHaveLength(2);
+		const renamed = (
+			await call("update_agent", {
+				id: helper.id,
+				name: "Helper 2",
+				description: "",
+				revision: helper.revision,
+			})
+		).data;
+		expect(renamed.name).toBe("Helper 2");
 		expect(
-			(await call("revoke_agent_token", { id: created.agent.id })).data
+			(await call("list_agent_activity", { agentId: helper.id })).data.length,
+		).toBeGreaterThan(0);
+		expect(
+			(await call("list_agent_activity", { agentId: helper.id, limit: 1 }))
+				.data,
+		).toHaveLength(1);
+		expect(
+			(await call("revoke_agent_token", { id: created.credentialId })).data
 				.revokedAt,
 		).toBeDefined();
+		expect((await call("delete_agent", { id: helper.id })).data).toEqual({
+			deleted: helper.id,
+		});
 
 		expect(
 			(
@@ -416,5 +493,90 @@ describe("MCP handler", () => {
 		expect((await call("remove_subscriber", { id: hook.id })).data).toEqual({
 			deleted: hook.id,
 		});
+	});
+
+	it("denies a tool the agent cannot call and keeps secrets out of the log", async () => {
+		const token = await tokenFor(
+			t,
+			["status.read", "drafts.read", "drafts.write", "members.manage"] as const,
+			"draft bot",
+		);
+		const { client } = await connect(t, token);
+		expect(client.getInstructions()).toContain("draft_notification");
+		await client.close();
+		const response = await handleMcpRequest(
+			new Request("http://localhost/api/mcp", {
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${token}`,
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					jsonrpc: "2.0",
+					id: 7,
+					method: "tools/call",
+					params: {
+						name: "create_incident",
+						arguments: { title: "Quiet", message: "No send" },
+					},
+				}),
+			}),
+			t.services,
+		);
+		const body = await response.json();
+		expect(body.result.isError).toBe(true);
+		expect(body.result.content[0].text).toContain("incidents.publish");
+		expect(await t.store.count("incidents")).toBe(0);
+		const { call } = await connect(t, token);
+		const password = "super-secret-password";
+		await call("update_member", {
+			id: "mem_missing",
+			password,
+		});
+		const logged = JSON.stringify(await t.store.find("agent_activity"));
+		expect(logged).not.toContain(password);
+		expect(logged).not.toContain(token);
+		expect(logged).toContain("create_incident");
+
+		const nameless = await handleMcpRequest(
+			new Request("http://localhost/api/mcp", {
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${token}`,
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					jsonrpc: "2.0",
+					method: "tools/call",
+					params: { name: "create_incident", arguments: {} },
+				}),
+			}),
+			t.services,
+		);
+		expect(await nameless.json()).toMatchObject({
+			id: null,
+			result: { isError: true },
+		});
+	});
+
+	it("records a denial when a tool needs one more permission", async () => {
+		const { call } = await connect(
+			t,
+			await tokenFor(t, ["incidents.publish"], "quiet publisher"),
+		);
+		const result = await call("create_incident", {
+			title: "Quiet",
+			message: "No send",
+		});
+		expect(result.isError).toBe(true);
+		expect(result.text).toContain("notifications.send");
+		expect(await t.store.find("agent_activity")).toContainEqual(
+			expect.objectContaining({
+				type: "tool_call",
+				tool: "create_incident",
+				outcome: "denied",
+				permission: "notifications.send",
+			}),
+		);
 	});
 });

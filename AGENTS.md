@@ -15,7 +15,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **Layout:**
   - `src/lib/domain`: types, zod input schemas, status and uptime logic (pure).
   - `src/lib/store`: `DocumentStore` interface, adapters (memory, Postgres, Mongo) and the `CachedStore` wrapper. New adapters must pass `test/store/contract.ts`.
-  - `src/lib/services`: business logic and role checks. Pages, server actions and MCP tools call services; they never touch the store directly.
+  - `src/lib/services`: business logic and permission checks (`requirePermission`). Pages, server actions and MCP tools call services; they never touch the store directly.
   - `src/lib/mcp`: MCP server (tools are registered per role) and the HTTP handler.
   - `src/lib/notifications`: airhorn notifier, templates, the SendGrid provider and the signed webhook provider. The notifier loads `providers.ts` (airhorn and the AWS and Twilio SDKs) on the first send, because that load takes more than 0.5 s and approximately 85 MiB. A load failure affects only notifications.
   - `src/app`: thin pages and route handlers. `src/app/manage/actions.ts` holds every portal server action. `src/app/manage/(portal)` holds the signed-in pages. Its layout renders the sidebar and its `loading.tsx` renders the placeholder. A page calls `requireMember()`. A server action calls `requireMemberForAction()`, which does not use the session cache.

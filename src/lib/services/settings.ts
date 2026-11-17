@@ -3,7 +3,7 @@ import {
 	updateSettingsSchema,
 } from "../domain/schemas";
 import type { Actor, Settings } from "../domain/types";
-import { iso, parse, requireRole, type ServiceContext } from "./context";
+import { iso, parse, requirePermission, type ServiceContext } from "./context";
 
 export const SETTINGS_ID = "settings";
 
@@ -33,7 +33,7 @@ export class SettingsService {
 	}
 
 	async update(actor: Actor, input: UpdateSettingsInput): Promise<Settings> {
-		requireRole(actor, "admin");
+		requirePermission(actor, "settings.write");
 		const patch = parse(updateSettingsSchema, input);
 		const current = await this.ctx.store.get("settings", SETTINGS_ID, {
 			consistent: true,

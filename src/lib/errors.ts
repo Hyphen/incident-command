@@ -59,6 +59,21 @@ export class ForbiddenError extends AppError {
 	}
 }
 
+/** Marks a `PermissionDeniedError` in each copy of this module. */
+const PERMISSION_DENIED = Symbol.for("incident-command.PermissionDeniedError");
+
+/** The actor does not have one permission. `permission` is the catalog key. */
+export class PermissionDeniedError extends ForbiddenError {
+	readonly permission: string;
+	readonly [PERMISSION_DENIED] = true;
+
+	constructor(message: string, permission: string) {
+		super(message);
+		this.name = "PermissionDeniedError";
+		this.permission = permission;
+	}
+}
+
 export class NotFoundError extends AppError {
 	constructor(entity: string, id: string) {
 		super("not_found", `${entity} "${id}" was not found`);
@@ -107,6 +122,13 @@ export class OAuthError extends AppError {
 
 export function isAppError(error: unknown): error is AppError {
 	return error instanceof Error && APP_ERROR in error;
+}
+
+/** Whether an error is a `PermissionDeniedError`, also from another copy of this module. */
+export function isPermissionDenied(
+	error: unknown,
+): error is PermissionDeniedError {
+	return isAppError(error) && PERMISSION_DENIED in error;
 }
 
 /** Whether an error is an `OAuthError`, also from a different copy of this module. */

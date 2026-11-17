@@ -12,7 +12,13 @@ import type {
 } from "../domain/types";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import type { Condition } from "../store/types";
-import { authorRef, iso, requireRole, type ServiceContext } from "./context";
+import type { ActivityService } from "./activity";
+import {
+	authorRef,
+	iso,
+	requirePermission,
+	type ServiceContext,
+} from "./context";
 import { type IncidentService, newIncidentId } from "./incidents";
 
 /** The portal path where a person reviews a notification draft. */
@@ -54,10 +60,16 @@ function targetOf(draft: NotificationDraft): Target {
 export class DraftService {
 	private readonly ctx: ServiceContext;
 	private readonly incidents: IncidentService;
+	private readonly activity: ActivityService;
 
-	constructor(ctx: ServiceContext, incidents: IncidentService) {
+	constructor(
+		ctx: ServiceContext,
+		incidents: IncidentService,
+		activity: ActivityService,
+	) {
 		this.ctx = ctx;
 		this.incidents = incidents;
+		this.activity = activity;
 	}
 
 	async list(options: DraftListOptions = {}): Promise<NotificationDraft[]> {
@@ -93,7 +105,7 @@ export class DraftService {
 		actor: Actor,
 		input: NotificationDraftInput,
 	): Promise<NotificationDraft> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "drafts.write");
 		const { incidentId, ...fields } = input;
 		const target: Target = incidentId
 			? { action: "update", incidentId }
@@ -119,7 +131,7 @@ export class DraftService {
 		id: string,
 		input: DraftContentInput,
 	): Promise<NotificationDraft> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "drafts.review");
 		const current = await this.pending(id);
 		const { content } = await this.prepare(targetOf(current), input);
 		return this.save({ ...current, content, updatedAt: iso(this.ctx.now()) });
@@ -134,7 +146,7 @@ export class DraftService {
 		id: string,
 		input: DraftContentInput,
 	): Promise<{ draft: NotificationDraft; incident: Incident }> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "drafts.review");
 		const current = await this.pending(id);
 		const { content } = await this.prepare(targetOf(current), input);
 		const now = iso(this.ctx.now());
@@ -169,27 +181,53 @@ export class DraftService {
 		}
 		const draft: NotificationDraft = { ...reviewed, incidentId: incident.id };
 		await this.ctx.store.update("notification_drafts", draft);
+		await this.recordReview(actor, current, "draft_approved");
 		return { draft, incident };
 	}
 
 	/** Closes a draft without publishing or sending it. */
 	async discard(actor: Actor, id: string): Promise<NotificationDraft> {
-		requireRole(actor, "editor");
+		requirePermission(actor, "drafts.review");
 		const current = await this.pending(id);
 		const now = iso(this.ctx.now());
-		return this.save({
+		const saved = await this.save({
 			...current,
 			state: "discarded",
 			reviewedBy: authorRef(actor),
 			reviewedAt: now,
 			updatedAt: now,
 		});
+		await this.recordReview(actor, current, "draft_discarded");
+		return saved;
 	}
 
-	/**
-	 * Checks the content with the same rules that publication uses, so an
-	 * approved draft does not fail later.
-	 */
+	/** Returns the migrated agent id for a draft from an old OAuth grant. */
+	private async reviewAgentId(createdById: string): Promise<string> {
+		if (!createdById.startsWith("ogr_")) {
+			return createdById;
+		}
+		const id = `agt_${createdById.slice(4)}`;
+		const agent = await this.ctx.store.get("agents", id);
+		return agent ? agent.id : createdById;
+	}
+
+	private async recordReview(
+		actor: Actor,
+		draft: NotificationDraft,
+		type: "draft_approved" | "draft_discarded",
+	): Promise<void> {
+		if (draft.createdBy.type !== "agent") {
+			return;
+		}
+		await this.activity.record({
+			agentId: await this.reviewAgentId(draft.createdBy.id),
+			type,
+			actor: authorRef(actor),
+			target: { type: "draft", id: draft.id },
+			outcome: "ok",
+		});
+	}
+
 	private async prepare(
 		target: Target,
 		input: DraftContentInput & { kind?: IncidentKind },

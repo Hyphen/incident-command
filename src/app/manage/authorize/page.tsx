@@ -4,6 +4,11 @@ import { buttonClass, Field, Flash, inputClass } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { getApp } from "@/lib/app";
 import { requireMember } from "@/lib/auth";
+import {
+	can,
+	permissionSummary,
+	permissionsInEffect,
+} from "@/lib/domain/permissions";
 import { ROLE_LABELS } from "@/lib/domain/status";
 import { resolveFlash } from "@/lib/flash";
 import {
@@ -48,7 +53,15 @@ export default async function AuthorizePage({
 			</AuthLayout>
 		);
 	}
-	const { member } = await requireMember("viewer", authorizePath(params));
+	const { actor, member } = await requireMember(
+		"viewer",
+		authorizePath(params),
+	);
+	const [choices, preferred] = await Promise.all([
+		services.agents.choices(actor),
+		services.oauth.preferredAgentId(member.id, check.client.id),
+	]);
+	const known = choices.some((agent) => agent.id === preferred);
 	// A repeated parameter is an array. The first value applies.
 	const { error } = resolveFlash({ error: [query.error].flat().at(0) });
 	return (
@@ -61,24 +74,69 @@ export default async function AuthorizePage({
 					</strong>{" "}
 					wants to connect to {settings.siteName} as you.
 				</p>
+				{choices.length > 0 && (
+					<fieldset className="space-y-2">
+						<legend className="text-sm font-medium">Agent</legend>
+						<label className="flex items-center gap-2">
+							<input
+								type="radio"
+								name="choice"
+								value="new"
+								defaultChecked={!known}
+							/>
+							New agent
+						</label>
+						<label className="flex items-center gap-2">
+							<input
+								type="radio"
+								name="choice"
+								value="existing"
+								defaultChecked={known}
+							/>
+							Existing agent
+						</label>
+						<select
+							name="agentId"
+							defaultValue={known ? preferred : choices[0]?.id}
+							className={inputClass}
+						>
+							{choices.map((agent) => (
+								<option key={agent.id} value={agent.id}>
+									{`${agent.name} — ${permissionSummary(
+										permissionsInEffect(agent.permissions, member.role),
+									)}`}
+								</option>
+							))}
+						</select>
+						<p className="text-muted">
+							Your role limits what the agent can do through this connection.
+						</p>
+					</fieldset>
+				)}
+				{choices.length === 0 && (
+					<input type="hidden" name="choice" value="new" />
+				)}
 				<Field
 					label="Agent name"
 					htmlFor="agent-name"
-					hint="Choose a name for this connection."
+					hint="Use this name when you create a new agent."
 				>
 					<input
 						id="agent-name"
 						name="name"
 						defaultValue={check.client.name}
-						required
+						required={choices.length === 0}
 						maxLength={120}
 						className={inputClass}
 					/>
 				</Field>
 				<p className="text-muted">
-					The agent can do everything that you can do with the MCP tools. You
-					are signed in as {member.email} ({ROLE_LABELS[member.role]}). The
-					agent stays connected until you disconnect it on the Agents page.
+					A new agent can read the status page and write drafts. It cannot
+					publish or notify subscribers. An admin can change its permissions.
+					You are signed in as {member.email} ({ROLE_LABELS[member.role]}).
+					{can(actor, "agents.manage")
+						? " You can attach this connection to any agent."
+						: ""}
 				</p>
 				<p className="text-muted">
 					The agent supplied the client name above. Allow it only if you started
