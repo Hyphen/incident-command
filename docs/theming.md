@@ -10,10 +10,13 @@ There are three levels of customization, from no code to full control.
 
 - **Theme:** pick a preset: `default` (light, follows system dark mode), `midnight`, `ocean`, `sunset` or `mono`.
 - **Brand color:** any hex color. The readable foreground (black or white) is computed automatically.
-- **Logo and favicon URLs.**
+- **Logo:** upload a PNG, JPEG, WebP, GIF or SVG file, or set a logo URL. The maximum size of a file is 512 KB. The uploaded file replaces the URL on the page.
+- **Favicon URL.**
 - **Custom CSS:** inlined on every page after the theme, so it can override any token or style. `<` is escaped so the stylesheet can never break out of its `<style>` tag.
 
-Agents can do the same with the `update_settings` MCP tool.
+Set the logo URL with the `update_settings` MCP tool. Upload the logo file in the portal.
+
+The status page and the manage portal show "Powered by Incident Command" at the bottom. This line stays on the page.
 
 ## 2. Override tokens with custom CSS
 

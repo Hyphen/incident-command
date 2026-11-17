@@ -7,6 +7,11 @@ import {
 	secureCookies,
 	startSession,
 } from "@/lib/auth";
+import {
+	LOGO_SIZE_MESSAGE,
+	LOGO_SVG_MESSAGE,
+	LOGO_TYPE_MESSAGE,
+} from "@/lib/domain/logo";
 import { ConflictError, ValidationError } from "@/lib/errors";
 import {
 	flashCodeForError,
@@ -93,6 +98,14 @@ describe("auth helpers", () => {
 		expect(readFlash("error", flashCodeForError(changed))).toBe(
 			changed.message,
 		);
+		for (const message of [
+			LOGO_TYPE_MESSAGE,
+			LOGO_SIZE_MESSAGE,
+			LOGO_SVG_MESSAGE,
+		]) {
+			const error = new ValidationError(message);
+			expect(readFlash("error", flashCodeForError(error))).toBe(error.message);
+		}
 	});
 
 	it("decides when cookies are secure", () => {

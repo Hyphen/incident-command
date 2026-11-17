@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { WatchtowerLogo } from "@/components/watchtower-logo";
+import { LogoImage } from "@/components/logo-image";
+import { PoweredBy } from "@/components/powered-by";
+import { publicLogoSrc } from "@/lib/brand";
 import type { Settings } from "@/lib/domain/types";
 
 export function SiteHeader({
@@ -10,23 +12,20 @@ export function SiteHeader({
 	settings: Settings;
 	canSubscribe: boolean;
 }) {
+	const logoSrc = publicLogoSrc(settings);
 	return (
 		<header className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-4 px-4 pt-10 pb-6">
 			<Link href="/" className="flex items-center gap-3">
-				{settings.logoUrl ? (
-					// biome-ignore lint/performance/noImgElement: logos are arbitrary external URLs configured at runtime
-					<img
-						src={settings.logoUrl}
+				{logoSrc ? (
+					<LogoImage
+						src={logoSrc}
 						alt={settings.siteName}
-						className="h-8 w-auto"
+						className="h-8 w-auto max-w-48 object-contain"
 					/>
 				) : (
-					<>
-						<WatchtowerLogo />
-						<span className="text-lg font-semibold tracking-tight">
-							{settings.siteName}
-						</span>
-					</>
+					<span className="text-lg font-semibold tracking-tight">
+						{settings.siteName}
+					</span>
 				)}
 			</Link>
 			<nav className="flex items-center gap-2 text-sm">
@@ -56,15 +55,7 @@ export function SiteHeader({
 export function SiteFooter() {
 	return (
 		<footer className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-4 pb-10 text-xs text-muted">
-			<span>
-				Powered by{" "}
-				<a
-					href="https://github.com/jaredwray/incident-command"
-					className="underline-offset-2 hover:underline"
-				>
-					Incident Command
-				</a>
-			</span>
+			<PoweredBy />
 			<span className="flex gap-4">
 				<Link href="/history" className="hover:text-fg">
 					History

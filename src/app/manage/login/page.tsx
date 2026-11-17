@@ -28,7 +28,7 @@ export default async function LoginPage({
 	}
 	const settings = await services.settings.get();
 	return (
-		<AuthLayout siteName={settings.siteName} title="Sign in">
+		<AuthLayout settings={settings} title="Sign in">
 			<form action={loginAction} className="space-y-4">
 				<Flash error={error} />
 				<input type="hidden" name="next" value={next} />

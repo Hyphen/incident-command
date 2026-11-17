@@ -3,6 +3,7 @@ import { GET as resourceMetadataForPath } from "@/app/.well-known/oauth-protecte
 import { GET as resourceMetadata } from "@/app/.well-known/oauth-protected-resource/route";
 import { POST as mcp } from "@/app/api/mcp/route";
 import { GET as status } from "@/app/api/v1/status/route";
+import { GET as logo } from "@/app/brand/logo/route";
 import { GET as feed } from "@/app/feed.xml/route";
 import { GET as health } from "@/app/healthz/route";
 import { POST as register } from "@/app/oauth/register/route";
@@ -29,6 +30,7 @@ import {
 	THEMES,
 } from "@/lib/theme";
 import { Clock, FakeNotifier } from "../helpers";
+import { PNG_LOGO } from "../logo-bytes";
 
 async function setup(env: Record<string, string> = {}) {
 	const clock = new Clock();
@@ -74,6 +76,26 @@ describe("API routes", () => {
 			status: "unavailable",
 			error: "weird",
 		});
+	});
+
+	it("serves the uploaded logo and a 404 when none is stored", async () => {
+		const { services } = await setup();
+		const missing = await logo();
+		expect(missing.status).toBe(404);
+		expect(missing.headers.get("cache-control")).toBe("no-store");
+		expect(missing.headers.get("x-content-type-options")).toBe("nosniff");
+
+		await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
+		const response = await logo();
+		expect(response.status).toBe(200);
+		expect(response.headers.get("content-type")).toBe("image/png");
+		expect(response.headers.get("cache-control")).toBe("public, max-age=86400");
+		expect(response.headers.get("content-security-policy")).toContain(
+			"sandbox",
+		);
+		expect(Buffer.from(await response.arrayBuffer())).toEqual(
+			Buffer.from(PNG_LOGO),
+		);
 	});
 
 	it("serves the public status json", async () => {

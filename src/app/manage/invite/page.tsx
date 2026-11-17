@@ -25,7 +25,7 @@ export default async function InvitePage({
 	]);
 	if (!invite) {
 		return (
-			<AuthLayout siteName={settings.siteName} title="Invite not valid">
+			<AuthLayout settings={settings} title="Invite not valid">
 				<div className="space-y-4">
 					<p className="text-sm text-muted">
 						This invite link is not correct, was used before, or expired. Ask an
@@ -42,7 +42,7 @@ export default async function InvitePage({
 		);
 	}
 	return (
-		<AuthLayout siteName={settings.siteName} title="Create your account">
+		<AuthLayout settings={settings} title="Create your account">
 			<form action={acceptInviteAction} className="space-y-4">
 				<p className="text-sm text-muted">
 					You are invited to {settings.siteName} with the{" "}

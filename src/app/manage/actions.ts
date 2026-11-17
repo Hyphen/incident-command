@@ -533,15 +533,25 @@ export async function updateGeneralSettingsAction(
 
 export async function updateBrandingAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("admin");
-	await attempt(BRANDING_PATH, () =>
-		services.settings.update(actor, {
+	await attempt(BRANDING_PATH, async () => {
+		const uploaded = form.get("logo");
+		// A new file wins when the form also asks to remove the stored logo.
+		if (uploaded instanceof File && uploaded.size > 0) {
+			await services.settings.saveLogo(
+				actor,
+				new Uint8Array(await uploaded.arrayBuffer()),
+			);
+		} else if (checkbox(form, "removeLogo")) {
+			await services.settings.removeLogo(actor);
+		}
+		await services.settings.update(actor, {
 			theme: text(form, "theme"),
 			brandColor: optionalText(form, "brandColor"),
 			logoUrl: optionalText(form, "logoUrl"),
 			faviconUrl: optionalText(form, "faviconUrl"),
 			customCss: optionalText(form, "customCss"),
-		}),
-	);
+		});
+	});
 	// The root layout and the portal layout show the settings.
 	revalidatePath("/", "layout");
 	redirect(flash(BRANDING_PATH, "branding_saved"));

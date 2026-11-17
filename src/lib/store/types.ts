@@ -2,6 +2,7 @@ import type {
 	Agent,
 	AgentActivity,
 	AgentToken,
+	BrandAsset,
 	Incident,
 	Invite,
 	Member,
@@ -20,6 +21,7 @@ import type {
 /** Every collection the application persists, keyed by name. */
 export interface CollectionMap {
 	settings: Settings;
+	brand_assets: BrandAsset;
 	services: Service;
 	service_status_changes: ServiceStatusChange;
 	incidents: Incident;
@@ -42,6 +44,7 @@ export type Doc<C extends CollectionName> = CollectionMap[C];
 
 export const COLLECTIONS: readonly CollectionName[] = [
 	"settings",
+	"brand_assets",
 	"services",
 	"service_status_changes",
 	"incidents",
@@ -70,6 +73,7 @@ export interface IndexDefinition {
  */
 export const INDEXES: Record<CollectionName, readonly IndexDefinition[]> = {
 	settings: [],
+	brand_assets: [],
 	services: [{ field: "order" }],
 	service_status_changes: [{ field: "serviceId" }, { field: "createdAt" }],
 	incidents: [{ field: "status" }, { field: "createdAt" }],

@@ -1,3 +1,8 @@
+import {
+	LOGO_SIZE_MESSAGE,
+	LOGO_SVG_MESSAGE,
+	LOGO_TYPE_MESSAGE,
+} from "./domain/logo";
 import type { Role } from "./domain/types";
 import type { AppError, ErrorCode } from "./errors";
 import catalog from "./flash-messages.json";
@@ -42,6 +47,9 @@ const MESSAGE_CODES: Record<string, FlashCode> = {
 		"notification_settings_changed",
 	"Somebody changed this agent. Examine the new values and save again.":
 		"agent_changed",
+	[LOGO_TYPE_MESSAGE]: "logo_type",
+	[LOGO_SIZE_MESSAGE]: "logo_too_large",
+	[LOGO_SVG_MESSAGE]: "logo_svg",
 };
 
 const ERROR_CODE_FLASH: Record<ErrorCode, FlashCode> = {

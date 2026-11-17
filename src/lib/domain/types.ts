@@ -107,6 +107,17 @@ export interface Settings {
 	customCss?: string;
 	allowSubscriptions: boolean;
 	uptimeDays: number;
+	/** Set when an admin uploads a logo. The image is at /brand/logo. */
+	logoUpdatedAt?: string;
+	updatedAt: string;
+}
+
+/** The logo file an admin uploaded. */
+export interface BrandAsset {
+	id: string;
+	contentType: string;
+	/** Base64-encoded image bytes. */
+	data: string;
 	updatedAt: string;
 }
 
