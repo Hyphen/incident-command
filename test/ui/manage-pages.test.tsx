@@ -382,6 +382,7 @@ describe("dashboard", () => {
 			impact: "critical",
 			serviceIds: [api.id],
 		});
+		await services.drafts.create(AGENT, { title: "Fixed", message: "x" });
 		render(await DashboardPage(flash({ notice: "welcome_admin" })));
 		expect(screen.getByRole("status")).toHaveTextContent(
 			"Welcome! Your admin account is ready.",
@@ -390,9 +391,89 @@ describe("dashboard", () => {
 			screen.getByRole("link", { name: "Declare incident" }),
 		).toHaveAttribute("href", "/manage/incidents/new");
 		expect(
-			screen.getByRole("link", { name: "API errors" }),
+			screen.getAllByRole("link", { name: "API errors" })[0],
+		).toHaveAttribute("href", expect.stringMatching(/^\/manage\/incidents\//));
+		expect(
+			within(screen.getByRole("region", { name: "Current status" })).getByText(
+				"Major outage",
+			),
 		).toBeInTheDocument();
-		expect(screen.getByText("Major outage")).toBeInTheDocument();
+		expect(
+			screen.getByRole("region", { name: "Services affected" }),
+		).toHaveTextContent("1 / 1API");
+		expect(
+			screen.getByText("1 notification draft waits for review."),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "Review drafts →" }),
+		).toHaveAttribute("href", "/manage/drafts");
+		const row = screen.getByRole("row", { name: /^API/ });
+		expect(row).toHaveTextContent("Major outage");
+		// The service has no history before this instant.
+		expect(within(row).getAllByText("No data")).toHaveLength(3);
+		expect(
+			screen.getByText("1 more than the previous 30 days"),
+		).toBeInTheDocument();
+		expect(screen.getByText("0 resolved")).toBeInTheDocument();
+		expect(screen.getByText(/Open for < 1m/)).toBeInTheDocument();
+	});
+
+	it("shows uptime by service and the time to resolve incidents", async () => {
+		const { app, clock, services } = await setupApp();
+		clock.set("2026-08-01T00:00:00.000Z");
+		const web = await services.catalog.create(SYSTEM_ACTOR, {
+			name: "Web",
+			group: "Frontend",
+		});
+		const outage = async (daysAgo: number) => {
+			clock.set(
+				new Date(
+					Date.parse("2026-11-02T12:00:00.000Z") - daysAgo * 86_400_000,
+				).toISOString(),
+			);
+			const incident = await services.incidents.create(SYSTEM_ACTOR, {
+				title: `Outage ${daysAgo} days ago`,
+				message: "x",
+				impact: "minor",
+				serviceIds: [web.id],
+				notify: false,
+			});
+			clock.advance(30 * 60_000);
+			await services.incidents.resolve(SYSTEM_ACTOR, incident.id);
+		};
+		for (const daysAgo of [31, 32, 33, 34, 35, 36, 37, 1, 2, 3, 4, 5, 6]) {
+			await outage(daysAgo);
+		}
+		await services.drafts.create(AGENT, { title: "One", message: "x" });
+		await services.drafts.create(AGENT, { title: "Two", message: "x" });
+		clock.set("2026-11-02T12:00:00.000Z");
+		await signIn(app, "viewer");
+		render(await DashboardPage(flash()));
+		expect(
+			screen.getByText("2 notification drafts wait for review."),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("region", { name: "Services affected" }),
+		).toHaveTextContent("All services are operational");
+		const row = screen.getByRole("row", { name: /^WebFrontend/ });
+		expect(row).toHaveTextContent("Operational");
+		expect(within(row).getAllByText("100%")).toHaveLength(3);
+		expect(screen.getByRole("region", { name: "Uptime" })).toHaveTextContent(
+			"100%Last 90 days",
+		);
+		expect(
+			screen.getByText("1 fewer than the previous 30 days"),
+		).toBeInTheDocument();
+		expect(screen.getByText("6 resolved")).toBeInTheDocument();
+		expect(screen.getAllByText("30m")).toHaveLength(2);
+		expect(
+			screen.getByRole("link", { name: "Outage 1 days ago" }),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("link", { name: "Outage 6 days ago" }),
+		).not.toBeInTheDocument();
+		expect(screen.getAllByText(/Resolved in 30m/)).toHaveLength(5);
+		expect(screen.getByText("Showing 5 of 6 incidents.")).toBeInTheDocument();
 	});
 
 	it("shows an empty state and store outages", async () => {
@@ -408,6 +489,15 @@ describe("dashboard", () => {
 		expect(screen.getByRole("alert")).toHaveTextContent(
 			"The database is unreachable (connection refused)",
 		);
+		expect(screen.getByText(/No services yet/)).toBeInTheDocument();
+		expect(screen.queryByText(/wait for review/)).not.toBeInTheDocument();
+		expect(
+			screen.getByText("Same as the previous 30 days"),
+		).toBeInTheDocument();
+		expect(screen.getAllByText("None")).toHaveLength(2);
+		expect(
+			screen.getByText("No incidents in the last 30 days."),
+		).toBeInTheDocument();
 	});
 
 	it("hides edit actions from viewers", async () => {

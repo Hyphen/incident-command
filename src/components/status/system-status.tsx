@@ -4,7 +4,7 @@ import { formatMonthRange } from "@/lib/format";
 import type { ServiceGroupView, ServiceView } from "@/lib/services/status";
 import { StatusIcon } from "../icons";
 import { STATUS_TEXT } from "./badges";
-import { MOBILE_DAYS, UptimeBars } from "./uptime-bars";
+import { UptimeAxis, UptimeBars } from "./uptime-bars";
 
 function ServiceRow({ service }: { service: ServiceView }) {
 	return (
@@ -74,11 +74,7 @@ export function SystemStatus({
 				</div>
 			)}
 			<footer className="flex justify-between border-t border-border px-5 py-3 text-xs text-muted">
-				<span className="hidden sm:inline">{window.days} days ago</span>
-				<span className="sm:hidden">
-					{Math.min(window.days, MOBILE_DAYS)} days ago
-				</span>
-				<span>Today</span>
+				<UptimeAxis days={window.days} />
 			</footer>
 		</section>
 	);

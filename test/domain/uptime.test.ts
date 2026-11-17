@@ -4,15 +4,19 @@ import type {
 	ServiceStatusChange,
 } from "@/lib/domain/types";
 import {
+	combineUptime,
 	computeUptime,
 	DAY_MS,
 	formatUptime,
+	periodUptime,
 	startOfUtcDay,
 	toDateKey,
+	uptimePeriods,
 	uptimeWindow,
 } from "@/lib/domain/uptime";
 
 const NOW = new Date("2026-11-02T12:00:00.000Z");
+const HOUR_MS = 3_600_000;
 
 function service(overrides: Partial<Service> = {}): Service {
 	return {
@@ -61,6 +65,13 @@ describe("uptime helpers", () => {
 		expect(window.end).toBe(NOW);
 		expect(startOfUtcDay(NOW).toISOString()).toBe("2026-11-02T00:00:00.000Z");
 		expect(toDateKey(NOW)).toBe("2026-11-02");
+	});
+
+	it("lists the standard periods that fit in the window and the window", () => {
+		expect(uptimePeriods(90)).toEqual([7, 30, 90]);
+		expect(uptimePeriods(7)).toEqual([7]);
+		expect(uptimePeriods(45)).toEqual([7, 30, 45]);
+		expect(uptimePeriods(365)).toEqual([7, 30, 90, 365]);
 	});
 
 	it("formats uptime percentages", () => {
@@ -113,6 +124,8 @@ describe("computeUptime", () => {
 			date: "2026-10-31",
 			status: null,
 			uptime: null,
+			trackedMs: 0,
+			downtimeMs: 0,
 			incidents: [],
 		});
 		expect(result.days[1]?.status).toBe("operational");
@@ -216,5 +229,71 @@ describe("computeUptime", () => {
 
 	it("exposes the day length constant", () => {
 		expect(DAY_MS).toBe(24 * 60 * 60 * 1000);
+	});
+});
+
+describe("combineUptime", () => {
+	const window = uptimeWindow(NOW, 3);
+
+	it("weights each service by the time it has data", () => {
+		const api = service();
+		const web = service({
+			id: "c2",
+			name: "Web",
+			createdAt: "2026-11-01T12:00:00.000Z",
+		});
+		const changes = [
+			change("2026-11-01T00:00:00.000Z", "operational", "major_outage"),
+			change("2026-11-01T06:00:00.000Z", "major_outage", "operational"),
+			change("2026-11-02T00:00:00.000Z", "operational", "partial_outage", "c2"),
+		];
+		const incidents = [
+			incident({
+				id: "global",
+				title: "No services",
+				serviceIds: [],
+				status: "investigating",
+				startedAt: "2026-11-02T01:00:00.000Z",
+				resolvedAt: undefined,
+			}),
+			incident({ id: "maint", kind: "maintenance" }),
+		];
+		const result = combineUptime(
+			[api, web].map((s) => computeUptime(s, changes, incidents, window)),
+			incidents,
+			window,
+		);
+		const [first, second, third] = result.days;
+		expect(first).toMatchObject({
+			date: "2026-10-31",
+			status: "operational",
+			uptime: 1,
+			trackedMs: 24 * HOUR_MS,
+		});
+		// API: 6h of 24h down. Web: 12h with data and no downtime.
+		expect(second).toMatchObject({
+			status: "major_outage",
+			trackedMs: 36 * HOUR_MS,
+			downtimeMs: 6 * HOUR_MS,
+		});
+		expect(second?.uptime).toBeCloseTo(1 - 6 / 36, 10);
+		// Web: 12h of partial outage count as 3.6h of downtime.
+		expect(third?.status).toBe("partial_outage");
+		expect(third?.downtimeMs).toBeCloseTo(3.6 * HOUR_MS, 3);
+		expect(third?.incidents.map((i) => i.id)).toEqual(["global"]);
+		expect(result.uptime).toBeCloseTo(1 - 9.6 / 84, 10);
+		expect(periodUptime(result.days, 1)).toBeCloseTo(1 - 3.6 / 24, 10);
+		expect(periodUptime(result.days, 2)).toBeCloseTo(1 - 9.6 / 60, 10);
+	});
+
+	it("has no data without services", () => {
+		const result = combineUptime([], [], window);
+		expect(result.uptime).toBeNull();
+		expect(result.days.map((day) => [day.date, day.status])).toEqual([
+			["2026-10-31", null],
+			["2026-11-01", null],
+			["2026-11-02", null],
+		]);
+		expect(periodUptime(result.days, 1)).toBeNull();
 	});
 });

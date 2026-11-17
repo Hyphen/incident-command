@@ -367,11 +367,20 @@ describe("status components", () => {
 		render(
 			<UptimeBars
 				days={[
-					{ date: "2026-11-01", status: null, uptime: null, incidents: [] },
+					{
+						date: "2026-11-01",
+						status: null,
+						uptime: null,
+						trackedMs: 0,
+						downtimeMs: 0,
+						incidents: [],
+					},
 					{
 						date: "2026-11-02",
 						status: "major_outage",
 						uptime: 0.5,
+						trackedMs: 43_200_000,
+						downtimeMs: 21_600_000,
 						incidents: [{ id: "i", title: "Outage", impact: "critical" }],
 					},
 				]}

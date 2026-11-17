@@ -1,3 +1,4 @@
+import { type ResolutionStats, resolutionStats } from "../domain/metrics";
 import { impactToStatus, worstStatus } from "../domain/status";
 import type {
 	Incident,
@@ -6,10 +7,14 @@ import type {
 	Settings,
 } from "../domain/types";
 import {
+	combineUptime,
 	computeUptime,
 	DAY_MS,
 	type DayStatus,
+	periodUptime,
+	type UptimeResult,
 	type UptimeWindow,
+	uptimePeriods,
 	uptimeWindow,
 } from "../domain/uptime";
 import type { ServiceCatalog } from "./catalog";
@@ -18,6 +23,8 @@ import type { IncidentService } from "./incidents";
 import type { SettingsService } from "./settings";
 
 export const RECENT_DAYS = 14;
+/** The length of the period of the incident metrics on the portal overview. */
+export const METRICS_DAYS = 30;
 
 export interface ServiceView extends Service {
 	uptime: number | null;
@@ -39,8 +46,39 @@ export interface StatusSummary {
 	activeMaintenance: Incident[];
 	upcomingMaintenance: Incident[];
 	recentIncidents: Incident[];
+	/** The combined uptime of the visible services across the window. */
+	uptime: UptimeResult;
 	window: UptimeWindow;
 	generatedAt: string;
+}
+
+export interface UptimePeriod {
+	days: number;
+	uptime: number | null;
+}
+
+export interface ServiceUptimeView {
+	service: ServiceView;
+	/** The uptime of the service for each period, shortest first. */
+	periods: UptimePeriod[];
+}
+
+export interface IncidentMetrics extends ResolutionStats {
+	/** The length of the period in days. */
+	days: number;
+	/** The incidents that were created in the period, newest first. */
+	incidents: Incident[];
+	/** The number of incidents that were created in the period before. */
+	previousCount: number;
+}
+
+/** The read model of the portal overview. */
+export interface StatusOverview {
+	summary: StatusSummary;
+	/** The combined uptime of the visible services for each period, shortest first. */
+	periods: UptimePeriod[];
+	services: ServiceUptimeView[];
+	metrics: IncidentMetrics;
 }
 
 export interface HistoryMonth {
@@ -166,8 +204,48 @@ export class StatusService {
 			activeMaintenance,
 			upcomingMaintenance,
 			recentIncidents,
+			uptime: combineUptime(views, relevant, window),
 			window,
 			generatedAt: now.toISOString(),
+		};
+	}
+
+	/**
+	 * The status summary with the uptime of each period and the incident
+	 * metrics of the last `METRICS_DAYS` days.
+	 */
+	async overview(): Promise<StatusOverview> {
+		const now = this.ctx.now().getTime();
+		const cutoff = new Date(now - METRICS_DAYS * DAY_MS).toISOString();
+		const [summary, incidents] = await Promise.all([
+			this.summary(),
+			this.incidents.list({
+				kind: "incident",
+				since: new Date(now - 2 * METRICS_DAYS * DAY_MS).toISOString(),
+			}),
+		]);
+		const lengths = uptimePeriods(summary.window.days);
+		const periods = (days: readonly DayStatus[]): UptimePeriod[] =>
+			lengths.map((length) => ({
+				days: length,
+				uptime: periodUptime(days, length),
+			}));
+		const current = incidents.filter(
+			(incident) => incident.createdAt >= cutoff,
+		);
+		return {
+			summary,
+			periods: periods(summary.uptime.days),
+			services: summary.services.map((service) => ({
+				service,
+				periods: periods(service.days),
+			})),
+			metrics: {
+				days: METRICS_DAYS,
+				incidents: current,
+				previousCount: incidents.length - current.length,
+				...resolutionStats(current),
+			},
 		};
 	}
 

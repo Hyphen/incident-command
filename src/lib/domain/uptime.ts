@@ -1,4 +1,4 @@
-import { DOWNTIME_WEIGHT, statusSeverity } from "./status";
+import { DOWNTIME_WEIGHT, statusSeverity, worstStatus } from "./status";
 import type {
 	Incident,
 	IncidentImpact,
@@ -8,6 +8,9 @@ import type {
 } from "./types";
 
 export const DAY_MS = 86_400_000;
+
+/** The standard uptime periods in days. */
+export const UPTIME_PERIODS = [7, 30, 90] as const;
 
 export interface DayIncident {
 	id: string;
@@ -22,6 +25,10 @@ export interface DayStatus {
 	status: ServiceStatus | null;
 	/** Fraction between 0 and 1, or `null` when there is no data. */
 	uptime: number | null;
+	/** The time with data during the day, in milliseconds. */
+	trackedMs: number;
+	/** The weighted downtime during the day, in milliseconds (see `DOWNTIME_WEIGHT`). */
+	downtimeMs: number;
 	incidents: DayIncident[];
 }
 
@@ -50,6 +57,27 @@ export function toDateKey(date: Date): string {
 export function uptimeWindow(now: Date, days: number): UptimeWindow {
 	const start = new Date(startOfUtcDay(now).getTime() - (days - 1) * DAY_MS);
 	return { start, end: now, days };
+}
+
+function ratio(trackedMs: number, downtimeMs: number): number | null {
+	return trackedMs > 0 ? 1 - downtimeMs / trackedMs : null;
+}
+
+/** The incidents that overlap the day that starts at `dayStart`. */
+function dayIncidents(
+	incidents: readonly Incident[],
+	dayStart: number,
+	now: number,
+): DayIncident[] {
+	return incidents
+		.filter((incident) => {
+			const started = new Date(incident.startedAt).getTime();
+			const ended = incident.resolvedAt
+				? new Date(incident.resolvedAt).getTime()
+				: now;
+			return started < dayStart + DAY_MS && ended >= dayStart;
+		})
+		.map(({ id, title, impact }) => ({ id, title, impact }));
 }
 
 interface Segment {
@@ -134,23 +162,79 @@ export function computeUptime(
 		days.push({
 			date: toDateKey(new Date(dayStart)),
 			status: worst,
-			uptime: tracked > 0 ? 1 - down / tracked : null,
-			incidents: affecting
-				.filter((incident) => {
-					const started = new Date(incident.startedAt).getTime();
-					const ended = incident.resolvedAt
-						? new Date(incident.resolvedAt).getTime()
-						: now;
-					return started < dayStart + DAY_MS && ended >= dayStart;
-				})
-				.map(({ id, title, impact }) => ({ id, title, impact })),
+			uptime: ratio(tracked, down),
+			trackedMs: tracked,
+			downtimeMs: down,
+			incidents: dayIncidents(affecting, dayStart, now),
 		});
 	}
 
-	return {
-		uptime: totalTracked > 0 ? 1 - totalDown / totalTracked : null,
-		days,
-	};
+	return { uptime: ratio(totalTracked, totalDown), days };
+}
+
+/**
+ * Combines the uptime of services into one result for the same window. Each
+ * day adds the tracked time and the downtime of all services. A day shows
+ * the worst status of the services and each incident that overlaps it, also
+ * an incident without services.
+ */
+export function combineUptime(
+	results: readonly UptimeResult[],
+	incidents: readonly Incident[],
+	window: UptimeWindow,
+): UptimeResult {
+	const affecting = incidents.filter(
+		(incident) => incident.kind === "incident",
+	);
+	const now = window.end.getTime();
+	const days: DayStatus[] = [];
+	for (let index = 0; index < window.days; index++) {
+		const dayStart = window.start.getTime() + index * DAY_MS;
+		const parts = results
+			.map((result) => result.days[index] as DayStatus)
+			.filter((day) => day.status !== null);
+		let trackedMs = 0;
+		let downtimeMs = 0;
+		for (const part of parts) {
+			trackedMs += part.trackedMs;
+			downtimeMs += part.downtimeMs;
+		}
+		days.push({
+			date: toDateKey(new Date(dayStart)),
+			status:
+				parts.length > 0
+					? worstStatus(parts.map((part) => part.status as ServiceStatus))
+					: null,
+			uptime: ratio(trackedMs, downtimeMs),
+			trackedMs,
+			downtimeMs,
+			incidents: dayIncidents(affecting, dayStart, now),
+		});
+	}
+	return { uptime: periodUptime(days, days.length), days };
+}
+
+/** The uptime of the last `count` days, or `null` when these days have no data. */
+export function periodUptime(
+	days: readonly DayStatus[],
+	count: number,
+): number | null {
+	let trackedMs = 0;
+	let downtimeMs = 0;
+	for (const day of days.slice(-count)) {
+		trackedMs += day.trackedMs;
+		downtimeMs += day.downtimeMs;
+	}
+	return ratio(trackedMs, downtimeMs);
+}
+
+/**
+ * The uptime periods in days for a window, shortest first. The standard
+ * periods that are shorter than the window come first. The window is the
+ * last period.
+ */
+export function uptimePeriods(windowDays: number): number[] {
+	return [...UPTIME_PERIODS.filter((days) => days < windowDays), windowDays];
 }
 
 /** Formats an uptime fraction as a percentage string such as `99.95%`. */
