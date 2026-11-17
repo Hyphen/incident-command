@@ -125,7 +125,7 @@ describe("login and setup", () => {
 		);
 		expect(document.querySelector("img")).toHaveAttribute(
 			"src",
-			"/brand/logo?v=2026-11-02T12:00:00.000Z",
+			"/brand/logo?v=2026-11-02T12%3A00%3A00.000Z",
 		);
 		expect(
 			screen.getByRole("link", { name: "Incident Command" }),
@@ -330,7 +330,7 @@ describe("portal layout", () => {
 		const brand = screen.getByRole("link", { name: "Acme Status" });
 		expect(brand.querySelector("img")).toHaveAttribute(
 			"src",
-			"/brand/logo?v=2026-11-02T12:00:00.000Z",
+			"/brand/logo?v=2026-11-02T12%3A00%3A00.000Z",
 		);
 	});
 
@@ -1373,7 +1373,7 @@ describe("admin pages", () => {
 		).not.toBeChecked();
 		expect(document.querySelector("img")).toHaveAttribute(
 			"src",
-			"/brand/logo?v=2026-11-02T12:00:00.000Z",
+			"/brand/logo?v=2026-11-02T12%3A00%3A00.000Z",
 		);
 	});
 

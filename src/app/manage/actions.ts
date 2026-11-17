@@ -536,21 +536,25 @@ export async function updateBrandingAction(form: FormData): Promise<void> {
 	await attempt(BRANDING_PATH, async () => {
 		const uploaded = form.get("logo");
 		// A new file wins when the form also asks to remove the stored logo.
-		if (uploaded instanceof File && uploaded.size > 0) {
-			await services.settings.saveLogo(
-				actor,
-				new Uint8Array(await uploaded.arrayBuffer()),
-			);
+		const file =
+			uploaded instanceof File && uploaded.size > 0 ? uploaded : undefined;
+		let logo: { bytes: Uint8Array } | { remove: true } | undefined;
+		if (file) {
+			logo = { bytes: new Uint8Array(await file.arrayBuffer()) };
 		} else if (checkbox(form, "removeLogo")) {
-			await services.settings.removeLogo(actor);
+			logo = { remove: true };
 		}
-		await services.settings.update(actor, {
-			theme: text(form, "theme"),
-			brandColor: optionalText(form, "brandColor"),
-			logoUrl: optionalText(form, "logoUrl"),
-			faviconUrl: optionalText(form, "faviconUrl"),
-			customCss: optionalText(form, "customCss"),
-		});
+		await services.settings.updateBranding(
+			actor,
+			{
+				theme: text(form, "theme"),
+				brandColor: optionalText(form, "brandColor"),
+				logoUrl: optionalText(form, "logoUrl"),
+				faviconUrl: optionalText(form, "faviconUrl"),
+				customCss: optionalText(form, "customCss"),
+			},
+			logo,
+		);
 	});
 	// The root layout and the portal layout show the settings.
 	revalidatePath("/", "layout");

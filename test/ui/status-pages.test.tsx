@@ -184,7 +184,7 @@ describe("status page", () => {
 		render(await StatusPage());
 		expect(screen.getByRole("img", { name: "Acme" })).toHaveAttribute(
 			"src",
-			"/brand/logo?v=2026-11-02T12:00:00.000Z",
+			"/brand/logo?v=2026-11-02T12%3A00%3A00.000Z",
 		);
 	});
 });

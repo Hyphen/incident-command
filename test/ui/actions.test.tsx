@@ -1122,6 +1122,46 @@ describe("subscriber and settings actions", () => {
 		expect((await services.settings.get()).logoUpdatedAt).toBeUndefined();
 	});
 
+	it("does not change the logo when branding is invalid", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "admin");
+		const fields = {
+			theme: "midnight",
+			brandColor: "",
+			logoUrl: "ftp://example.com/logo.png",
+			faviconUrl: "",
+			customCss: "",
+		};
+		const uploaded = form(fields);
+		uploaded.set(
+			"logo",
+			new File([PNG_LOGO], "logo.png", { type: "image/png" }),
+		);
+		expectFlashRedirect(
+			await redirectOf(updateBrandingAction(uploaded)),
+			"/manage/settings/branding",
+			"error",
+			"Check the form and try again.",
+		);
+		await expect(services.settings.getLogo()).resolves.toBeUndefined();
+		expect((await services.settings.get()).theme).toBe("default");
+
+		await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
+		expectFlashRedirect(
+			await redirectOf(
+				updateBrandingAction(form({ ...fields, removeLogo: "on" })),
+			),
+			"/manage/settings/branding",
+			"error",
+			"Check the form and try again.",
+		);
+		expect((await services.settings.getLogo())?.contentType).toBe("image/png");
+		expect((await services.settings.get()).logoUpdatedAt).toBe(
+			"2026-11-02T12:00:00.000Z",
+		);
+		expect((await services.settings.get()).theme).toBe("default");
+	});
+
 	it("rejects a logo file that is not an image", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");

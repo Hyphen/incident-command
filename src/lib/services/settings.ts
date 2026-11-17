@@ -4,6 +4,7 @@ import {
 	updateSettingsSchema,
 } from "../domain/schemas";
 import type { Actor, BrandAsset, Settings } from "../domain/types";
+import type { ReadOptions } from "../store/types";
 import { iso, parse, requirePermission, type ServiceContext } from "./context";
 
 export const SETTINGS_ID = "settings";
@@ -35,8 +36,8 @@ export class SettingsService {
 	}
 
 	/** The uploaded logo, or undefined when the admin did not upload one. */
-	async getLogo(): Promise<BrandAsset | undefined> {
-		return this.ctx.store.get("brand_assets", LOGO_ASSET_ID);
+	async getLogo(options?: ReadOptions): Promise<BrandAsset | undefined> {
+		return this.ctx.store.get("brand_assets", LOGO_ASSET_ID, options);
 	}
 
 	async update(actor: Actor, input: UpdateSettingsInput): Promise<Settings> {
@@ -44,9 +45,37 @@ export class SettingsService {
 		return this.apply(parse(updateSettingsSchema, input));
 	}
 
+	/**
+	 * Saves branding fields. It checks those fields before it stores a logo.
+	 * A file replaces the stored logo. The remove flag deletes the stored logo.
+	 */
+	async updateBranding(
+		actor: Actor,
+		input: UpdateSettingsInput,
+		logo?: { bytes: Uint8Array } | { remove: true },
+	): Promise<Settings> {
+		requirePermission(actor, "settings.write");
+		const patch = parse(updateSettingsSchema, input);
+		if (!logo) {
+			return this.apply(patch);
+		}
+		if ("bytes" in logo) {
+			const logoUpdatedAt = await this.putLogo(logo.bytes);
+			return this.apply({ ...patch, logoUpdatedAt });
+		}
+		await this.ctx.store.delete("brand_assets", LOGO_ASSET_ID);
+		return this.apply({ ...patch, logoUpdatedAt: null });
+	}
+
 	/** Stores an uploaded logo and makes the public page use it. */
 	async saveLogo(actor: Actor, bytes: Uint8Array): Promise<Settings> {
 		requirePermission(actor, "settings.write");
+		const logoUpdatedAt = await this.putLogo(bytes);
+		return this.apply({ logoUpdatedAt });
+	}
+
+	/** Checks the file, then stores it. The caller checks permission first. */
+	private async putLogo(bytes: Uint8Array): Promise<string> {
 		const { contentType } = inspectLogo(bytes);
 		const updatedAt = iso(this.ctx.now());
 		const asset: BrandAsset = {
@@ -63,7 +92,7 @@ export class SettingsService {
 		} else {
 			await this.ctx.store.insert("brand_assets", asset);
 		}
-		return this.apply({ logoUpdatedAt: updatedAt });
+		return updatedAt;
 	}
 
 	/** Deletes the uploaded logo. The page then uses the logo URL, when one is set. */
