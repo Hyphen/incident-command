@@ -215,9 +215,17 @@ describe("incident page", () => {
 		expect(
 			screen.getByText("Resolved", { selector: "dt" }),
 		).toBeInTheDocument();
-		expect(screen.getByText(/1h 35m/)).toBeInTheDocument();
+		expect(screen.getByText(/1h 35m/, { selector: "dd" })).toBeInTheDocument();
 		expect(screen.getByText("API", { selector: "dd" })).toBeInTheDocument();
 		expect(screen.queryByText(/Secret/)).not.toBeInTheDocument();
+		expect(
+			screen.getByRole("heading", { name: "Status in the last 24 hours" }),
+		).toBeInTheDocument();
+		expect(
+			within(
+				screen.getByRole("list", { name: "API: status for each minute" }),
+			).getByRole("listitem", { name: "Major outage: 1h 35m" }),
+		).toBeInTheDocument();
 		expect(screen.getByText("All good")).toBeInTheDocument();
 		expect(screen.queryByText(/System \(system\)/)).not.toBeInTheDocument();
 		expect(
@@ -242,6 +250,9 @@ describe("incident page", () => {
 			screen.getByText("Completed", { selector: "dt" }),
 		).toBeInTheDocument();
 		expect(screen.queryByText(/impact$/)).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("heading", { name: "Status in the last 24 hours" }),
+		).not.toBeInTheDocument();
 	});
 
 	it("404s for unknown incidents", async () => {

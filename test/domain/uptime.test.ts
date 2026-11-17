@@ -8,6 +8,7 @@ import {
 	computeUptime,
 	DAY_MS,
 	formatUptime,
+	minuteTimeline,
 	periodUptime,
 	startOfUtcDay,
 	toDateKey,
@@ -295,5 +296,53 @@ describe("combineUptime", () => {
 			["2026-11-02", null],
 		]);
 		expect(periodUptime(result.days, 1)).toBeNull();
+	});
+});
+
+describe("minuteTimeline", () => {
+	it("gives each minute its worst status and merges equal minutes", () => {
+		const changes = [
+			change("2026-11-02T10:00:30.000Z", "operational", "major_outage"),
+			change("2026-11-02T10:02:10.000Z", "major_outage", "operational"),
+		];
+		expect(minuteTimeline(service(), changes, NOW)).toEqual([
+			{
+				status: "operational",
+				start: "2026-11-01T12:00:00.000Z",
+				end: "2026-11-02T10:00:00.000Z",
+				minutes: 1320,
+			},
+			{
+				status: "major_outage",
+				start: "2026-11-02T10:00:00.000Z",
+				end: "2026-11-02T10:03:00.000Z",
+				minutes: 3,
+			},
+			{
+				status: "operational",
+				start: "2026-11-02T10:03:00.000Z",
+				end: "2026-11-02T12:00:00.000Z",
+				minutes: 117,
+			},
+		]);
+	});
+
+	it("has no data before the service existed and stops at now", () => {
+		const now = new Date("2026-11-02T12:00:20.000Z");
+		const created = service({ createdAt: "2026-11-02T09:00:00.000Z" });
+		expect(minuteTimeline(created, [], now)).toEqual([
+			{
+				status: null,
+				start: "2026-11-01T12:01:00.000Z",
+				end: "2026-11-02T09:00:00.000Z",
+				minutes: 1259,
+			},
+			{
+				status: "operational",
+				start: "2026-11-02T09:00:00.000Z",
+				end: "2026-11-02T12:00:20.000Z",
+				minutes: 181,
+			},
+		]);
 	});
 });

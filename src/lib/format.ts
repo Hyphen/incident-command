@@ -31,6 +31,11 @@ export function formatDateTime(iso: string): string {
 	return `${dateTime.format(new Date(iso))} UTC`;
 }
 
+/** `14:05 UTC` */
+export function formatTime(iso: string): string {
+	return `${new Date(iso).toISOString().slice(11, 16)} UTC`;
+}
+
 /** `Nov 2, 2026` from an ISO timestamp or a `YYYY-MM-DD` key. */
 export function formatDay(value: string): string {
 	return day.format(

@@ -11,7 +11,10 @@ import {
 	computeUptime,
 	DAY_MS,
 	type DayStatus,
+	minuteTimeline,
 	periodUptime,
+	type StatusPeriod,
+	timelineStart,
 	type UptimeResult,
 	type UptimeWindow,
 	uptimePeriods,
@@ -79,6 +82,13 @@ export interface StatusOverview {
 	periods: UptimePeriod[];
 	services: ServiceUptimeView[];
 	metrics: IncidentMetrics;
+}
+
+/** The status of one service for each minute of the last 24 hours. */
+export interface ServiceTimeline {
+	service: Service;
+	/** The periods of the 24 hours, oldest first. */
+	periods: StatusPeriod[];
 }
 
 export interface HistoryMonth {
@@ -247,6 +257,35 @@ export class StatusService {
 				...resolutionStats(current),
 			},
 		};
+	}
+
+	/**
+	 * The status for each minute of the last 24 hours, for each visible service
+	 * that the incident affects. The result is empty when the incident was not
+	 * in progress in these 24 hours.
+	 */
+	async incidentTimeline(incident: Incident): Promise<ServiceTimeline[]> {
+		const now = this.ctx.now();
+		const start = timelineStart(now).toISOString();
+		if (
+			incident.status === "scheduled" ||
+			(incident.resolvedAt !== undefined && incident.resolvedAt < start)
+		) {
+			return [];
+		}
+		const [services, changes] = await Promise.all([
+			this.catalog.list({ includeHidden: false }),
+			this.ctx.store.find("service_status_changes", {
+				where: [{ field: "createdAt", op: "gte", value: start }],
+				sort: [{ field: "createdAt" }],
+			}),
+		]);
+		return services
+			.filter((service) => incident.serviceIds.includes(service.id))
+			.map((service) => ({
+				service,
+				periods: minuteTimeline(service, changes, now),
+			}));
 	}
 
 	/**
