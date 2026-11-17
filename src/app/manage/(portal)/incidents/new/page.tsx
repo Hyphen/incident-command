@@ -73,7 +73,7 @@ export default async function NewIncidentPage({
 							className={inputClass}
 						/>
 					</Field>
-					<ServicePicker services={catalog} />
+					<ServicePicker services={catalog} withStatus={isIncident} />
 					{isIncident && (
 						<ServiceStatusSelect hint="Automatic derives the status from the impact." />
 					)}

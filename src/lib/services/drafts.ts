@@ -249,6 +249,7 @@ export class DraftService {
 					status: input.status,
 					message: input.message,
 					serviceStatus: input.serviceStatus,
+					serviceStatuses: input.serviceStatuses,
 				},
 			);
 			return {
@@ -257,6 +258,7 @@ export class DraftService {
 					status: data.status,
 					message: data.message,
 					serviceStatus: data.serviceStatus,
+					serviceStatuses: data.serviceStatuses,
 				},
 			};
 		}
@@ -272,6 +274,7 @@ export class DraftService {
 			status: data.status,
 			message: data.message,
 			serviceStatus: data.serviceStatus,
+			serviceStatuses: data.serviceStatuses,
 		};
 		if (target.kind === "maintenance") {
 			content.scheduledStart = data.scheduledStart;
@@ -294,6 +297,7 @@ export class DraftService {
 					status: content.status,
 					message: content.message,
 					serviceStatus: content.serviceStatus,
+					serviceStatuses: content.serviceStatuses,
 				},
 				{ id },
 			);

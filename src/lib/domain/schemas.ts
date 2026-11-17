@@ -51,6 +51,23 @@ export const impactSchema = z.enum(INCIDENT_IMPACTS);
 export const roleSchema = z.enum(ROLES);
 export const kindSchema = z.enum(INCIDENT_KINDS);
 
+/**
+ * Statuses for single affected services. Each status replaces `serviceStatus`
+ * and the automatic status for its service. An empty list is not set.
+ */
+const serviceStatusesSchema = z
+	.array(
+		z.object({ serviceId: z.string().min(1), status: serviceStatusSchema }),
+	)
+	.max(100)
+	.refine(
+		(entries) =>
+			new Set(entries.map((entry) => entry.serviceId)).size === entries.length,
+		"Give each service only one status",
+	)
+	.optional()
+	.transform((entries) => (entries?.length ? entries : undefined));
+
 export const createServiceSchema = z.object({
 	name: z.string().trim().min(1).max(120),
 	description: text(500),
@@ -79,6 +96,7 @@ export const createIncidentSchema = z.object({
 	impact: impactSchema.optional(),
 	serviceIds: z.array(z.string().min(1)).max(100).optional(),
 	serviceStatus: serviceStatusSchema.optional(),
+	serviceStatuses: serviceStatusesSchema,
 	scheduledStart: isoDate.optional(),
 	scheduledEnd: isoDate.optional(),
 	notify: z.boolean().optional(),
@@ -89,6 +107,7 @@ export const incidentUpdateSchema = z.object({
 	status: eventStatusSchema.optional(),
 	message: z.string().trim().min(1).max(10_000),
 	serviceStatus: serviceStatusSchema.optional(),
+	serviceStatuses: serviceStatusesSchema,
 	notify: z.boolean().optional(),
 });
 export type IncidentUpdateInput = z.input<typeof incidentUpdateSchema>;

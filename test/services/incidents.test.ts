@@ -228,6 +228,95 @@ describe("IncidentService", () => {
 		expect(await statusOf(web)).toBe("operational");
 	});
 
+	it("sets the status of each affected service", async () => {
+		const db = (await t.services.catalog.create(ADMIN, { name: "DB" })).id;
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Errors",
+			message: "Looking",
+			impact: "critical",
+			serviceIds: [api, web, db],
+			serviceStatuses: [{ serviceId: api, status: "partial_outage" }],
+		});
+		expect(await statusOf(api)).toBe("partial_outage");
+		expect(await statusOf(web)).toBe("major_outage");
+
+		// A status of one service replaces serviceStatus for that service only.
+		await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			message: "Better",
+			serviceStatus: "degraded_performance",
+			serviceStatuses: [{ serviceId: web, status: "major_outage" }],
+		});
+		expect(await statusOf(api)).toBe("degraded_performance");
+		expect(await statusOf(web)).toBe("major_outage");
+		expect(await statusOf(db)).toBe("degraded_performance");
+
+		// A status of one service also wins over a different open incident.
+		await t.services.incidents.create(EDITOR, {
+			title: "Other",
+			message: "Other",
+			impact: "critical",
+			serviceIds: [api, db],
+			notify: false,
+		});
+		await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			status: "resolved",
+			message: "Fixed",
+			serviceStatuses: [{ serviceId: api, status: "operational" }],
+		});
+		expect(await statusOf(api)).toBe("operational");
+		expect(await statusOf(web)).toBe("operational");
+		expect(await statusOf(db)).toBe("major_outage");
+
+		// A note after resolution changes only the services that have a status.
+		await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			message: "Web is slow again",
+			serviceStatuses: [{ serviceId: web, status: "degraded_performance" }],
+		});
+		expect(await statusOf(api)).toBe("operational");
+		expect(await statusOf(web)).toBe("degraded_performance");
+		expect(await statusOf(db)).toBe("major_outage");
+	});
+
+	it("accepts a service status only for an affected service", async () => {
+		const notAffected = /only an affected service can have its own status/;
+		await expect(
+			t.services.incidents.create(EDITOR, {
+				title: "x",
+				message: "y",
+				serviceIds: [api],
+				serviceStatuses: [{ serviceId: web, status: "major_outage" }],
+			}),
+		).rejects.toThrow(notAffected);
+		await expect(
+			t.services.incidents.create(EDITOR, {
+				title: "x",
+				message: "y",
+				serviceIds: [api],
+				serviceStatuses: [
+					{ serviceId: api, status: "major_outage" },
+					{ serviceId: api, status: "operational" },
+				],
+			}),
+		).rejects.toThrow("serviceStatuses: Give each service only one status");
+		expect(await t.store.count("incidents")).toBe(0);
+
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "x",
+			message: "y",
+			serviceIds: [api],
+		});
+		await expect(
+			t.services.incidents.postUpdate(EDITOR, incident.id, {
+				message: "z",
+				serviceStatuses: [{ serviceId: web, status: "major_outage" }],
+			}),
+		).rejects.toThrow(notAffected);
+		expect((await t.services.incidents.get(incident.id)).updates).toHaveLength(
+			1,
+		);
+		expect(await statusOf(web)).toBe("operational");
+	});
+
 	it("skips services that were deleted", async () => {
 		const incident = await t.services.incidents.create(EDITOR, {
 			title: "A",

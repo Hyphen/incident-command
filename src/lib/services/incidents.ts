@@ -22,6 +22,7 @@ import {
 	MAINTENANCE_STATUSES,
 	type Service,
 	type ServiceStatus,
+	type ServiceStatusOverride,
 } from "../domain/types";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import type { NotificationEvent } from "../notifications/templates";
@@ -88,6 +89,21 @@ function assertStatusForKind(kind: IncidentKind, status: EventStatus): void {
 	if (!allowed.includes(status)) {
 		throw new ValidationError(
 			`Status "${status}" is not valid for ${kind}. Use one of: ${allowed.join(", ")}`,
+		);
+	}
+}
+
+/** Checks that each service with its own status is an affected service. */
+function assertAffected(
+	serviceIds: readonly string[],
+	overrides: readonly ServiceStatusOverride[] = [],
+): void {
+	const extra = overrides
+		.map((override) => override.serviceId)
+		.filter((id) => !serviceIds.includes(id));
+	if (extra.length > 0) {
+		throw new ValidationError(
+			`serviceStatuses: only an affected service can have its own status. Add ${extra.join(", ")} to the affected services, or remove the status.`,
 		);
 	}
 }
@@ -182,6 +198,7 @@ export class IncidentService {
 		}
 		assertWindow(data.scheduledStart, data.scheduledEnd);
 		const serviceIds = await this.validateServices(data.serviceIds ?? []);
+		assertAffected(serviceIds, data.serviceStatuses);
 		return { ...data, serviceIds };
 	}
 
@@ -195,6 +212,7 @@ export class IncidentService {
 		if (data.status) {
 			assertStatusForKind(incident.kind, data.status);
 		}
+		assertAffected(incident.serviceIds, data.serviceStatuses);
 		return { incident, data };
 	}
 
@@ -243,6 +261,7 @@ export class IncidentService {
 		await this.syncServices(
 			incident,
 			this.plan(incident, data.serviceStatus, true),
+			data.serviceStatuses,
 		);
 		await this.notify(
 			kind === "incident" ? "incident.created" : "maintenance.scheduled",
@@ -268,6 +287,7 @@ export class IncidentService {
 		const { current, next } = await this.mutate(id, (current) => {
 			const status = data.status ?? current.status;
 			assertStatusForKind(current.kind, status);
+			assertAffected(current.serviceIds, data.serviceStatuses);
 			const now = iso(this.ctx.now());
 			const next: Incident = {
 				...current,
@@ -298,7 +318,7 @@ export class IncidentService {
 			closing && wasClosed && !data.serviceStatus
 				? undefined
 				: this.plan(next, data.serviceStatus, false);
-		await this.syncServices(next, plan);
+		await this.syncServices(next, plan, data.serviceStatuses);
 		const event: NotificationEvent =
 			next.kind === "incident"
 				? closing && !wasClosed
@@ -442,30 +462,45 @@ export class IncidentService {
 			: undefined;
 	}
 
+	/**
+	 * Moves the affected services to their new status. A service with its own
+	 * status gets that status. The plan sets the status of the other services.
+	 */
 	private async syncServices(
 		incident: Incident,
 		plan: ServicePlan | undefined,
+		overrides: readonly ServiceStatusOverride[] = [],
 	): Promise<void> {
-		if (!plan || incident.serviceIds.length === 0) {
+		const own = new Map(
+			overrides.map((override) => [override.serviceId, override.status]),
+		);
+		if ((!plan && own.size === 0) || incident.serviceIds.length === 0) {
 			return;
 		}
-		const others = plan.restore
+		const others = plan?.restore
 			? (await this.list({ open: true })).filter(
 					// scheduled maintenance has not touched any service yet
 					(other) => other.id !== incident.id && other.status !== "scheduled",
 				)
 			: [];
 		for (const serviceId of incident.serviceIds) {
+			const status = own.get(serviceId) ?? plan?.status;
+			if (!status) {
+				continue;
+			}
 			const service = await this.ctx.store.get("services", serviceId, {
 				consistent: true,
 			});
 			if (!service) {
 				continue;
 			}
-			if (others.some((other) => other.serviceIds.includes(serviceId))) {
+			if (
+				!own.has(serviceId) &&
+				others.some((other) => other.serviceIds.includes(serviceId))
+			) {
 				continue;
 			}
-			await this.catalog.applyStatus(service, plan.status, incident.id);
+			await this.catalog.applyStatus(service, status, incident.id);
 		}
 	}
 

@@ -31,6 +31,10 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
   (statuses: investigating -> identified -> monitoring -> resolved), and close with resolve_incident.
 - Affected services move to a status derived from the incident impact (minor=degraded_performance,
   major=partial_outage, critical=major_outage) unless serviceStatus is given; resolving restores them.
+- To give affected services different statuses, use serviceStatuses, for example
+  [{"serviceId": "svc_api", "status": "major_outage"}, {"serviceId": "svc_web", "status": "degraded_performance"}].
+  It works with create_incident, post_incident_update and draft_notification. Each entry replaces
+  serviceStatus and the automatic status for that service only.
 - Schedule planned work with schedule_maintenance (statuses: scheduled -> in_progress -> verifying -> completed).
 - When a person must review a notification first, use draft_notification and give that person the reviewUrl.
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
@@ -59,6 +63,24 @@ function notifyField(actor: AgentActor) {
 const isoDate = z
 	.string()
 	.describe("ISO 8601 timestamp with timezone, e.g. 2026-11-03T02:00:00Z");
+const serviceStatus = serviceStatusSchema
+	.optional()
+	.describe(
+		"The status for all affected services. It replaces the automatic status.",
+	);
+const serviceStatuses = z
+	.array(
+		z.object({
+			serviceId: z
+				.string()
+				.describe("An affected service of the incident or maintenance"),
+			status: serviceStatusSchema,
+		}),
+	)
+	.optional()
+	.describe(
+		"Statuses for single affected services. Each entry replaces serviceStatus and the automatic status for its service. Other affected services keep the automatic status or serviceStatus.",
+	);
 
 type ToolHandler<A> = (args: A) => Promise<unknown>;
 
@@ -399,9 +421,8 @@ export function createMcpServer(
 					.optional()
 					.describe("none | minor | major | critical (default minor)"),
 				serviceIds: z.array(z.string()).optional(),
-				serviceStatus: serviceStatusSchema
-					.optional()
-					.describe("Override the status applied to affected services"),
+				serviceStatus,
+				serviceStatuses,
 				status: eventStatusSchema
 					.optional()
 					.describe(
@@ -420,12 +441,13 @@ export function createMcpServer(
 		{
 			title: "Post incident update",
 			description:
-				"Adds a timeline update to an incident or maintenance, optionally changing its status.",
+				"Adds a timeline update to an incident or maintenance, optionally changing its status and the status of each affected service.",
 			inputSchema: {
 				id,
 				message: z.string(),
 				status: eventStatusSchema.optional(),
-				serviceStatus: serviceStatusSchema.optional(),
+				serviceStatus,
+				serviceStatuses,
 				notify,
 			},
 		},
@@ -541,9 +563,8 @@ export function createMcpServer(
 					.array(z.string())
 					.optional()
 					.describe("New events only: affected services"),
-				serviceStatus: serviceStatusSchema
-					.optional()
-					.describe("Override the status applied to affected services"),
+				serviceStatus,
+				serviceStatuses,
 				scheduledStart: isoDate
 					.optional()
 					.describe("New maintenance only: start of the window (ISO 8601)"),
