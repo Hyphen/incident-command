@@ -22,7 +22,7 @@ export default async function SetupPage({
 	}
 	const settings = await services.settings.get();
 	return (
-		<AuthLayout siteName={settings.siteName} title="Create the first admin">
+		<AuthLayout settings={settings} title="Create the first admin">
 			<form action={setupAction} className="space-y-4">
 				<p className="text-sm text-muted">
 					This account can invite members, create agent tokens and change

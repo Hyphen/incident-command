@@ -1,9 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { logoutAction } from "@/app/manage/actions";
-import { WatchtowerLogo } from "@/components/watchtower-logo";
+import { LogoImage } from "@/components/logo-image";
+import { PoweredBy } from "@/components/powered-by";
+import { publicLogoSrc } from "@/lib/brand";
 import { hasRole, ROLE_LABELS } from "@/lib/domain/status";
-import type { PublicMember, Role } from "@/lib/domain/types";
+import type { PublicMember, Role, Settings } from "@/lib/domain/types";
 import { resolveFlash } from "@/lib/flash";
 import type { StoreHealth } from "@/lib/store/cached";
 import { SubmitButton } from "../submit-button";
@@ -33,13 +35,14 @@ export interface FlashParams {
  */
 export function PortalFrame({
 	member,
-	siteName,
+	settings,
 	children,
 }: {
 	member: PublicMember;
-	siteName: string;
+	settings: Pick<Settings, "siteName" | "logoUrl" | "logoUpdatedAt">;
 	children: ReactNode;
 }) {
+	const logoSrc = publicLogoSrc(settings);
 	return (
 		<div className="min-h-dvh lg:grid lg:grid-cols-[240px_1fr]">
 			<aside className="border-b border-border bg-surface lg:min-h-dvh lg:border-r lg:border-b-0">
@@ -48,8 +51,14 @@ export function PortalFrame({
 						href="/manage"
 						className="flex items-center gap-3 font-semibold tracking-tight"
 					>
-						<WatchtowerLogo />
-						<span className="min-w-0 break-words">{siteName}</span>
+						{logoSrc ? (
+							<LogoImage
+								src={logoSrc}
+								alt=""
+								className="h-8 w-auto max-w-28 object-contain"
+							/>
+						) : null}
+						<span className="min-w-0 break-words">{settings.siteName}</span>
 					</Link>
 				</div>
 				<PortalNav
@@ -74,9 +83,14 @@ export function PortalFrame({
 					</div>
 				</div>
 			</aside>
-			<main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-8 lg:px-8">
-				{children}
-			</main>
+			<div className="flex min-h-dvh flex-col">
+				<main className="mx-auto w-full max-w-5xl flex-1 space-y-6 px-4 py-8 lg:px-8">
+					{children}
+				</main>
+				<footer className="px-4 pb-8 text-xs text-muted lg:px-8">
+					<PoweredBy />
+				</footer>
+			</div>
 		</div>
 	);
 }
@@ -133,28 +147,40 @@ export function ManagePageSkeleton() {
 
 /** Centered card layout used by the login and setup pages. */
 export function AuthLayout({
-	siteName,
+	settings,
 	title,
 	children,
 }: {
-	siteName: string;
+	settings: Pick<Settings, "siteName" | "logoUrl" | "logoUpdatedAt">;
 	title: string;
 	children: ReactNode;
 }) {
+	const logoSrc = publicLogoSrc(settings);
 	return (
-		<main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-4 py-12">
-			<div className="mb-3 flex items-center gap-3">
-				<WatchtowerLogo />
-				<p className="min-w-0 text-sm font-medium break-words text-muted">
-					{siteName}
-				</p>
+		<main className="mx-auto flex min-h-dvh max-w-sm flex-col px-4 py-12">
+			<div className="my-auto">
+				<div className="mb-3 flex items-center gap-3">
+					{logoSrc ? (
+						<LogoImage
+							src={logoSrc}
+							alt=""
+							className="h-8 w-auto max-w-28 object-contain"
+						/>
+					) : null}
+					<p className="min-w-0 text-sm font-medium break-words text-muted">
+						{settings.siteName}
+					</p>
+				</div>
+				<h1 className="mt-1 mb-6 text-2xl font-semibold tracking-tight">
+					{title}
+				</h1>
+				<div className="rounded-card border border-border bg-surface p-6">
+					{children}
+				</div>
 			</div>
-			<h1 className="mt-1 mb-6 text-2xl font-semibold tracking-tight">
-				{title}
-			</h1>
-			<div className="rounded-card border border-border bg-surface p-6">
-				{children}
-			</div>
+			<p className="pt-8 text-center text-xs text-muted">
+				<PoweredBy />
+			</p>
 		</main>
 	);
 }

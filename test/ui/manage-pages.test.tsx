@@ -26,6 +26,7 @@ import { SESSION_COOKIE } from "@/lib/auth";
 import { sha256 } from "@/lib/crypto";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import { agentActor } from "../helpers";
+import { PNG_LOGO } from "../logo-bytes";
 import {
 	AGENT_REDIRECT,
 	authorizationQuery,
@@ -112,6 +113,7 @@ describe("login and setup", () => {
 			password: "password123",
 		});
 		expect(await redirectOf(SetupPage(flash()))).toBe("/manage/login");
+		await app.services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
 		const page = render(
 			await LoginPage(flash({ error: "invalid_credentials" })),
 		);
@@ -121,6 +123,13 @@ describe("login and setup", () => {
 		expect(screen.getByRole("alert")).toHaveTextContent(
 			"Invalid email or password",
 		);
+		expect(document.querySelector("img")).toHaveAttribute(
+			"src",
+			"/brand/logo?v=2026-11-02T12%3A00%3A00.000Z",
+		);
+		expect(
+			screen.getByRole("link", { name: "Incident Command" }),
+		).toHaveAttribute("href", "https://github.com/jaredwray/incident-command");
 		page.unmount();
 		await signIn(app, "viewer");
 		expect(await redirectOf(LoginPage(flash()))).toBe("/manage");
@@ -301,12 +310,28 @@ describe("portal layout", () => {
 			"href",
 			"/manage",
 		);
+		expect(
+			screen.getByRole("link", { name: "Incident Command" }),
+		).toHaveAttribute("href", "https://github.com/jaredwray/incident-command");
 		expect(screen.getByText(member.name)).toBeInTheDocument();
 		expect(screen.getByText(`${member.email} · Editor`)).toBeInTheDocument();
 		expect(
 			screen.getByRole("button", { name: "Sign out" }),
 		).toBeInTheDocument();
 		expect(screen.getByRole("main")).toHaveTextContent("Page content");
+	});
+
+	it("shows an uploaded logo beside the site name", async () => {
+		const { app, services } = await setupApp();
+		await services.settings.update(SYSTEM_ACTOR, { siteName: "Acme Status" });
+		await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
+		await signIn(app, "admin");
+		render(await PortalLayout({ children: page }));
+		const brand = screen.getByRole("link", { name: "Acme Status" });
+		expect(brand.querySelector("img")).toHaveAttribute(
+			"src",
+			"/brand/logo?v=2026-11-02T12%3A00%3A00.000Z",
+		);
 	});
 
 	it("keeps a section marked on the pages below it", async () => {
@@ -1329,9 +1354,27 @@ describe("admin pages", () => {
 		);
 		expect(screen.getByDisplayValue("sunset")).toBeChecked();
 		expect(screen.getByLabelText("Brand color")).toHaveValue("#123456");
+		expect(screen.getByLabelText("Logo file")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("checkbox", { name: "Remove the uploaded logo" }),
+		).not.toBeInTheDocument();
 		expect(
 			screen.queryByLabelText("Uptime window (days)"),
 		).not.toBeInTheDocument();
+	});
+
+	it("shows the uploaded logo and a control to remove it", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "admin");
+		await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
+		render(await BrandingPage(flash()));
+		expect(
+			screen.getByRole("checkbox", { name: "Remove the uploaded logo" }),
+		).not.toBeChecked();
+		expect(document.querySelector("img")).toHaveAttribute(
+			"src",
+			"/brand/logo?v=2026-11-02T12%3A00%3A00.000Z",
+		);
 	});
 
 	it("renders the notification channels without an encryption key", async () => {

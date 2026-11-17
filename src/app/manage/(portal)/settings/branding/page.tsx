@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { updateBrandingAction } from "@/app/manage/actions";
+import { LogoImage } from "@/components/logo-image";
 import { SettingsTabs } from "@/components/manage/settings-tabs";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { buttonClass, Card, Field, inputClass } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
+import { publicLogoSrc } from "@/lib/brand";
 import { THEMES } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
@@ -18,13 +20,18 @@ export default async function BrandingPage({
 	const flash = await searchParams;
 	const { services, app } = await requireMember("admin");
 	const settings = await services.settings.get();
+	const logoSrc = publicLogoSrc(settings);
 	return (
 		<ManagePage title="Settings" flash={flash} health={app.store.health}>
 			<SettingsTabs active="branding" />
-			<form action={updateBrandingAction} className="space-y-6">
+			<form
+				action={updateBrandingAction}
+				encType="multipart/form-data"
+				className="space-y-6"
+			>
 				<Card
 					title="Branding"
-					description="Pick a theme, then fine-tune it with a brand color, logo and custom CSS."
+					description="Pick a theme, then set a brand color, upload a logo and add custom CSS."
 				>
 					<fieldset>
 						<legend className="mb-2 text-sm font-medium">Theme</legend>
@@ -58,6 +65,34 @@ export default async function BrandingPage({
 							))}
 						</div>
 					</fieldset>
+					<div className="mt-4">
+						<Field
+							label="Logo file"
+							htmlFor="logo"
+							hint="Upload a PNG, JPEG, WebP, GIF or SVG file up to 512 KB. The file replaces the logo URL."
+						>
+							{logoSrc ? (
+								<LogoImage
+									src={logoSrc}
+									alt=""
+									className="mb-3 h-8 w-auto max-w-48 object-contain"
+								/>
+							) : null}
+							<input
+								id="logo"
+								name="logo"
+								type="file"
+								accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+								className={inputClass}
+							/>
+						</Field>
+						{settings.logoUpdatedAt ? (
+							<label className="mt-3 flex items-center gap-2 text-sm">
+								<input type="checkbox" name="removeLogo" />
+								Remove the uploaded logo
+							</label>
+						) : null}
+					</div>
 					<div className="mt-4 grid gap-4 sm:grid-cols-3">
 						<Field
 							label="Brand color"
@@ -73,7 +108,11 @@ export default async function BrandingPage({
 								className={inputClass}
 							/>
 						</Field>
-						<Field label="Logo URL" htmlFor="logoUrl">
+						<Field
+							label="Logo URL"
+							htmlFor="logoUrl"
+							hint="The page uses this URL when no logo file is stored."
+						>
 							<input
 								id="logoUrl"
 								name="logoUrl"

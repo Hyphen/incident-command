@@ -298,5 +298,20 @@
 		"id": "fls_4tbiwu38x1jwqnni",
 		"kind": "error",
 		"text": "Somebody else changed these notification settings. Reload the page."
+	},
+	"logo_type": {
+		"id": "fls_7n4qlogo1typexx",
+		"kind": "error",
+		"text": "Use a PNG, JPEG, WebP, GIF or SVG logo."
+	},
+	"logo_too_large": {
+		"id": "fls_7n4qlogo2sizeyy",
+		"kind": "error",
+		"text": "The logo must be 512 KB or smaller."
+	},
+	"logo_svg": {
+		"id": "fls_7n4qlogo3svgzz",
+		"kind": "error",
+		"text": "This SVG logo is not allowed."
 	}
 }

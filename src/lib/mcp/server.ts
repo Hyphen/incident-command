@@ -795,7 +795,7 @@ export function createMcpServer(
 		{
 			title: "Update settings",
 			description:
-				"Updates status page settings and branding. Pass null or an empty string to clear optional values.",
+				"Updates status page settings and branding. Pass null or an empty string to clear optional values. Upload a logo in the portal. An uploaded logo replaces logoUrl on the page.",
 			inputSchema: {
 				siteName: z.string().optional(),
 				description: z.string().optional(),

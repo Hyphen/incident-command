@@ -140,6 +140,7 @@ describe("PostgresStore", () => {
 			"ic_agent_activity",
 			"ic_agent_tokens",
 			"ic_agents",
+			"ic_brand_assets",
 			"ic_incidents",
 			"ic_invites",
 			"ic_members",

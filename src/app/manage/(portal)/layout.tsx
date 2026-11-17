@@ -19,7 +19,7 @@ export default async function PortalLayout({
 	}
 	const settings = await context.services.settings.get();
 	return (
-		<PortalFrame member={context.member} siteName={settings.siteName}>
+		<PortalFrame member={context.member} settings={settings}>
 			{children}
 		</PortalFrame>
 	);

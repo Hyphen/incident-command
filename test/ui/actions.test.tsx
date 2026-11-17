@@ -41,8 +41,10 @@ import {
 } from "@/app/manage/actions";
 import { subscribeAction, unsubscribeAction } from "@/app/subscribe/actions";
 import { SESSION_COOKIE } from "@/lib/auth";
+import { LOGO_TYPE_MESSAGE } from "@/lib/domain/logo";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import { agentActor } from "../helpers";
+import { JPEG_LOGO, PNG_LOGO } from "../logo-bytes";
 import {
 	AGENT_REDIRECT,
 	authorizationQuery,
@@ -1048,6 +1050,141 @@ describe("subscriber and settings actions", () => {
 			"error",
 			"Check the form and try again.",
 		);
+	});
+
+	it("saves an uploaded logo and can remove it", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "admin");
+		const uploaded = form({
+			theme: "midnight",
+			brandColor: "#112233",
+			logoUrl: "https://acme.dev/logo.svg",
+			faviconUrl: "",
+			customCss: "",
+		});
+		uploaded.set(
+			"logo",
+			new File([PNG_LOGO], "logo.png", { type: "image/png" }),
+		);
+		expectSameFlash(
+			await redirectOf(updateBrandingAction(uploaded)),
+			"/manage/settings/branding?notice=Branding saved",
+		);
+		expect(await services.settings.get()).toMatchObject({
+			theme: "midnight",
+			logoUrl: "https://acme.dev/logo.svg",
+			logoUpdatedAt: "2026-11-02T12:00:00.000Z",
+		});
+		expect((await services.settings.getLogo())?.contentType).toBe("image/png");
+
+		const empty = form({
+			theme: "ocean",
+			brandColor: "",
+			logoUrl: "https://acme.dev/logo.svg",
+			faviconUrl: "",
+			customCss: "",
+		});
+		empty.set("logo", new File([], "logo.png", { type: "image/png" }));
+		await redirectOf(updateBrandingAction(empty));
+		expect((await services.settings.get()).theme).toBe("ocean");
+		expect((await services.settings.getLogo())?.contentType).toBe("image/png");
+
+		// A new file wins when the form also asks to remove the stored logo.
+		const replaced = form({
+			theme: "ocean",
+			brandColor: "",
+			logoUrl: "",
+			faviconUrl: "",
+			customCss: "",
+			removeLogo: "on",
+		});
+		replaced.set(
+			"logo",
+			new File([JPEG_LOGO], "logo.jpg", { type: "image/jpeg" }),
+		);
+		await redirectOf(updateBrandingAction(replaced));
+		expect((await services.settings.get()).logoUrl).toBeUndefined();
+		expect((await services.settings.getLogo())?.contentType).toBe("image/jpeg");
+
+		await redirectOf(
+			updateBrandingAction(
+				form({
+					theme: "default",
+					brandColor: "",
+					logoUrl: "",
+					faviconUrl: "",
+					customCss: "",
+					removeLogo: "on",
+				}),
+			),
+		);
+		await expect(services.settings.getLogo()).resolves.toBeUndefined();
+		expect((await services.settings.get()).logoUpdatedAt).toBeUndefined();
+	});
+
+	it("does not change the logo when branding is invalid", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "admin");
+		const fields = {
+			theme: "midnight",
+			brandColor: "",
+			logoUrl: "ftp://example.com/logo.png",
+			faviconUrl: "",
+			customCss: "",
+		};
+		const uploaded = form(fields);
+		uploaded.set(
+			"logo",
+			new File([PNG_LOGO], "logo.png", { type: "image/png" }),
+		);
+		expectFlashRedirect(
+			await redirectOf(updateBrandingAction(uploaded)),
+			"/manage/settings/branding",
+			"error",
+			"Check the form and try again.",
+		);
+		await expect(services.settings.getLogo()).resolves.toBeUndefined();
+		expect((await services.settings.get()).theme).toBe("default");
+
+		await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
+		expectFlashRedirect(
+			await redirectOf(
+				updateBrandingAction(form({ ...fields, removeLogo: "on" })),
+			),
+			"/manage/settings/branding",
+			"error",
+			"Check the form and try again.",
+		);
+		expect((await services.settings.getLogo())?.contentType).toBe("image/png");
+		expect((await services.settings.get()).logoUpdatedAt).toBe(
+			"2026-11-02T12:00:00.000Z",
+		);
+		expect((await services.settings.get()).theme).toBe("default");
+	});
+
+	it("rejects a logo file that is not an image", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "admin");
+		const data = form({
+			theme: "default",
+			brandColor: "",
+			logoUrl: "",
+			faviconUrl: "",
+			customCss: "",
+		});
+		data.set(
+			"logo",
+			new File([Uint8Array.from([1, 2, 3, 4])], "logo.png", {
+				type: "image/png",
+			}),
+		);
+		expectFlashRedirect(
+			await redirectOf(updateBrandingAction(data)),
+			"/manage/settings/branding",
+			"error",
+			LOGO_TYPE_MESSAGE,
+		);
+		await expect(services.settings.getLogo()).resolves.toBeUndefined();
 	});
 });
 

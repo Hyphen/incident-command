@@ -17,6 +17,7 @@ import SubscribePage from "@/app/subscribe/page";
 import UnsubscribePage from "@/app/subscribe/unsubscribe/page";
 import { setApp } from "@/lib/app";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
+import { PNG_LOGO } from "../logo-bytes";
 import { expectNotFound, flashQueryParams, params, setupApp } from "./app";
 
 describe("root layout", () => {
@@ -88,6 +89,14 @@ describe("status page", () => {
 			screen.getByText("No incidents reported in the last 14 days."),
 		).toBeInTheDocument();
 		expect(screen.queryByText("Subscribe to updates")).not.toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "Status" })).toHaveAttribute(
+			"href",
+			"/",
+		);
+		expect(screen.queryByRole("img")).not.toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "Incident Command" }),
+		).toHaveAttribute("href", "https://github.com/jaredwray/incident-command");
 	});
 
 	it("renders services, incidents and maintenance", async () => {
@@ -163,6 +172,20 @@ describe("status page", () => {
 		).toBeGreaterThan(0);
 		expect(screen.getByText("Aug 2026 – Nov 2026")).toBeInTheDocument();
 		expect(screen.getAllByText("API errors").length).toBeGreaterThan(1);
+	});
+
+	it("shows an uploaded logo instead of the logo URL", async () => {
+		const { services } = await setupApp();
+		await services.settings.update(SYSTEM_ACTOR, {
+			siteName: "Acme",
+			logoUrl: "https://acme.dev/logo.svg",
+		});
+		await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
+		render(await StatusPage());
+		expect(screen.getByRole("img", { name: "Acme" })).toHaveAttribute(
+			"src",
+			"/brand/logo?v=2026-11-02T12%3A00%3A00.000Z",
+		);
 	});
 });
 

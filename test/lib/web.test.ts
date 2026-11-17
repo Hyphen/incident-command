@@ -3,12 +3,14 @@ import { GET as resourceMetadataForPath } from "@/app/.well-known/oauth-protecte
 import { GET as resourceMetadata } from "@/app/.well-known/oauth-protected-resource/route";
 import { POST as mcp } from "@/app/api/mcp/route";
 import { GET as status } from "@/app/api/v1/status/route";
+import { GET as logo } from "@/app/brand/logo/route";
 import { GET as feed } from "@/app/feed.xml/route";
 import { GET as health } from "@/app/healthz/route";
 import { POST as register } from "@/app/oauth/register/route";
 import { POST as token } from "@/app/oauth/token/route";
 import { createApp, setApp } from "@/lib/app";
 import { loadConfig } from "@/lib/config";
+import { ValidationError } from "@/lib/errors";
 import { buildRssFeed, escapeXml } from "@/lib/feed";
 import {
 	formatDateTime,
@@ -29,6 +31,7 @@ import {
 	THEMES,
 } from "@/lib/theme";
 import { Clock, FakeNotifier } from "../helpers";
+import { JPEG_LOGO, PNG_LOGO } from "../logo-bytes";
 
 async function setup(env: Record<string, string> = {}) {
 	const clock = new Clock();
@@ -42,6 +45,14 @@ async function setup(env: Record<string, string> = {}) {
 }
 
 afterEach(() => setApp(undefined));
+
+function logoRequest(version?: string): Request {
+	const url = new URL("https://status.example/brand/logo");
+	if (version) {
+		url.searchParams.set("v", version);
+	}
+	return new Request(url);
+}
 
 describe("API routes", () => {
 	it("reports health", async () => {
@@ -74,6 +85,81 @@ describe("API routes", () => {
 			status: "unavailable",
 			error: "weird",
 		});
+	});
+
+	it("serves the uploaded logo and a 404 when none is stored", async () => {
+		const { app, services } = await setup();
+		const missing = await logo(logoRequest());
+		expect(missing.status).toBe(404);
+		expect(missing.headers.get("cache-control")).toBe("no-store");
+		expect(missing.headers.get("x-content-type-options")).toBe("nosniff");
+		const missingVersion = await logo(logoRequest("2026-11-02T12:00:00.000Z"));
+		expect(missingVersion.status).toBe(404);
+		expect(missingVersion.headers.get("cache-control")).toBe("no-store");
+
+		const down = vi.spyOn(app.store.inner, "get");
+		down.mockRejectedValueOnce(new Error("down"));
+		const unavailable = await logo(logoRequest("2026-11-02T12:00:00.000Z"));
+		expect(unavailable.status).toBe(404);
+		expect(unavailable.headers.get("cache-control")).toBe("no-store");
+		down.mockRestore();
+
+		const saved = await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
+		const response = await logo(logoRequest(saved.logoUpdatedAt));
+		expect(response.status).toBe(200);
+		expect(response.headers.get("content-type")).toBe("image/png");
+		expect(response.headers.get("cache-control")).toBe("public, max-age=86400");
+		expect(response.headers.get("content-security-policy")).toContain(
+			"sandbox",
+		);
+		expect(Buffer.from(await response.arrayBuffer())).toEqual(
+			Buffer.from(PNG_LOGO),
+		);
+
+		const unversioned = await logo(logoRequest());
+		expect(unversioned.status).toBe(200);
+		expect(unversioned.headers.get("cache-control")).toBe("no-store");
+	});
+
+	it("refreshes a stale logo instead of caching it", async () => {
+		const { app, services } = await setup();
+		await services.settings.saveLogo(SYSTEM_ACTOR, PNG_LOGO);
+		const stale = await services.settings.getLogo();
+		const nextAt = "2026-11-02T13:00:00.000Z";
+		await app.store.inner.update("brand_assets", {
+			id: stale?.id ?? "logo",
+			contentType: "image/jpeg",
+			data: Buffer.from(JPEG_LOGO).toString("base64"),
+			updatedAt: nextAt,
+		});
+
+		const refreshed = await logo(logoRequest(nextAt));
+		expect(refreshed.headers.get("content-type")).toBe("image/jpeg");
+		expect(refreshed.headers.get("cache-control")).toBe(
+			"public, max-age=86400",
+		);
+		expect(Buffer.from(await refreshed.arrayBuffer())).toEqual(
+			Buffer.from(JPEG_LOGO),
+		);
+
+		const other = await logo(logoRequest("2020-01-01T00:00:00.000Z"));
+		expect(other.headers.get("content-type")).toBe("image/jpeg");
+		expect(other.headers.get("cache-control")).toBe("no-store");
+
+		vi.spyOn(app.store.inner, "get").mockRejectedValueOnce(new Error("down"));
+		const duringOutage = await logo(logoRequest(nextAt));
+		expect(duringOutage.headers.get("content-type")).toBe("image/png");
+		expect(duringOutage.headers.get("cache-control")).toBe("no-store");
+		expect(Buffer.from(await duringOutage.arrayBuffer())).toEqual(
+			Buffer.from(PNG_LOGO),
+		);
+
+		vi.spyOn(app.store.inner, "get").mockRejectedValueOnce(
+			new ValidationError("bad"),
+		);
+		await expect(
+			logo(logoRequest("2020-01-01T00:00:00.000Z")),
+		).rejects.toBeInstanceOf(ValidationError);
 	});
 
 	it("serves the public status json", async () => {

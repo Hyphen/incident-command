@@ -48,7 +48,7 @@ export default async function AuthorizePage({
 	// the redirect URI of a request that is not valid.
 	if (check.kind !== "consent") {
 		return (
-			<AuthLayout siteName={settings.siteName} title="Cannot connect the agent">
+			<AuthLayout settings={settings} title="Cannot connect the agent">
 				<p className="text-sm text-muted">{check.message}</p>
 			</AuthLayout>
 		);
@@ -65,7 +65,7 @@ export default async function AuthorizePage({
 	// A repeated parameter is an array. The first value applies.
 	const { error } = resolveFlash({ error: [query.error].flat().at(0) });
 	return (
-		<AuthLayout siteName={settings.siteName} title="Connect an agent">
+		<AuthLayout settings={settings} title="Connect an agent">
 			<form action={approveAgentAction} className="space-y-4 text-sm">
 				<Flash error={error} />
 				<p>
