@@ -1355,7 +1355,7 @@ describe("admin pages", () => {
 			theme: "sunset",
 			brandColor: "#123456",
 		});
-		render(await BrandingPage(flash()));
+		const first = render(await BrandingPage(flash()));
 		expect(screen.getByRole("link", { name: "Branding" })).toHaveAttribute(
 			"aria-current",
 			"page",
@@ -1370,6 +1370,13 @@ describe("admin pages", () => {
 		expect(
 			screen.queryByLabelText("Uptime window (days)"),
 		).not.toBeInTheDocument();
+		first.unmount();
+
+		// A stored id of a removed preset selects the preset that the site shows.
+		// With no selection, the form sends no theme and the save fails.
+		await services.settings.update(SYSTEM_ACTOR, { theme: "midnight" });
+		render(await BrandingPage(flash()));
+		expect(screen.getByDisplayValue("carbon")).toBeChecked();
 	});
 
 	it("shows each uploaded file and a control to remove it", async () => {

@@ -1,0 +1,22 @@
+/* Terminal: a dark console look with a monospace font and a green accent. */
+[data-theme="terminal"] {
+	--ic-bg: #0b0f0c;
+	--ic-surface: #101612;
+	--ic-surface-muted: #161e18;
+	--ic-fg: #d7e4d9;
+	--ic-muted: #8fa594;
+	--ic-border: #233028;
+	--ic-brand: #4ade80;
+	--ic-brand-fg: #06130a;
+	--ic-operational: #4ade80;
+	--ic-degraded: #facc15;
+	--ic-partial: #fb923c;
+	--ic-major: #f87171;
+	--ic-maintenance: #7dd3fc;
+	--ic-nodata: #223027;
+	--ic-radius: 0.25rem;
+	--ic-font:
+		ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas,
+		"Liberation Mono", monospace;
+	color-scheme: dark;
+}

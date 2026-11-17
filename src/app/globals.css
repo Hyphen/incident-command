@@ -2,7 +2,8 @@
 
 /* Theme presets. Each file defines the --ic-* design tokens for one theme. */
 @import "../themes/default.css";
-@import "../themes/midnight.css";
+@import "../themes/carbon.css";
+@import "../themes/terminal.css";
 @import "../themes/ocean.css";
 @import "../themes/sunset.css";
 @import "../themes/mono.css";

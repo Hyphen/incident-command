@@ -16,20 +16,43 @@ export const THEMES: readonly ThemePreset[] = [
 	{
 		id: "default",
 		name: "Default",
-		description: "Clean light theme that follows the system dark mode.",
+		description: "Neutral corporate look. Follows the system dark mode.",
 	},
-	{ id: "midnight", name: "Midnight", description: "Deep navy dark theme." },
-	{ id: "ocean", name: "Ocean", description: "Cool blues with soft surfaces." },
-	{ id: "sunset", name: "Sunset", description: "Warm, friendly tones." },
+	{
+		id: "carbon",
+		name: "Carbon",
+		description: "Neutral dark theme with thin borders.",
+	},
+	{
+		id: "terminal",
+		name: "Terminal",
+		description: "Dark console look with a monospace font.",
+	},
+	{
+		id: "ocean",
+		name: "Ocean",
+		description: "Cool light theme with a teal accent.",
+	},
+	{
+		id: "sunset",
+		name: "Sunset",
+		description: "Warm light theme with round corners.",
+	},
 	{
 		id: "mono",
 		name: "Mono",
-		description: "Minimal black and white with sharp corners.",
+		description: "Black and white with sharp corners.",
 	},
 ];
 
+/** Ids of removed presets. Each id maps to the preset that replaced it. */
+const REPLACED_THEMES = new Map([["midnight", "carbon"]]);
+
 export function resolveTheme(id: string | undefined): string {
-	return THEMES.some((theme) => theme.id === id) ? (id as string) : "default";
+	const current = REPLACED_THEMES.get(id as string) ?? id;
+	return THEMES.some((theme) => theme.id === current)
+		? (current as string)
+		: "default";
 }
 
 function channel(hex: string, offset: number): number {

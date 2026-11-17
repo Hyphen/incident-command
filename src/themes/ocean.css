@@ -1,19 +1,22 @@
-/* Ocean: cool blues with soft surfaces. */
+/* Ocean: a cool light theme with navy text and a teal accent. */
 [data-theme="ocean"] {
-	--ic-bg: #eef6fb;
+	--ic-bg: #f0f6fa;
 	--ic-surface: #ffffff;
-	--ic-surface-muted: #e3f0f8;
-	--ic-fg: #0b2537;
-	--ic-muted: #4b6577;
-	--ic-border: #cfe2ee;
-	--ic-brand: #0e7490;
+	--ic-surface-muted: #eaf2f8;
+	--ic-fg: #0c2a3e;
+	--ic-muted: #4a6578;
+	--ic-border: #d3e2ec;
+	--ic-brand: #0b7285;
 	--ic-brand-fg: #ffffff;
-	--ic-operational: #0f9f6e;
-	--ic-degraded: #c58b00;
+	--ic-operational: #0f9d6c;
+	--ic-degraded: #bb8700;
 	--ic-partial: #e2620f;
-	--ic-major: #d92d3a;
-	--ic-maintenance: #2b6fd6;
-	--ic-nodata: #cfdde6;
-	--ic-radius: 1.25rem;
+	--ic-major: #d6303b;
+	--ic-maintenance: #3b74d9;
+	--ic-nodata: #d3e0e9;
+	--ic-radius: 0.875rem;
+	--ic-font:
+		ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+		"Helvetica Neue", Arial, sans-serif;
 	color-scheme: light;
 }

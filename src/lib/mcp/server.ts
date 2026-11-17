@@ -805,7 +805,7 @@ export function createMcpServer(
 					.string()
 					.optional()
 					.describe(
-						"Theme preset, e.g. default, midnight, ocean, sunset, mono",
+						"Theme preset: default, carbon, terminal, ocean, sunset or mono",
 					),
 				brandColor: z
 					.string()
