@@ -462,7 +462,7 @@ describe("subscription pages", () => {
 		expect(screen.getByText("You're already subscribed")).toBeInTheDocument();
 	});
 
-	it("shows a toggle of the three channels and checks the field", async () => {
+	it("shows the channel choice only for more than one channel and checks the field", async () => {
 		const user = userEvent.setup();
 		const { services } = await setupApp();
 		await services.notificationSettings.updateChannel(SYSTEM_ACTOR, "sms", {
@@ -544,15 +544,30 @@ describe("subscription pages", () => {
 		already.unmount();
 
 		// A channel that cannot send stays in the toggle, but nobody can select it.
-		for (const channel of ["email", "sms"] as const) {
-			await services.notificationSettings.updateChannel(SYSTEM_ACTOR, channel, {
-				enabled: false,
-			});
-		}
-		render(await SubscribePage({ searchParams: params({ channel: "email" }) }));
-		expect(screen.getByRole("radio", { name: "Email" })).toBeDisabled();
+		await services.notificationSettings.updateChannel(SYSTEM_ACTOR, "sms", {
+			enabled: false,
+		});
+		const two = render(
+			await SubscribePage({ searchParams: params({ channel: "sms" }) }),
+		);
 		expect(screen.getByRole("radio", { name: "Text message" })).toBeDisabled();
-		expect(screen.getByRole("radio", { name: "Webhook" })).toBeChecked();
+		expect(screen.getByRole("radio", { name: "Webhook" })).toBeEnabled();
+		expect(screen.getByRole("radio", { name: "Email" })).toBeChecked();
+		two.unmount();
+
+		// With one channel there is no choice. The form sends that channel.
+		await services.notificationSettings.updateChannel(SYSTEM_ACTOR, "email", {
+			enabled: false,
+		});
+		render(await SubscribePage({ searchParams: params({ channel: "email" }) }));
+		expect(screen.queryByRole("group", { name: "Channel" })).toBeNull();
+		expect(screen.queryAllByRole("radio")).toHaveLength(0);
+		expect(screen.getByLabelText("Webhook URL")).toHaveAttribute("type", "url");
+		expect(
+			new FormData(
+				screen.getByRole("textbox").closest("form") ?? undefined,
+			).get("type"),
+		).toBe("webhook");
 	});
 
 	it("serves the cached status page while the database is offline", async () => {
