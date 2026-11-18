@@ -303,6 +303,7 @@ export const updateNotificationChannelSchema = z.object({
 	enabled: z.boolean().optional(),
 	strategy: z.enum(DELIVERY_STRATEGIES).optional(),
 	from: patchText(200),
+	allowPrivateNetworks: z.boolean().optional(),
 });
 export type UpdateNotificationChannelInput = z.input<
 	typeof updateNotificationChannelSchema

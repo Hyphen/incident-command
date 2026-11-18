@@ -331,6 +331,21 @@ export function NotificationChannelCard({
 						</div>
 					</fieldset>
 				)}
+				{channel.id === "webhook" && (
+					<div className="space-y-1">
+						<Checkbox
+							name="allowPrivateNetworks"
+							label="Allow private network addresses"
+							defaultChecked={channel.allowPrivateNetworks}
+						/>
+						<p className="pl-6 text-xs text-muted">
+							Lets webhooks post to hosts inside your network, such as
+							10.0.0.0/8, 192.168.0.0/16 or localhost. Anyone can add a webhook
+							on the public subscribe page, so turn this on only for an internal
+							webhook.
+						</p>
+					</div>
+				)}
 				{definition.sender && (
 					<Field
 						label={definition.sender.defaultLabel}

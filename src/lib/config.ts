@@ -40,8 +40,6 @@ export interface Config {
 	sendGridApiKey?: string;
 	aws?: { region: string; accessKeyId?: string; secretAccessKey?: string };
 	webhookSecret?: string;
-	/** Webhooks may post to private network addresses (`WEBHOOK_ALLOW_PRIVATE_NETWORKS`). */
-	webhookAllowPrivateNetworks: boolean;
 	/** Keys that encrypt provider credentials in the store. */
 	encryption: { key?: string; previousKeys: string[] };
 	/** Seed demo services and incidents into an empty store on boot. */
@@ -131,10 +129,6 @@ const envSchema = z.object({
 		.string()
 		.optional()
 		.transform((value) => value === "true" || value === "1"),
-	WEBHOOK_ALLOW_PRIVATE_NETWORKS: z
-		.string()
-		.optional()
-		.transform((value) => value === "true" || value === "1"),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -202,7 +196,6 @@ export function loadConfig(
 				}
 			: undefined,
 		webhookSecret: env.WEBHOOK_SECRET,
-		webhookAllowPrivateNetworks: env.WEBHOOK_ALLOW_PRIVATE_NETWORKS,
 		encryption: {
 			key: env.ENCRYPTION_KEY,
 			previousKeys: env.ENCRYPTION_KEY_PREVIOUS,

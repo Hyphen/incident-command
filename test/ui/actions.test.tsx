@@ -1271,16 +1271,27 @@ describe("notification settings actions", () => {
 			strategy: "load_balanced",
 			from: "Acme <status@acme.dev>",
 		});
-		// The webhook form has no strategy field and no sender field.
+		await redirectOf(
+			updateNotificationChannelAction(
+				form({ channel: "webhook", enabled: "on", allowPrivateNetworks: "on" }),
+			),
+		);
+		expect((await services.notificationSettings.list(actor))[0]).toMatchObject({
+			enabled: true,
+			allowPrivateNetworks: true,
+		});
+		// The webhook form has no strategy field and no sender field. A form
+		// without the boxes turns the channel and private network addresses off.
 		expectSameFlash(
 			await redirectOf(
 				updateNotificationChannelAction(form({ channel: "webhook" })),
 			),
 			`${PATH}?notice=Channel saved`,
 		);
-		expect((await services.notificationSettings.list(actor))[0]?.enabled).toBe(
-			false,
-		);
+		expect((await services.notificationSettings.list(actor))[0]).toMatchObject({
+			enabled: false,
+			allowPrivateNetworks: false,
+		});
 		expectFlashRedirect(
 			await redirectOf(
 				updateNotificationChannelAction(

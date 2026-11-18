@@ -14,8 +14,9 @@ export interface WebhookProviderOptions {
 	secret?: string;
 	timeoutMs?: number;
 	/**
-	 * Allows requests to private network addresses (`WEBHOOK_ALLOW_PRIVATE_NETWORKS`).
-	 * Off by default, so a webhook URL cannot reach a host inside the network of the server.
+	 * Allows requests to private network addresses. An admin sets it on the
+	 * webhook channel. Off by default, so a webhook URL cannot reach a host
+	 * inside the network of the server.
 	 */
 	allowPrivateNetworks?: boolean;
 	fetch?: typeof fetch;

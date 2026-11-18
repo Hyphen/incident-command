@@ -150,6 +150,12 @@ export interface NotificationChannelSettings {
 	from?: string;
 	/** In order. With `active_passive`, the first provider is the active one. */
 	providers: NotificationProvider[];
+	/**
+	 * The webhook channel only: when true, webhooks may post to private network
+	 * addresses. Off by default, so a webhook URL cannot reach a host inside the
+	 * network of the server.
+	 */
+	allowPrivateNetworks?: boolean;
 	/** Incremented on every write; used for optimistic concurrency. */
 	revision: number;
 	updatedAt: string;

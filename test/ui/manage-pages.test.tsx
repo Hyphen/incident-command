@@ -1591,6 +1591,13 @@ describe("admin pages", () => {
 		expect(
 			webhooks.queryByRole("heading", { name: "Providers" }),
 		).not.toBeInTheDocument();
+		// Only the webhook channel has the private network switch, and it starts off.
+		expect(
+			webhooks.getByLabelText("Allow private network addresses"),
+		).not.toBeChecked();
+		expect(
+			within(card("Email")).queryByLabelText("Allow private network addresses"),
+		).not.toBeInTheDocument();
 		expect(
 			webhooks.getByRole("button", { name: "Save channel" }),
 		).toBeInTheDocument();
