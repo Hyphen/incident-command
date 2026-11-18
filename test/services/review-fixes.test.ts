@@ -128,15 +128,22 @@ describe("subscription confirmations", () => {
 		const t = createTestContext();
 		t.notifier.confirmationResult = false;
 		const attempt = t.services.subscribers.subscribe({
-			email: "jane@example.com",
+			type: "email",
+			target: "jane@example.com",
 		});
 		await expect(attempt).rejects.toBeInstanceOf(AppError);
 		await expect(
-			t.services.subscribers.subscribe({ email: "jane@example.com" }),
-		).rejects.toThrow(/couldn't send the confirmation email/);
+			t.services.subscribers.subscribe({
+				type: "email",
+				target: "jane@example.com",
+			}),
+		).rejects.toThrow(/couldn't send the confirmation\./);
 		t.notifier.confirmationResult = true;
 		await expect(
-			t.services.subscribers.subscribe({ email: "jane@example.com" }),
+			t.services.subscribers.subscribe({
+				type: "email",
+				target: "jane@example.com",
+			}),
 		).resolves.toBe("confirmation_sent");
 		expect(await t.store.count("subscribers")).toBe(1);
 	});

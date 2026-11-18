@@ -1466,22 +1466,29 @@ describe("public subscribe actions", () => {
 	it("subscribes and unsubscribes", async () => {
 		const { notifier } = await setupApp();
 		expect(
-			await redirectOf(subscribeAction(form({ email: "jane@example.com" }))),
-		).toBe("/subscribe?status=confirmation_sent");
-		const badEmail = await redirectOf(subscribeAction(form({ email: "bad" })));
-		expect(new URL(badEmail, "http://localhost").pathname).toBe("/subscribe");
+			await redirectOf(
+				subscribeAction(form({ type: "email", target: "jane@example.com" })),
+			),
+		).toBe("/subscribe?channel=email&status=confirmation_sent");
+		// An error opens the same channel again.
+		const badEmail = await redirectOf(
+			subscribeAction(form({ type: "webhook", target: "bad" })),
+		);
+		const badUrl = new URL(badEmail, "http://localhost");
+		expect(badUrl.pathname).toBe("/subscribe");
+		expect(badUrl.searchParams.get("channel")).toBe("webhook");
 		expect(flashMessage(badEmail, "error")).toBe(
 			"Check the form and try again.",
 		);
-		const emptyEmail = await redirectOf(subscribeAction(new FormData()));
-		expect(new URL(emptyEmail, "http://localhost").pathname).toBe("/subscribe");
-		expect(flashMessage(emptyEmail, "error")).toBeTruthy();
+		const empty = await redirectOf(subscribeAction(new FormData()));
+		expect(new URL(empty, "http://localhost").pathname).toBe("/subscribe");
+		expect(flashMessage(empty, "error")).toBeTruthy();
 		notifier.confirmationResult = false;
 		const notSent = await redirectOf(
-			subscribeAction(form({ email: "sam@example.com" })),
+			subscribeAction(form({ type: "email", target: "sam@example.com" })),
 		);
 		expect(flashMessage(notSent, "error")).toBe(
-			"We couldn't send the confirmation email. Please try again later.",
+			"We couldn't send the confirmation. Please try again later.",
 		);
 		const token = notifier.confirmations[0]?.subscriber.token ?? "";
 		expect(await redirectOf(unsubscribeAction(form({ token })))).toBe(
@@ -1497,8 +1504,8 @@ describe("public subscribe actions", () => {
 		vi.spyOn(services.subscribers, "subscribe").mockRejectedValueOnce(
 			new Error("db down"),
 		);
-		await expect(subscribeAction(form({ email: "a@b.co" }))).rejects.toThrow(
-			"db down",
-		);
+		await expect(
+			subscribeAction(form({ type: "email", target: "a@b.co" })),
+		).rejects.toThrow("db down");
 	});
 });

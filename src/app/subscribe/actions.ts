@@ -7,18 +7,24 @@ import { flash, flashCodeForError } from "@/lib/flash";
 
 export async function subscribeAction(formData: FormData): Promise<void> {
 	const { services } = await getApp();
+	const type = String(formData.get("type") ?? "");
+	// After the redirect, the page opens the same channel again.
+	const page = type
+		? `/subscribe?channel=${encodeURIComponent(type)}`
+		: "/subscribe";
 	let outcome: string;
 	try {
 		outcome = await services.subscribers.subscribe({
-			email: String(formData.get("email") ?? ""),
+			type,
+			target: String(formData.get("target") ?? ""),
 		});
 	} catch (error) {
 		if (!isAppError(error)) {
 			throw error;
 		}
-		redirect(flash("/subscribe", flashCodeForError(error)));
+		redirect(flash(page, flashCodeForError(error)));
 	}
-	redirect(`/subscribe?status=${outcome}`);
+	redirect(`${page}&status=${outcome}`);
 }
 
 export async function unsubscribeAction(formData: FormData): Promise<void> {

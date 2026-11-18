@@ -1431,7 +1431,6 @@ describe("admin pages", () => {
 		expect(
 			screen.getByText(/These channels cannot send now: Text messaging\./),
 		).toBeInTheDocument();
-		expect(screen.queryByText(/public subscribe form/)).not.toBeInTheDocument();
 		expect(screen.getByRole("radio", { name: /Text message/ })).toBeDisabled();
 		expect(
 			screen.getByRole("link", { name: "Settings → Notifications" }),
@@ -1449,7 +1448,7 @@ describe("admin pages", () => {
 		const off = render(await SubscribersPage(flash()));
 		expect(
 			screen.getByText(
-				/cannot send now: Email, Text messaging\. .* and the public subscribe form is hidden/,
+				/cannot send now: Email, Text messaging\. Their subscribers get no notifications, and the public subscribe page does not offer them\./,
 			),
 		).toBeInTheDocument();
 		expect(screen.getByText("Subscribers (2)")).toBeInTheDocument();
@@ -1468,7 +1467,10 @@ describe("admin pages", () => {
 			name: "SNS",
 			values: { region: "us-east-1" },
 		});
-		await services.subscribers.subscribe({ email: "pending@example.com" });
+		await services.subscribers.subscribe({
+			type: "email",
+			target: "pending@example.com",
+		});
 		render(await SubscribersPage(flash()));
 		expect(screen.queryByText(/cannot send now/)).not.toBeInTheDocument();
 		expect(
@@ -1490,9 +1492,7 @@ describe("admin pages", () => {
 			within(tabs).getByRole("link", { name: "Notifications" }),
 		).toHaveAttribute("href", "/manage/settings/notifications");
 		expect(screen.getByLabelText("Uptime window (days)")).toHaveValue(30);
-		expect(
-			screen.getByLabelText("Allow visitors to subscribe by email"),
-		).toBeChecked();
+		expect(screen.getByLabelText("Allow visitors to subscribe")).toBeChecked();
 		expect(screen.queryByLabelText("Brand color")).not.toBeInTheDocument();
 	});
 

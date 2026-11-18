@@ -232,8 +232,6 @@ export const updateSettingsSchema = z.object({
 });
 export type UpdateSettingsInput = z.input<typeof updateSettingsSchema>;
 
-export const subscribeSchema = z.object({ email });
-
 const PHONE = /^\+[1-9][0-9]{6,14}$/;
 
 /** True for a phone number in E.164 format, such as `+15551234567`. */
@@ -251,11 +249,18 @@ const phone = z
 
 export const smsSubscriberSchema = z.object({ phone });
 
-export const webhookSubscriberSchema = z.object({
-	url: z.url({ protocol: /^https?$/ }).max(2000),
-});
+const webhookUrl = z.url({ protocol: /^https?$/ }).max(2000);
+
+export const webhookSubscriberSchema = z.object({ url: webhookUrl });
 
 export const emailSubscriberSchema = z.object({ email });
+
+/** A public subscription. The format of `target` follows `type`. */
+export const subscribeSchema = z.discriminatedUnion("type", [
+	z.object({ type: z.literal("email"), target: email }),
+	z.object({ type: z.literal("sms"), target: phone }),
+	z.object({ type: z.literal("webhook"), target: webhookUrl }),
+]);
 
 export const notificationChannelSchema = z.enum(SUBSCRIBER_TYPES);
 
