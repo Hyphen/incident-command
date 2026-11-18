@@ -5,6 +5,7 @@ import { PoweredBy } from "@/components/powered-by";
 import { publicLogoSrc } from "@/lib/brand";
 import type { Settings } from "@/lib/domain/types";
 import { FEED_PATH } from "@/lib/feed";
+import { LLMS_PATH } from "@/lib/llms";
 
 export function SiteHeader({
 	settings,
@@ -66,6 +67,9 @@ export function SiteFooter({ settings }: { settings: Settings }) {
 				</a>
 				<a href="/api/v1/status" className="hover:text-fg">
 					API
+				</a>
+				<a href={LLMS_PATH} className="hover:text-fg">
+					llms.txt
 				</a>
 			</span>
 		</footer>
