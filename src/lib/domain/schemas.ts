@@ -227,7 +227,6 @@ export const updateSettingsSchema = z.object({
 		.optional()
 		.transform((value) => (value === "" ? null : value)),
 	customCss: patchText(CUSTOM_CSS_MAX_LENGTH),
-	allowSubscriptions: z.boolean().optional(),
 	showPoweredBy: z.boolean().optional(),
 	uptimeDays: z.number().int().min(7).max(365).optional(),
 });

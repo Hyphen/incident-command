@@ -41,7 +41,6 @@ export class SettingsService {
 			description: "",
 			siteUrl: this.ctx.config.siteUrl,
 			theme: "default",
-			allowSubscriptions: true,
 			showPoweredBy: true,
 			uptimeDays: 90,
 			updatedAt: new Date(0).toISOString(),
@@ -50,7 +49,14 @@ export class SettingsService {
 
 	async get(): Promise<Settings> {
 		const stored = await this.ctx.store.get("settings", SETTINGS_ID);
-		return { ...this.defaults(), ...stored };
+		// Older versions stored `allowSubscriptions`. That setting is gone, so drop it.
+		const {
+			allowSubscriptions: _removed,
+			...current
+		}: Partial<Settings> & {
+			allowSubscriptions?: boolean;
+		} = stored ?? {};
+		return { ...this.defaults(), ...current };
 	}
 
 	/** The uploaded logo or favicon, or undefined when the admin did not upload one. */

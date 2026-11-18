@@ -31,18 +31,10 @@ export class SubscriberService {
 		this.notificationSettings = notificationSettings;
 	}
 
-	/**
-	 * The channels that the public subscribe page offers: each channel that
-	 * can send, when the settings allow subscriptions.
-	 */
+	/** The channels that the public subscribe page offers: each channel that can send. */
 	async channels(): Promise<SubscriberType[]> {
-		const [settings, available] = await Promise.all([
-			this.settings.get(),
-			this.notificationSettings.availability(),
-		]);
-		return settings.allowSubscriptions
-			? PUBLIC_CHANNELS.filter((type) => available[type])
-			: [];
+		const available = await this.notificationSettings.availability();
+		return PUBLIC_CHANNELS.filter((type) => available[type]);
 	}
 
 	/** Whether the public status page can offer subscriptions. */

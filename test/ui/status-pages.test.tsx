@@ -88,7 +88,11 @@ describe("root layout", () => {
 describe("status page", () => {
 	it("renders an empty, operational page", async () => {
 		const { services } = await setupApp();
-		await services.settings.update(SYSTEM_ACTOR, { allowSubscriptions: false });
+		for (const channel of ["email", "webhook"] as const) {
+			await services.notificationSettings.updateChannel(SYSTEM_ACTOR, channel, {
+				enabled: false,
+			});
+		}
 		render(await StatusPage());
 		expect(
 			screen.getByRole("heading", { name: "We're fully operational" }),

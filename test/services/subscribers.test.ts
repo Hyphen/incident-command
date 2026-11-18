@@ -108,7 +108,9 @@ describe("SubscriberService", () => {
 		).rejects.toBeInstanceOf(ForbiddenError);
 		await expect(t.services.subscribers.canSubscribe()).resolves.toBe(true);
 
-		await t.services.settings.update(ADMIN, { allowSubscriptions: false });
+		await t.services.notificationSettings.updateChannel(ADMIN, "webhook", {
+			enabled: false,
+		});
 		await expect(t.services.subscribers.channels()).resolves.toEqual([]);
 		await expect(t.services.subscribers.canSubscribe()).resolves.toBe(false);
 		await expect(

@@ -1043,7 +1043,6 @@ describe("subscriber and settings actions", () => {
 					description: "Hello",
 					siteUrl: "https://status.acme.dev",
 					supportUrl: "https://acme.dev/help",
-					allowSubscriptions: "on",
 					uptimeDays: "30",
 				}),
 			),
@@ -1056,7 +1055,6 @@ describe("subscriber and settings actions", () => {
 			siteUrl: "https://status.acme.dev",
 			theme: "ocean",
 			uptimeDays: 30,
-			allowSubscriptions: true,
 		});
 		expectFlashRedirect(
 			await redirectOf(
@@ -1071,10 +1069,7 @@ describe("subscriber and settings actions", () => {
 	it("saves branding without touching the general settings", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");
-		await services.settings.update(SYSTEM_ACTOR, {
-			allowSubscriptions: true,
-			uptimeDays: 30,
-		});
+		await services.settings.update(SYSTEM_ACTOR, { uptimeDays: 30 });
 		vi.mocked(revalidatePath).mockClear();
 		const url = await redirectOf(
 			updateBrandingAction(
@@ -1094,7 +1089,6 @@ describe("subscriber and settings actions", () => {
 			brandColor: "#ff0066",
 			customCss: ":root{}",
 			showPoweredBy: false,
-			allowSubscriptions: true,
 			uptimeDays: 30,
 		});
 		await redirectOf(
