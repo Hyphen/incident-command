@@ -258,9 +258,12 @@ describe("StatusService", () => {
 		]);
 		expect(older.months[0]?.incidents.map((i) => i.id)).toEqual([august.id]);
 		expect(older.newer).toBe("2026-11");
+		// August has the earliest incident, so the history stops there.
+		expect(older.older).toBeNull();
+		expect(await t.services.status.history("1775-02")).toEqual(older);
 
-		const middle = await t.services.status.history("2026-06", 2);
-		expect(middle.newer).toBe("2026-08");
+		const middle = await t.services.status.history("2026-08", 2);
+		expect(middle.newer).toBe("2026-10");
 		const recent = await t.services.status.history("2026-10");
 		expect(recent.newer).toBe("2026-11");
 
@@ -268,5 +271,22 @@ describe("StatusService", () => {
 		expect((await t.services.status.history("garbage")).months[0]?.key).toBe(
 			"2026-11",
 		);
+	});
+
+	it("has one history page when no incident started", async () => {
+		t.clock.set("2026-05-05T00:00:00.000Z");
+		await t.services.incidents.create(EDITOR, {
+			kind: "maintenance",
+			title: "Future",
+			message: "f",
+			scheduledStart: "2026-12-01T00:00:00.000Z",
+			scheduledEnd: "2026-12-01T01:00:00.000Z",
+		});
+		t.clock.set("2026-11-02T12:00:00.000Z");
+
+		const latest = await t.services.status.history();
+		expect(latest.older).toBeNull();
+		expect(latest.newer).toBeNull();
+		expect(await t.services.status.history("2026-05")).toEqual(latest);
 	});
 });
