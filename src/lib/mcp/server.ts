@@ -879,6 +879,12 @@ export function createMcpServer(
 						"A stylesheet that each page loads after the theme. It replaces the stored stylesheet.",
 					),
 				allowSubscriptions: z.boolean().optional(),
+				showPoweredBy: z
+					.boolean()
+					.optional()
+					.describe(
+						'Set to false to remove "Powered by Incident Command" from the public pages',
+					),
 				uptimeDays: z.number().int().optional(),
 			},
 		},

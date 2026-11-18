@@ -54,11 +54,11 @@ export function SiteHeader({
 	);
 }
 
-export function SiteFooter() {
+export function SiteFooter({ settings }: { settings: Settings }) {
 	return (
 		<footer className="ic-footer mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-4 pb-10 text-xs text-muted">
-			<PoweredBy />
-			<span className="flex gap-4">
+			{settings.showPoweredBy ? <PoweredBy /> : null}
+			<span className="ml-auto flex gap-4">
 				<Link href="/history" className="hover:text-fg">
 					History
 				</Link>
@@ -96,7 +96,7 @@ export function PublicPage({
 			<main className="ic-main mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 pb-16">
 				{children}
 			</main>
-			<SiteFooter />
+			<SiteFooter settings={settings} />
 		</div>
 	);
 }

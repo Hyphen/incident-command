@@ -228,6 +228,7 @@ export const updateSettingsSchema = z.object({
 		.transform((value) => (value === "" ? null : value)),
 	customCss: patchText(CUSTOM_CSS_MAX_LENGTH),
 	allowSubscriptions: z.boolean().optional(),
+	showPoweredBy: z.boolean().optional(),
 	uptimeDays: z.number().int().min(7).max(365).optional(),
 });
 export type UpdateSettingsInput = z.input<typeof updateSettingsSchema>;

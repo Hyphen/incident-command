@@ -1514,17 +1514,26 @@ describe("admin pages", () => {
 		expect(screen.getByLabelText("Favicon")).toHaveAttribute("type", "file");
 		// The admin uploads each file. The form has no URL field.
 		expect(screen.queryByLabelText(/URL/)).not.toBeInTheDocument();
-		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+		expect(
+			screen.queryByLabelText("Allow visitors to subscribe by email"),
+		).not.toBeInTheDocument();
 		expect(
 			screen.queryByLabelText("Uptime window (days)"),
 		).not.toBeInTheDocument();
+		expect(screen.getByLabelText(/Powered by Incident Command/)).toBeChecked();
 		first.unmount();
 
 		// A stored id of a removed preset selects the preset that the site shows.
 		// With no selection, the form sends no theme and the save fails.
-		await services.settings.update(SYSTEM_ACTOR, { theme: "midnight" });
+		await services.settings.update(SYSTEM_ACTOR, {
+			theme: "midnight",
+			showPoweredBy: false,
+		});
 		render(await BrandingPage(flash()));
 		expect(screen.getByDisplayValue("carbon")).toBeChecked();
+		expect(
+			screen.getByLabelText(/Powered by Incident Command/),
+		).not.toBeChecked();
 	});
 
 	it("shows each uploaded file and a control to remove it", async () => {

@@ -577,6 +577,7 @@ export async function updateBrandingAction(form: FormData): Promise<void> {
 				theme: text(form, "theme"),
 				brandColor: optionalText(form, "brandColor"),
 				customCss: optionalText(form, "customCss"),
+				showPoweredBy: checkbox(form, "showPoweredBy"),
 			},
 			{
 				logo: await brandAssetChange(form, "logo", "removeLogo"),

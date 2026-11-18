@@ -24,10 +24,11 @@ There are three levels of customization, from no code to full control. An agent 
 - **Logo:** upload a PNG, JPEG, WebP, GIF or SVG file. The maximum size of a file is 512 KB.
 - **Favicon:** upload an ICO, PNG, JPEG, WebP, GIF or SVG file. The maximum size of a file is 512 KB.
 - **Custom CSS:** inlined on every page after the theme, so it can override any token or style. `<` is escaped so the stylesheet can never break out of its `<style>` tag.
+- **Powered by:** clear **Show "Powered by Incident Command" on the public pages** to remove the line from the footer of the public pages. The setting is on by default.
 
 The app stores the logo and the favicon in the database. It loads them into memory at startup and serves them from `/brand/logo` and `/brand/favicon`. Thus the status page shows your brand when your website or the database is down. An agent uploads a file with the `upload_brand_asset` MCP tool.
 
-The status page and the manage portal show "Powered by Incident Command" at the bottom. This line stays on the page.
+By default, the status page and the manage portal show "Powered by Incident Command" at the bottom. The **Powered by** setting removes the line from the public pages. The manage portal always shows the line.
 
 ## 2. Custom CSS
 

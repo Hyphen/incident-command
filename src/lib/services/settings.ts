@@ -42,6 +42,7 @@ export class SettingsService {
 			siteUrl: this.ctx.config.siteUrl,
 			theme: "default",
 			allowSubscriptions: true,
+			showPoweredBy: true,
 			uptimeDays: 90,
 			updatedAt: new Date(0).toISOString(),
 		};
