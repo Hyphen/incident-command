@@ -14,21 +14,21 @@ export function SiteHeader({
 }) {
 	const logoSrc = publicLogoSrc(settings);
 	return (
-		<header className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-4 px-4 pt-10 pb-6">
+		<header className="ic-header mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-4 px-4 pt-10 pb-6">
 			<Link href="/" className="flex items-center gap-3">
 				{logoSrc ? (
 					<LogoImage
 						src={logoSrc}
 						alt={settings.siteName}
-						className="h-8 w-auto max-w-48 object-contain"
+						className="ic-logo h-8 w-auto max-w-48 object-contain"
 					/>
 				) : (
-					<span className="text-lg font-semibold tracking-tight">
+					<span className="ic-site-name text-lg font-semibold tracking-tight">
 						{settings.siteName}
 					</span>
 				)}
 			</Link>
-			<nav className="flex items-center gap-2 text-sm">
+			<nav className="ic-nav flex items-center gap-2 text-sm">
 				{settings.supportUrl && (
 					<a
 						href={settings.supportUrl}
@@ -42,7 +42,7 @@ export function SiteHeader({
 				{canSubscribe && (
 					<Link
 						href="/subscribe"
-						className="rounded-full bg-brand px-4 py-1.5 font-medium text-brand-fg hover:opacity-90"
+						className="ic-subscribe rounded-full bg-brand px-4 py-1.5 font-medium text-brand-fg hover:opacity-90"
 					>
 						Subscribe to updates
 					</Link>
@@ -54,7 +54,7 @@ export function SiteHeader({
 
 export function SiteFooter() {
 	return (
-		<footer className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-4 pb-10 text-xs text-muted">
+		<footer className="ic-footer mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-4 pb-10 text-xs text-muted">
 			<PoweredBy />
 			<span className="flex gap-4">
 				<Link href="/history" className="hover:text-fg">
@@ -68,7 +68,11 @@ export function SiteFooter() {
 	);
 }
 
-/** Layout used by every public page. */
+/**
+ * Layout used by every public page. The `ic-*` class names on the public
+ * pages are the selectors of the design guide (`src/lib/design.ts`). Custom
+ * CSS uses them, thus do not rename or remove one.
+ */
 export function PublicPage({
 	settings,
 	canSubscribe,
@@ -79,9 +83,9 @@ export function PublicPage({
 	children: ReactNode;
 }) {
 	return (
-		<div className="flex min-h-dvh flex-col">
+		<div className="ic-page flex min-h-dvh flex-col">
 			<SiteHeader settings={settings} canSubscribe={canSubscribe} />
-			<main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 pb-16">
+			<main className="ic-main mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 pb-16">
 				{children}
 			</main>
 			<SiteFooter />

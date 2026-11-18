@@ -33,9 +33,9 @@ export function IncidentList({
 					<h3 className="mb-2 text-sm font-semibold text-muted">
 						{formatDay(day)}
 					</h3>
-					<ul className="divide-y divide-border rounded-card border border-border bg-surface">
+					<ul className="ic-incident-list divide-y divide-border rounded-card border border-border bg-surface">
 						{items.map((incident) => (
-							<li key={incident.id} className="px-5 py-4">
+							<li key={incident.id} className="ic-incident-item px-5 py-4">
 								<div className="flex flex-wrap items-center justify-between gap-2">
 									<Link
 										href={`/incidents/${incident.id}`}

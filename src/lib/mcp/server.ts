@@ -1,6 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { publicFaviconSrc, publicLogoSrc } from "../brand";
+import { designGuide } from "../design";
+import { decodeBrandAsset } from "../domain/brand-asset";
 import { can, PERMISSIONS, type Permission } from "../domain/permissions";
 import {
 	eventStatusSchema,
@@ -11,8 +14,10 @@ import {
 } from "../domain/schemas";
 import {
 	type AgentActor,
+	BRAND_ASSET_KINDS,
 	DELIVERY_STRATEGIES,
 	type Incident,
+	type Settings,
 	SUBSCRIBER_TYPES,
 } from "../domain/types";
 import { formatUptime } from "../domain/uptime";
@@ -42,12 +47,17 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
 - Everything you post is public on the status page and may notify subscribers. Write for customers.`;
 
+const DESIGN_INSTRUCTIONS = `
+- To change the design of the status page, call get_design_guide first. It lists the theme presets,
+  the design tokens and the CSS selectors. Then use update_settings (theme, brandColor, customCss)
+  and upload_brand_asset (logo, favicon).`;
+
 function instructionsFor(actor: AgentActor): string {
-	if (!can(actor, "incidents.publish")) {
-		return `${BASE_INSTRUCTIONS}
-- Use draft_notification. A person approves each draft.`;
-	}
-	return BASE_INSTRUCTIONS;
+	const draft = can(actor, "incidents.publish")
+		? ""
+		: "\n- Use draft_notification. A person approves each draft.";
+	const design = can(actor, "settings.write") ? DESIGN_INSTRUCTIONS : "";
+	return `${BASE_INSTRUCTIONS}${draft}${design}`;
 }
 
 const id = z.string().min(1).describe("The record id");
@@ -165,6 +175,17 @@ export function createMcpServer(
 	async function portalUrl(path: string): Promise<string> {
 		const { siteUrl } = await services.settings.get();
 		return `${siteUrl ?? origin}${path}`;
+	}
+
+	/** The settings, with the full URL of the logo and of the favicon when a file is stored. */
+	async function settingsView(settings: Settings) {
+		const logo = publicLogoSrc(settings);
+		const favicon = publicFaviconSrc(settings);
+		return {
+			...settings,
+			...(logo ? { logoUrl: await portalUrl(logo) } : {}),
+			...(favicon ? { faviconUrl: await portalUrl(favicon) } : {}),
+		};
 	}
 
 	function tool<S extends z.ZodRawShape>(
@@ -805,11 +826,26 @@ export function createMcpServer(
 		"get_settings",
 		{
 			title: "Get settings",
-			description: "Status page settings and branding.",
+			description:
+				"Status page settings and branding. logoUrl and faviconUrl show when a file is stored.",
 			inputSchema: {},
 			readOnly: true,
 		},
-		async () => services.settings.get(),
+		async () => settingsView(await services.settings.get()),
+	);
+
+	// The guide holds no settings. Only an agent that can change the design needs it.
+	tool(
+		"settings.write",
+		"get_design_guide",
+		{
+			title: "Get design guide",
+			description:
+				"The reference for a custom design of the status page: the theme presets, the design tokens, the CSS selectors for customCss, the rules, the limits and an example. Read it before you change the design.",
+			inputSchema: {},
+			readOnly: true,
+		},
+		async () => designGuide(),
 	);
 
 	tool(
@@ -818,7 +854,7 @@ export function createMcpServer(
 		{
 			title: "Update settings",
 			description:
-				"Updates status page settings and branding. Pass null or an empty string to clear optional values. Upload the logo and the favicon in the portal.",
+				"Updates status page settings and branding. Pass null or an empty string to clear optional values. customCss replaces the stored stylesheet. Call get_design_guide for the tokens and the selectors that customCss can use. Use upload_brand_asset for the logo and the favicon.",
 			inputSchema: {
 				siteName: z.string().optional(),
 				description: z.string().optional(),
@@ -835,12 +871,65 @@ export function createMcpServer(
 					.nullable()
 					.optional()
 					.describe("Hex color such as #4f46e5"),
-				customCss: z.string().nullable().optional(),
+				customCss: z
+					.string()
+					.nullable()
+					.optional()
+					.describe(
+						"A stylesheet that each page loads after the theme. It replaces the stored stylesheet.",
+					),
 				allowSubscriptions: z.boolean().optional(),
 				uptimeDays: z.number().int().optional(),
 			},
 		},
-		async (args) => services.settings.update(actor, args),
+		async (args) => settingsView(await services.settings.update(actor, args)),
+	);
+
+	tool(
+		"settings.write",
+		"upload_brand_asset",
+		{
+			title: "Upload brand asset",
+			description:
+				"Stores the logo or the favicon of the status page. It replaces the stored file. The maximum size of a file is 512 KB. A logo is a PNG, JPEG, WebP, GIF or SVG file. A favicon can also be an ICO file. An SVG file cannot contain a script or an event handler.",
+			inputSchema: {
+				kind: z.enum(BRAND_ASSET_KINDS),
+				data: z
+					.string()
+					.describe(
+						"The file as base64 text, as a base64 data URL, or as the source text of an SVG image",
+					),
+			},
+			target: ({ kind }) => ({ type: "brand_asset", id: kind }),
+		},
+		async ({ kind, data }) =>
+			settingsView(
+				await services.settings.updateBranding(
+					actor,
+					{},
+					{ [kind]: { bytes: decodeBrandAsset(data) } },
+				),
+			),
+	);
+
+	tool(
+		"settings.write",
+		"remove_brand_asset",
+		{
+			title: "Remove brand asset",
+			description:
+				"Removes the stored logo or favicon. The header then shows the site name, or the browser shows its default icon.",
+			inputSchema: { kind: z.enum(BRAND_ASSET_KINDS) },
+			target: ({ kind }) => ({ type: "brand_asset", id: kind }),
+		},
+		async ({ kind }) =>
+			settingsView(
+				await services.settings.updateBranding(
+					actor,
+					{},
+					{ [kind]: { remove: true } },
+				),
+			),
 	);
 
 	tool(

@@ -29,7 +29,7 @@ export const STATUS_TEXT: Record<ServiceStatus, string> = {
 };
 
 const pill =
-	"inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
+	"ic-badge inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
 
 export function StatusDot({ status }: { status: ServiceStatus }) {
 	return (
