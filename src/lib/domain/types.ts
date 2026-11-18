@@ -51,14 +51,12 @@ export const NOTIFICATION_CHANNELS: readonly NotificationChannel[] =
 export const DELIVERY_STRATEGIES = ["active_passive", "load_balanced"] as const;
 export type DeliveryStrategy = (typeof DELIVERY_STRATEGIES)[number];
 
-export const PROVIDER_TYPES = [
-	"webhook",
-	"sendgrid",
-	"ses",
-	"twilio",
-	"sns",
-] as const;
+/** The provider types that an admin can add to the email or text messaging channel. */
+export const PROVIDER_TYPES = ["sendgrid", "ses", "twilio", "sns"] as const;
 export type ProviderType = (typeof PROVIDER_TYPES)[number];
+
+/** A provider type, or `webhook`: the built-in webhook sender of the server. */
+export type SenderType = ProviderType | "webhook";
 
 export type DraftAction = "create" | "update";
 export type DraftState = "pending" | "approved" | "discarded";
@@ -168,7 +166,7 @@ export interface PublicNotificationProvider
 
 /** A provider that environment variables configure. */
 export interface EnvironmentProvider {
-	type: ProviderType;
+	type: SenderType;
 	name: string;
 }
 

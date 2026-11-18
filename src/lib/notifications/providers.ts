@@ -113,14 +113,11 @@ export function createProvider(
 	allowPrivateNetworks = false,
 ): AirhornProvider {
 	switch (provider.type) {
-		case "webhook": {
-			const seconds = Number(provider.options.timeoutSeconds);
+		case "webhook":
 			return new WebhookProvider({
 				secret: provider.secrets.signingSecret,
-				timeoutMs: seconds > 0 ? seconds * 1000 : undefined,
 				allowPrivateNetworks,
 			});
-		}
 		case "sendgrid":
 			return new SendGridProvider({
 				apiKey: provider.secrets.apiKey as string,

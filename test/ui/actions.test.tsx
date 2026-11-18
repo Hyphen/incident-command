@@ -1271,13 +1271,15 @@ describe("notification settings actions", () => {
 			strategy: "load_balanced",
 			from: "Acme <status@acme.dev>",
 		});
-		await redirectOf(
-			updateNotificationChannelAction(
-				form({ channel: "webhook", enabled: "on", strategy: "active_passive" }),
+		// The webhook form has no strategy field and no sender field.
+		expectSameFlash(
+			await redirectOf(
+				updateNotificationChannelAction(form({ channel: "webhook" })),
 			),
+			`${PATH}?notice=Channel saved`,
 		);
 		expect((await services.notificationSettings.list(actor))[0]?.enabled).toBe(
-			true,
+			false,
 		);
 		expectFlashRedirect(
 			await redirectOf(
