@@ -111,6 +111,16 @@ export default async function SubscribePage({ searchParams }: Props) {
 					hints={HINTS}
 				/>
 				<FeedHint />
+				<p className="text-sm">
+					To stop updates,{" "}
+					<Link
+						href="/subscribe/unsubscribe"
+						className="underline hover:text-fg"
+					>
+						unsubscribe
+					</Link>
+					.
+				</p>
 			</NoticeCard>
 		);
 	}

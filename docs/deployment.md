@@ -89,6 +89,7 @@ Admins set up notifications in **Manage → Settings → Notifications**. Incide
 - Amazon SNS takes a sender ID of up to 11 letters and digits. When the sender is a phone number, SNS sends it as the origination number. The number must be an origination number of your AWS account.
 - The public subscribe page offers each channel that is on and can send: email, text message and webhook. To stop public sign-ups through a channel, turn that channel off. The channel sends a confirmation link to the address, phone number or URL. Notifications start only after a click on that link.
 - A webhook confirmation has `"event": "subscription.confirm"`, `text`, `content` and `confirmUrl`. Slack and Discord show the text with the link.
+- A visitor unsubscribes on `/subscribe/unsubscribe`. The visitor chooses the channel and enters the email address, phone number or webhook URL. The page gives the same answer when the address has no subscription. The link in each email opens the same page and unsubscribes with one click.
 - Admins add subscribers in **Manage → Subscribers** or with the `add_subscriber` MCP tool. These subscribers get no confirmation. Get consent before you add a phone number.
 - `SITE_URL` is used to build the links in notifications, so set it to the public URL.
 

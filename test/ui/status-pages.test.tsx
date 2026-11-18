@@ -417,6 +417,10 @@ describe("subscription pages", () => {
 		expect(
 			screen.getByRole("heading", { name: "Get Acme updates" }),
 		).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "unsubscribe" })).toHaveAttribute(
+			"href",
+			"/subscribe/unsubscribe",
+		);
 		expect(screen.getByLabelText("Email address")).toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "RSS feed" })).toHaveAttribute(
 			"href",
@@ -611,12 +615,41 @@ describe("subscription pages", () => {
 			screen.getByRole("button", { name: "Unsubscribe" }),
 		).toBeInTheDocument();
 		expect(document.querySelector('input[name="token"]')).toHaveValue("abc");
+		expect(screen.queryByRole("group", { name: "Channel" })).toBeNull();
 		page.unmount();
-		const empty = render(await UnsubscribePage({ searchParams: params({}) }));
-		expect(document.querySelector('input[name="token"]')).toHaveValue("");
-		empty.unmount();
 		render(await UnsubscribePage({ searchParams: params({ done: "1" }) }));
 		expect(screen.getByText("You've been unsubscribed")).toBeInTheDocument();
+	});
+
+	it("asks for the address without a token", async () => {
+		await setupApp();
+		// Text messaging cannot send in the test environment, but a visitor can still leave it.
+		const form = render(await UnsubscribePage({ searchParams: params({}) }));
+		const picker = screen.getByRole("group", { name: "Channel" });
+		for (const radio of within(picker).getAllByRole("radio")) {
+			expect(radio).toBeEnabled();
+		}
+		expect(screen.getByRole("radio", { name: "Email" })).toBeChecked();
+		expect(screen.getByLabelText("Email address")).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "Unsubscribe" }),
+		).toBeInTheDocument();
+		expect(document.querySelector('input[name="token"]')).toBeNull();
+		form.unmount();
+
+		// After an error, the page opens the same channel and shows the error.
+		render(
+			await UnsubscribePage({
+				searchParams: params({
+					channel: "sms",
+					...flashQueryParams({ error: "validation_failed" }),
+				}),
+			}),
+		);
+		expect(screen.getByRole("radio", { name: "Text message" })).toBeChecked();
+		expect(screen.getByRole("alert")).toHaveTextContent(
+			"Check the form and try again.",
+		);
 	});
 });
 

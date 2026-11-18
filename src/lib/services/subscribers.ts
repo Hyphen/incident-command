@@ -102,6 +102,22 @@ export class SubscriberService {
 			: false;
 	}
 
+	/**
+	 * Removes the subscriber of an address, as a visitor enters it on the
+	 * public unsubscribe page. The result is the same when the address has no
+	 * subscription, so the page does not show who subscribes.
+	 */
+	async unsubscribeAddress(input: {
+		type: string;
+		target: string;
+	}): Promise<void> {
+		const { target } = parse(subscribeSchema, input);
+		const subscriber = await this.findByTarget(target);
+		if (subscriber) {
+			await this.ctx.store.delete("subscribers", subscriber.id);
+		}
+	}
+
 	async list(actor: Actor): Promise<Omit<Subscriber, "token">[]> {
 		requirePermission(actor, "subscribers.read");
 		const subscribers = await this.ctx.store.find("subscribers", {
