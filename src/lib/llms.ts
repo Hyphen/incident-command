@@ -252,7 +252,7 @@ export function historyMarkdown(
 				`## ${formatMonth(month.key)}\n\n${incidentList(month.incidents, "No incidents reported.", origin)}`,
 		),
 		pages([
-			`- ${link("Older months", page(history.older))}`,
+			history.older && `- ${link("Older months", page(history.older))}`,
 			history.newer && `- ${link("Newer months", page(history.newer))}`,
 			`- ${link("Current status", `${origin}${LLMS_PATH}`)}`,
 		]),

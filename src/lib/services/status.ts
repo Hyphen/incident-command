@@ -110,8 +110,8 @@ export interface HistoryMonth {
 
 export interface HistoryPage {
 	months: HistoryMonth[];
-	/** Key of the page with older months. */
-	older: string;
+	/** Key of the page with older months, or `null` for the earliest page. */
+	older: string | null;
 	/** Key of the page with newer months, or `null` for the latest page. */
 	newer: string | null;
 }
@@ -307,13 +307,24 @@ export class StatusService {
 	/**
 	 * Incident history paginated by month. `month` (`YYYY-MM`) is the newest
 	 * month on the page; defaults to the current month.
+	 *
+	 * The history starts at the month of the earliest incident. A page does not
+	 * start before that month, and the earliest page has no older page. Thus a
+	 * crawler that follows the "older" links comes to an end.
 	 */
 	async history(month?: string, months = 3): Promise<HistoryPage> {
 		const current = monthKey(this.ctx.now());
-		const newest =
+		const [first] = await this.ctx.store.find("incidents", {
+			where: [{ field: "status", op: "ne", value: "scheduled" }],
+			sort: [{ field: "createdAt" }],
+			limit: 1,
+		});
+		const earliest = first ? first.createdAt.slice(0, 7) : current;
+		const requested =
 			month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) && month < current
 				? month
 				: current;
+		const newest = requested.localeCompare(earliest) < 0 ? earliest : requested;
 		const oldest = addMonths(newest, -(months - 1));
 		const incidents = (
 			await this.incidents.list({
@@ -334,7 +345,7 @@ export class StatusService {
 		const newer = addMonths(newest, months);
 		return {
 			months: result,
-			older: addMonths(oldest, -1),
+			older: oldest > earliest ? addMonths(oldest, -1) : null,
 			newer:
 				newest === current
 					? null

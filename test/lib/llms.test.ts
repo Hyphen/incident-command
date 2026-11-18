@@ -176,6 +176,12 @@ describe("history.md", () => {
 		await services.settings.update(SYSTEM_ACTOR, {
 			siteUrl: "https://status.acme.dev",
 		});
+		clock.set("2026-05-05T00:00:00.000Z");
+		await services.incidents.create(SYSTEM_ACTOR, {
+			title: "May blip",
+			message: "x",
+			status: "resolved",
+		});
 		clock.set("2026-10-10T00:00:00.000Z");
 		const blip = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "October blip",
@@ -229,6 +235,8 @@ No incidents reported.
 		expect(older).toContain(
 			"- [Newer months](https://status.acme.dev/history.md?month=2026-08)",
 		);
+		// May has the earliest incident, so the page has no older page.
+		expect(older).not.toContain("Older months");
 	});
 });
 

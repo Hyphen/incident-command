@@ -359,6 +359,12 @@ describe("incident page", () => {
 describe("history page", () => {
 	it("lists months with pagination", async () => {
 		const { services, clock } = await setupApp();
+		clock.set("2026-05-05T00:00:00.000Z");
+		await services.incidents.create(SYSTEM_ACTOR, {
+			title: "May blip",
+			message: "x",
+			status: "resolved",
+		});
 		clock.set("2026-10-10T00:00:00.000Z");
 		await services.incidents.create(SYSTEM_ACTOR, {
 			title: "October blip",
@@ -389,13 +395,24 @@ describe("history page", () => {
 		});
 	});
 
-	it("links to newer pages", async () => {
-		await setupApp();
+	it("links to newer pages from the earliest page", async () => {
+		const { services, clock } = await setupApp();
+		clock.set("2026-05-05T00:00:00.000Z");
+		await services.incidents.create(SYSTEM_ACTOR, {
+			title: "May blip",
+			message: "x",
+			status: "resolved",
+		});
+		clock.set("2026-11-02T12:00:00.000Z");
 		render(await HistoryPage({ searchParams: params({ month: "2026-05" }) }));
+		expect(screen.getByText("May blip")).toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "Newer →" })).toHaveAttribute(
 			"href",
 			"/history?month=2026-08",
 		);
+		expect(
+			screen.queryByRole("link", { name: "← Older" }),
+		).not.toBeInTheDocument();
 		expect(
 			await historyMetadata({ searchParams: params({ month: "2026-05" }) }),
 		).toEqual({
@@ -407,6 +424,17 @@ describe("history page", () => {
 				},
 			},
 		});
+	});
+
+	it("shows no pagination when no incident started", async () => {
+		await setupApp();
+		render(await HistoryPage({ searchParams: params({ month: "1775-02" }) }));
+		expect(
+			screen.getByRole("heading", { name: "November 2026" }),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("navigation", { name: "History pagination" }),
+		).not.toBeInTheDocument();
 	});
 });
 

@@ -52,25 +52,29 @@ export default async function HistoryPage({ searchParams }: Props) {
 					/>
 				</section>
 			))}
-			<nav
-				className="flex justify-between text-sm"
-				aria-label="History pagination"
-			>
-				<Link
-					href={`/history?month=${history.older}`}
-					className="text-muted hover:text-fg"
+			{(history.older || history.newer) && (
+				<nav
+					className="flex justify-between text-sm"
+					aria-label="History pagination"
 				>
-					← Older
-				</Link>
-				{history.newer && (
-					<Link
-						href={`/history?month=${history.newer}`}
-						className="text-muted hover:text-fg"
-					>
-						Newer →
-					</Link>
-				)}
-			</nav>
+					{history.older && (
+						<Link
+							href={`/history?month=${history.older}`}
+							className="text-muted hover:text-fg"
+						>
+							← Older
+						</Link>
+					)}
+					{history.newer && (
+						<Link
+							href={`/history?month=${history.newer}`}
+							className="ml-auto text-muted hover:text-fg"
+						>
+							Newer →
+						</Link>
+					)}
+				</nav>
+			)}
 		</PublicPage>
 	);
 }
