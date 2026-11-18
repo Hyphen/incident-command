@@ -2,7 +2,7 @@
 
 Every color, radius and font in the UI comes from a small set of CSS custom properties (design tokens). Components only use Tailwind CSS v4 utilities mapped to those tokens (`bg-surface`, `text-muted`, `border-border`, `bg-operational`, `rounded-card`, …), so a theme is nothing more than a set of variables.
 
-There are three levels of customization, from no code to full control.
+There are three levels of customization, from no code to full control. An agent can do the first two levels with the MCP server. See [Design the status page](mcp.md#design-the-status-page).
 
 ## 1. In the portal (no code)
 
@@ -25,11 +25,17 @@ There are three levels of customization, from no code to full control.
 - **Favicon:** upload an ICO, PNG, JPEG, WebP, GIF or SVG file. The maximum size of a file is 512 KB.
 - **Custom CSS:** inlined on every page after the theme, so it can override any token or style. `<` is escaped so the stylesheet can never break out of its `<style>` tag.
 
-The app stores the logo and the favicon in the database. It loads them into memory at startup and serves them from `/brand/logo` and `/brand/favicon`. Thus the status page shows your brand when your website or the database is down. The `update_settings` MCP tool cannot upload a file. Upload the files in the portal.
+The app stores the logo and the favicon in the database. It loads them into memory at startup and serves them from `/brand/logo` and `/brand/favicon`. Thus the status page shows your brand when your website or the database is down. An agent uploads a file with the `upload_brand_asset` MCP tool.
 
 The status page and the manage portal show "Powered by Incident Command" at the bottom. This line stays on the page.
 
-## 2. Override tokens with custom CSS
+## 2. Custom CSS
+
+The page loads the custom CSS after the theme. Thus the custom CSS can change each token and each style. The maximum length of the custom CSS is 50,000 characters.
+
+### Tokens
+
+Set a token to change a color, the corner radius or the font on all pages.
 
 ```css
 /* Load a web font (@import must come first) */
@@ -62,6 +68,75 @@ The status page and the manage portal show "Powered by Incident Command" at the 
 | `--ic-nodata`        | Uptime bars with no data          |
 | `--ic-radius`        | Card corner radius                |
 | `--ic-font`          | Font stack                        |
+
+### Selectors
+
+Each element of the public pages has a class name that starts with `ic-`. Use these class names to change one element. They stay the same between releases. The other class names of an element are Tailwind CSS utilities, and they can change.
+
+| Selector            | Element                                                       | Data attributes            |
+| ------------------- | ------------------------------------------------------------- | -------------------------- |
+| `.ic-page`          | The root of each public page. The portal does not have it.    |                            |
+| `.ic-header`        | The header of the page.                                       |                            |
+| `.ic-logo`          | The uploaded logo in the header.                              |                            |
+| `.ic-site-name`     | The site name in the header. It shows when no logo is stored. |                            |
+| `.ic-nav`           | The links in the header.                                      |                            |
+| `.ic-subscribe`     | The subscribe button.                                         |                            |
+| `.ic-main`          | The content column.                                           |                            |
+| `.ic-footer`        | The footer of the page.                                       |                            |
+| `.ic-banner`        | The banner that shows the overall status.                     | `data-status`              |
+| `.ic-description`   | The description below the banner.                             |                            |
+| `.ic-incident`      | The card of an open incident or of maintenance.               | `data-kind`, `data-status` |
+| `.ic-services`      | The system status card.                                       |                            |
+| `.ic-group`         | The heading of a service group.                               |                            |
+| `.ic-service`       | The row of one service.                                       | `data-status`              |
+| `.ic-uptime`        | The uptime history of one service.                            |                            |
+| `.ic-uptime-day`    | One day in the uptime history.                                | `data-status`              |
+| `.ic-uptime-bar`    | The colored bar of one day.                                   |                            |
+| `.ic-incident-list` | The list of the incidents of one day.                         |                            |
+| `.ic-incident-item` | One incident in that list.                                    |                            |
+| `.ic-badge`         | A status label with a colored dot.                            |                            |
+| `.ic-timeline`      | The updates of one incident.                                  |                            |
+| `.ic-update`        | One update in the timeline.                                   |                            |
+| `.ic-notice`        | The card on the subscription pages.                           |                            |
+
+A `data-status` value is `operational`, `under_maintenance`, `degraded_performance`, `partial_outage` or `major_outage`. A day in the uptime history that has no data has the value `no_data`. A `data-kind` value is `incident` or `maintenance`.
+
+```css
+/* A thicker border on the banner during a major outage */
+.ic-banner[data-status="major_outage"] {
+	border: 2px solid var(--ic-major);
+}
+
+/* Round uptime bars */
+.ic-uptime-bar {
+	border-radius: 9999px;
+}
+
+/* A larger logo */
+.ic-logo {
+	height: 3rem;
+}
+```
+
+### Rules
+
+- The custom CSS loads on each page. The portal is included, and it shows some of these elements, such as `.ic-badge`. Start a selector with `.ic-page` to change only the public pages.
+- To set a token for the public pages only, use `:root:has(.ic-page)`:
+
+  ```css
+  :root:has(.ic-page) {
+  	--ic-bg: #0b1020;
+  	--ic-surface: #121a33;
+  	--ic-fg: #e8ecff;
+  }
+  ```
+
+- The **Brand color** setting is stronger than `--ic-brand` in the custom CSS. Remove the brand color to control `--ic-brand` in the CSS.
+- The `default` preset has a dark mode. Use `@media (prefers-color-scheme: dark)` to set dark mode values.
+- Keep sufficient contrast between text and background. Keep a different color for each status.
+- A class name without the `ic-` prefix can change between releases. Do not use it in a selector.
+
+The `get_design_guide` MCP tool gives the same tokens, selectors and rules to an agent. The source of both lists is `src/lib/design.ts`.
 
 ## 3. Add a theme preset (code)
 

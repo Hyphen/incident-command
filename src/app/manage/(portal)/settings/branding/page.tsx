@@ -184,6 +184,17 @@ export default async function BrandingPage({
 											":root { --ic-radius: 0; --ic-font: 'Inter', sans-serif; }"
 										}
 									</code>
+									. Use an <code>ic-*</code> class name to change one element,
+									e.g. <code>{".ic-banner { border-width: 2px; }"}</code>. The{" "}
+									<a
+										href="https://github.com/jaredwray/incident-command/blob/main/docs/theming.md#2-custom-css"
+										className="underline underline-offset-2 hover:text-fg"
+										target="_blank"
+										rel="noreferrer"
+									>
+										theming guide
+									</a>{" "}
+									lists the tokens and the class names.
 								</>
 							}
 						>

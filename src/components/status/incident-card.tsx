@@ -13,7 +13,11 @@ export function affectedNames(
 		.map((service) => service.name);
 }
 
-/** Card for an open incident or maintenance showing its latest update. */
+/**
+ * Card for an open incident or maintenance showing its latest update.
+ * The title link covers the full card. A click on any part of the card opens
+ * the incident page.
+ */
 export function IncidentCard({
 	incident,
 	services,
@@ -29,14 +33,18 @@ export function IncidentCard({
 		incident.status,
 	);
 	return (
-		<article className="relative overflow-hidden rounded-card border border-border bg-surface">
+		<article
+			data-kind={incident.kind}
+			data-status={color}
+			className="ic-incident group relative overflow-hidden rounded-card border border-border bg-surface transition-colors hover:bg-surface-muted has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 has-[a:focus-visible]:outline-brand"
+		>
 			<div className={`absolute inset-y-0 left-0 w-1 ${STATUS_BG[color]}`} />
 			<div className="p-5 pl-6">
 				<div className="flex flex-wrap items-start justify-between gap-3">
 					<h2 className="font-semibold">
 						<Link
 							href={`/incidents/${incident.id}`}
-							className="hover:underline"
+							className="outline-none after:absolute after:inset-0 group-hover:underline"
 						>
 							{incident.title}
 						</Link>

@@ -1,6 +1,6 @@
 # MCP server
 
-Incident Command ships a [Model Context Protocol](https://modelcontextprotocol.io) server so AI agents can run the whole thing: declare and update incidents, change service status, schedule maintenance, and (with an admin token) manage members, tokens, subscribers and settings.
+Incident Command ships a [Model Context Protocol](https://modelcontextprotocol.io) server so AI agents can run the whole thing: declare and update incidents, change service status, schedule maintenance, and (with an admin token) manage members, tokens, subscribers and settings. An agent can also [design the status page](#design-the-status-page).
 
 - **Endpoint:** `POST https://<your-host>/api/mcp`
 - **Transport:** Streamable HTTP, stateless (every request is independent, so it scales horizontally and runs on serverless hosts). `GET`/`DELETE` return `405`.
@@ -148,8 +148,11 @@ A person reviews drafts. An agent cannot approve a draft. An agent cannot change
 | `update_agent`                | `agents.manage`       | Change the name, description or permissions.                                        |
 | `delete_agent`                | `agents.manage`       | Delete an agent and its credentials.                                                |
 | `list_agent_activity`         | `agents.read`         | Recent activity for one agent.                                                      |
-| `get_settings`                | `settings.read`       | Status page settings and branding.                                                  |
+| `get_settings`                | `settings.read`       | Status page settings and branding, with `logoUrl` and `faviconUrl`.                 |
+| `get_design_guide`            | `settings.write`      | The theme presets, design tokens, CSS selectors, rules and limits for a design.     |
 | `update_settings`             | `settings.write`      | Change name, URLs, theme, brand color, CSS and uptime.                              |
+| `upload_brand_asset`          | `settings.write`      | Store the logo or the favicon. It replaces the stored file.                         |
+| `remove_brand_asset`          | `settings.write`      | Remove the stored logo or favicon.                                                  |
 | `get_notification_settings`   | `channels.read`       | The webhook, email and text messaging channels and their providers. No credentials. |
 | `update_notification_channel` | `channels.write`      | Turn a channel on or off, or set its delivery strategy or sender.                   |
 | `list_subscribers`            | `subscribers.read`    | Webhook, email and text message subscribers.                                        |
@@ -203,6 +206,44 @@ Use a notification draft when a person must approve a notification before subscr
 The status page and subscribers see nothing until a person approves the draft. The service checks a draft with the same rules as `create_incident`, `schedule_maintenance` and `post_incident_update`. Thus, an approved draft does not fail because of invalid input. The published update shows the editor who approved it as the author. Only one review of a draft can succeed. If two editors review a draft at the same time, the second review gets a `conflict` error.
 
 An agent publishes only when it has `incidents.publish`. It notifies subscribers only when it has `notifications.send`. Without that permission, pass `notify: false` or use `draft_notification`.
+
+## Design the status page
+
+An agent that has `settings.read` and `settings.write` can do the full design of the status page. It selects a theme, sets the brand color, uploads the logo and the favicon, and writes custom CSS.
+
+1. The agent calls `get_design_guide`. The result lists the theme presets, the design tokens, the CSS selectors, the rules, the limits and an example stylesheet.
+2. The agent calls `update_settings` with `theme` and `brandColor`.
+3. The agent calls `upload_brand_asset` for the logo and for the favicon.
+4. The agent calls `update_settings` with `customCss` for all other changes.
+
+`upload_brand_asset` takes a `kind` (`logo` or `favicon`) and the file in `data`. The `data` value is one of these:
+
+- The file as base64 text.
+- A base64 data URL, such as `data:image/png;base64,iVBORw0…`.
+- The source text of an SVG image, such as `<svg xmlns="http://www.w3.org/2000/svg" …>`.
+
+```json
+{
+	"kind": "logo",
+	"data": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 32\"><text x=\"0\" y=\"24\" font-size=\"24\">Acme</text></svg>"
+}
+```
+
+The rules for a file are the same as in the portal. The maximum size of a file is 512 KB. A logo is a PNG, JPEG, WebP, GIF or SVG file. A favicon can also be an ICO file. An SVG file cannot contain a script or an event handler. The tool does not download a file from a URL.
+
+The result of `get_settings`, `update_settings`, `upload_brand_asset` and `remove_brand_asset` has `logoUrl` and `faviconUrl` when a file is stored. The activity log of the agent records which file changed. It does not record the file.
+
+A value of `customCss` replaces the stored stylesheet. Thus the agent must call `get_settings` first, then send the full stylesheet. Pass `null` to remove the stylesheet. [Theming](theming.md#2-custom-css) lists the tokens and the selectors that the stylesheet can use.
+
+```json
+{
+	"theme": "carbon",
+	"brandColor": null,
+	"customCss": ":root:has(.ic-page) { --ic-brand: #7c5cff; --ic-radius: 1rem; }\n.ic-uptime-bar { border-radius: 9999px; }"
+}
+```
+
+The public status page shows the new design without a review by a person. Give `settings.write` only to an agent that you trust with the look of the page.
 
 ## Attribution and notifications
 
