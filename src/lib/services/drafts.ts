@@ -1,4 +1,4 @@
-import { createId } from "../crypto";
+import { createId, sha256 } from "../crypto";
 import type {
 	DraftContentInput,
 	NotificationDraftInput,
@@ -106,14 +106,23 @@ export class DraftService {
 		input: NotificationDraftInput,
 	): Promise<NotificationDraft> {
 		requirePermission(actor, "drafts.write");
-		const { incidentId, ...fields } = input;
+		const { requestId, incidentId, ...fields } = input;
+		const id = requestId
+			? `drf_${sha256(JSON.stringify([actor.type, actor.id, requestId]))}`
+			: createId("drf");
+		if (requestId) {
+			const existing = await this.ctx.store.get("notification_drafts", id, {
+				consistent: true,
+			});
+			if (existing) return existing;
+		}
 		const target: Target = incidentId
 			? { action: "update", incidentId }
 			: { action: "create", kind: fields.kind ?? "incident" };
 		const { kind, content } = await this.prepare(target, fields);
 		const now = iso(this.ctx.now());
-		return this.ctx.store.insert("notification_drafts", {
-			id: createId("drf"),
+		const draft: NotificationDraft = {
+			id,
 			action: target.action,
 			kind,
 			incidentId,
@@ -122,7 +131,17 @@ export class DraftService {
 			createdBy: authorRef(actor),
 			createdAt: now,
 			updatedAt: now,
-		});
+		};
+		try {
+			return await this.ctx.store.insert("notification_drafts", draft);
+		} catch (error) {
+			if (!requestId || !(error instanceof ConflictError)) throw error;
+			const existing = await this.ctx.store.get("notification_drafts", id, {
+				consistent: true,
+			});
+			if (!existing) throw error;
+			return existing;
+		}
 	}
 
 	/** Replaces the content of a draft that waits for review. */
@@ -174,12 +193,20 @@ export class DraftService {
 			await this.ctx.store.update(
 				"notification_drafts",
 				saved
-					? { ...reviewed, incidentId: reviewed.incidentId ?? recordId }
+					? {
+							...reviewed,
+							incidentId: reviewed.incidentId ?? recordId,
+							publishedAt: iso(this.ctx.now()),
+						}
 					: { ...current, content, updatedAt: now },
 			);
 			throw error;
 		}
-		const draft: NotificationDraft = { ...reviewed, incidentId: incident.id };
+		const draft: NotificationDraft = {
+			...reviewed,
+			incidentId: incident.id,
+			publishedAt: iso(this.ctx.now()),
+		};
 		await this.ctx.store.update("notification_drafts", draft);
 		await this.recordReview(actor, current, "draft_approved");
 		return { draft, incident };

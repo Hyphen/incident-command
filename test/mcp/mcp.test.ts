@@ -298,8 +298,10 @@ describe("MCP handler", () => {
 			await tokenFor(t, permissionsForRole("editor"), "editor bot"),
 		);
 		const api = await t.services.catalog.create(ADMIN, { name: "API" });
+		const requestId = crypto.randomUUID();
 		const drafted = (
 			await call("draft_notification", {
+				requestId,
 				title: "API errors",
 				message: "We are looking into errors.",
 				impact: "major",
@@ -339,9 +341,23 @@ describe("MCP handler", () => {
 		).data;
 		expect(checked).toMatchObject({
 			reviewUrl: drafted.reviewUrl,
-			draft: { state: "approved", incidentId: incident.id },
+			draft: {
+				state: "approved",
+				incidentId: incident.id,
+				publishedAt: expect.any(String),
+			},
 		});
 
+		const retry = await call("draft_notification", {
+			requestId,
+			title: "API errors",
+			message: "We are looking into errors.",
+		});
+		expect(retry.data.draft).toMatchObject({
+			id: drafted.draft.id,
+			state: "approved",
+			incidentId: incident.id,
+		});
 		const update = (
 			await call("draft_notification", {
 				incidentId: incident.id,
