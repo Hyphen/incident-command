@@ -84,6 +84,7 @@ export default async function SubscribePage({ searchParams }: Props) {
 		);
 	}
 
+	// This page is the subscribe form, so the header has no subscribe button.
 	return (
 		<PublicPage settings={settings} canSubscribe={false}>
 			{body}

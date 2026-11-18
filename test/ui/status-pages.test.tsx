@@ -522,6 +522,35 @@ describe("subscription pages", () => {
 	});
 });
 
+describe("subscribe button", () => {
+	it("shows the subscribe button on each public page with a header", async () => {
+		const { services } = await setupApp();
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Investigating",
+		});
+		const pages = [
+			await StatusPage(),
+			await HistoryPage({ searchParams: params({}) }),
+			await IncidentPage({ params: params({ id: incident.id }) }),
+			await ConfirmPage({ searchParams: params({ token: "nope" }) }),
+			await UnsubscribePage({ searchParams: params({ token: "abc" }) }),
+		];
+		for (const page of pages) {
+			const { unmount } = render(page);
+			expect(
+				screen.getByRole("link", { name: "Subscribe to updates" }),
+			).toHaveAttribute("href", "/subscribe");
+			unmount();
+		}
+		// The subscribe page is the form, so its header has no button.
+		render(await SubscribePage({ searchParams: params({}) }));
+		expect(
+			screen.queryByRole("link", { name: "Subscribe to updates" }),
+		).not.toBeInTheDocument();
+	});
+});
+
 describe("error pages", () => {
 	it("renders not found and error boundaries", async () => {
 		const { unmount } = render(<NotFound />);
