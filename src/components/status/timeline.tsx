@@ -12,9 +12,9 @@ export function Timeline({
 }) {
 	const updates = [...incident.updates].reverse();
 	return (
-		<ol className="relative space-y-6 border-l border-border pl-6">
+		<ol className="ic-timeline relative space-y-6 border-l border-border pl-6">
 			{updates.map((update) => (
-				<li key={update.id} className="relative">
+				<li key={update.id} className="ic-update relative">
 					<span className="absolute top-1.5 -left-[29px] size-2.5 rounded-full border-2 border-surface bg-brand" />
 					<p className="text-sm font-semibold">
 						{EVENT_STATUS_LABELS[update.status]}

@@ -20,7 +20,9 @@ export default async function StatusPage() {
 		<PublicPage settings={summary.settings} canSubscribe={canSubscribe}>
 			<OverallBanner status={summary.overall} />
 			{summary.settings.description && (
-				<p className="text-muted">{summary.settings.description}</p>
+				<p className="ic-description text-muted">
+					{summary.settings.description}
+				</p>
 			)}
 
 			{active.length > 0 && (

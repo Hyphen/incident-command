@@ -207,6 +207,9 @@ export const registerClientSchema = z.object({
 	client_name: z.string().trim().max(120).optional(),
 });
 
+/** The largest custom stylesheet that the settings accept, in characters. */
+export const CUSTOM_CSS_MAX_LENGTH = 50_000;
+
 export const updateSettingsSchema = z.object({
 	siteName: z.string().trim().min(1).max(120).optional(),
 	description: z.string().trim().max(500).optional(),
@@ -223,7 +226,7 @@ export const updateSettingsSchema = z.object({
 		.nullable()
 		.optional()
 		.transform((value) => (value === "" ? null : value)),
-	customCss: patchText(50_000),
+	customCss: patchText(CUSTOM_CSS_MAX_LENGTH),
 	allowSubscriptions: z.boolean().optional(),
 	uptimeDays: z.number().int().min(7).max(365).optional(),
 });

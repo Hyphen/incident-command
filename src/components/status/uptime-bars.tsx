@@ -1,3 +1,4 @@
+import { NO_DATA_STATUS } from "@/lib/design";
 import { SERVICE_STATUS_LABELS } from "@/lib/domain/status";
 import { type DayStatus, formatUptime } from "@/lib/domain/uptime";
 import { formatDay } from "@/lib/format";
@@ -23,7 +24,7 @@ export function UptimeAxis({ days }: { days: number }) {
 export function UptimeBars({ days }: { days: DayStatus[] }) {
 	return (
 		<ol
-			className="flex h-8 items-stretch gap-[2px]"
+			className="ic-uptime flex h-8 items-stretch gap-[2px]"
 			aria-label="Daily status history"
 		>
 			{days.map((day, index) => {
@@ -35,10 +36,11 @@ export function UptimeBars({ days }: { days: DayStatus[] }) {
 					<li
 						key={day.date}
 						aria-label={`${formatDay(day.date)}: ${label}`}
-						className={`group relative flex-1 ${index < days.length - MOBILE_DAYS ? "hidden sm:block" : ""}`}
+						data-status={day.status ?? NO_DATA_STATUS}
+						className={`ic-uptime-day group relative flex-1 ${index < days.length - MOBILE_DAYS ? "hidden sm:block" : ""}`}
 					>
 						<div
-							className={`h-full rounded-[2px] ${color} transition-opacity group-hover:opacity-70`}
+							className={`ic-uptime-bar h-full rounded-[2px] ${color} transition-opacity group-hover:opacity-70`}
 						/>
 						<div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-lg border border-border bg-surface p-3 text-left text-xs shadow-lg group-hover:block">
 							<p className="font-semibold">{formatDay(day.date)}</p>
