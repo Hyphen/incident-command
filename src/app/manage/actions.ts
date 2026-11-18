@@ -605,7 +605,8 @@ export async function updateNotificationChannelAction(
 		services.notificationSettings.updateChannel(actor, channel, {
 			revision: integer(form, "revision"),
 			enabled: checkbox(form, "enabled"),
-			strategy: text(form, "strategy") as DeliveryStrategy,
+			// The webhook form has no strategy field.
+			strategy: optionalText(form, "strategy") as DeliveryStrategy | undefined,
 			from: optionalText(form, "from"),
 			// Only the webhook card has this box.
 			...(channel === "webhook"

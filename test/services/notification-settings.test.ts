@@ -166,6 +166,11 @@ describe("NotificationSettingsService", () => {
 			["sms", { from: "TOOLONGSENDERID" }, /E\.164/],
 			["sms", { from: "ACME CO" }, /E\.164/],
 			["webhook", { from: "x@y.co" }, /Webhooks have no sender/],
+			[
+				"webhook",
+				{ strategy: "active_passive" },
+				/Webhooks have no delivery strategy/,
+			],
 			["email", { strategy: "random" }, /strategy/],
 			["fax" as "sms", { enabled: true }, /Invalid option/],
 		];
@@ -235,23 +240,17 @@ describe("NotificationSettingsService", () => {
 			})
 			.catch((caught: unknown) => caught);
 		expect(error).toBeInstanceOf(EncryptionKeyMissingError);
-		await expect(
-			settings.addProvider(ADMIN, "webhook", {
-				type: "webhook",
-				name: "Unsigned",
-				values: { timeoutSeconds: "5", signingSecret: "" },
-			}),
-		).resolves.toMatchObject({
-			options: { timeoutSeconds: "5" },
-			savedSecrets: [],
-		});
+		// Empty credentials need no encryption key.
 		await expect(
 			settings.addProvider(ADMIN, "email", {
 				type: "ses",
 				name: "SES with a role",
-				values: { region: "us-east-1" },
+				values: { region: "us-east-1", accessKeyId: "", secretAccessKey: "" },
 			}),
-		).resolves.toMatchObject({ options: { region: "us-east-1" } });
+		).resolves.toMatchObject({
+			options: { region: "us-east-1" },
+			savedSecrets: [],
+		});
 	});
 
 	it("validates new providers", async () => {
@@ -266,12 +265,21 @@ describe("NotificationSettingsService", () => {
 		).rejects.toThrow(
 			"A SendGrid provider cannot send on the Text messaging channel",
 		);
+		// The server sends webhooks, so the webhook channel takes no providers.
+		await expect(
+			add("webhook", { type: "sendgrid", name: "x", values: { apiKey: "k" } }),
+		).rejects.toThrow(
+			"A SendGrid provider cannot send on the Webhooks channel",
+		);
+		await expect(
+			add("webhook", { type: "webhook" as "ses", name: "Hook" }),
+		).rejects.toBeInstanceOf(ValidationError);
 		await expect(
 			add("email", { type: "sendgrid", name: "x", values: { region: "x" } }),
 		).rejects.toThrow('SendGrid has no field named "region"');
-		await expect(
-			add("email", { type: "sendgrid", name: "x", values: {} }),
-		).rejects.toThrow("API key is required");
+		await expect(add("email", { type: "sendgrid", name: "x" })).rejects.toThrow(
+			"API key is required",
+		);
 		await expect(
 			add("sms", {
 				type: "twilio",
@@ -304,10 +312,18 @@ describe("NotificationSettingsService", () => {
 		).rejects.toBeInstanceOf(ForbiddenError);
 
 		for (let index = 0; index < MAX_PROVIDERS; index++) {
-			await add("webhook", { type: "webhook", name: `Hook ${index}` });
+			await add("email", {
+				type: "ses",
+				name: `SES ${index}`,
+				values: { region: "us-east-1" },
+			});
 		}
 		await expect(
-			add("webhook", { type: "webhook", name: "One too many" }),
+			add("email", {
+				type: "ses",
+				name: "One too many",
+				values: { region: "us-east-1" },
+			}),
 		).rejects.toThrow(`A channel can have at most ${MAX_PROVIDERS} providers`);
 	});
 
@@ -409,39 +425,40 @@ describe("NotificationSettingsService", () => {
 		for (const name of ["A", "B", "C"]) {
 			ids.push(
 				(
-					await settings.addProvider(ADMIN, "webhook", {
-						type: "webhook",
+					await settings.addProvider(ADMIN, "email", {
+						type: "ses",
 						name,
+						values: { region: "us-east-1" },
 					})
 				).id,
 			);
 		}
 		const names = async () =>
-			(await settings.list(ADMIN))[0]?.providers.map(
+			(await settings.list(ADMIN))[1]?.providers.map(
 				(provider) => provider.name,
 			);
-		await settings.moveProvider(ADMIN, "webhook", ids[2] as string, "up");
+		await settings.moveProvider(ADMIN, "email", ids[2] as string, "up");
 		expect(await names()).toEqual(["A", "C", "B"]);
-		await settings.moveProvider(ADMIN, "webhook", ids[0] as string, "down");
+		await settings.moveProvider(ADMIN, "email", ids[0] as string, "down");
 		expect(await names()).toEqual(["C", "A", "B"]);
-		await settings.moveProvider(ADMIN, "webhook", ids[2] as string, "up");
+		await settings.moveProvider(ADMIN, "email", ids[2] as string, "up");
 		expect(await names()).toEqual(["C", "A", "B"]);
-		await settings.moveProvider(ADMIN, "webhook", ids[1] as string, "down");
+		await settings.moveProvider(ADMIN, "email", ids[1] as string, "down");
 		expect(await names()).toEqual(["C", "A", "B"]);
 		await expect(
-			settings.moveProvider(ADMIN, "webhook", ids[1] as string, "left" as "up"),
+			settings.moveProvider(ADMIN, "email", ids[1] as string, "left" as "up"),
 		).rejects.toBeInstanceOf(ValidationError);
 		await expect(
-			settings.moveProvider(ADMIN, "webhook", "prv_missing", "up"),
+			settings.moveProvider(ADMIN, "email", "prv_missing", "up"),
 		).rejects.toBeInstanceOf(NotFoundError);
 
-		await settings.removeProvider(ADMIN, "webhook", ids[0] as string);
+		await settings.removeProvider(ADMIN, "email", ids[0] as string);
 		expect(await names()).toEqual(["C", "B"]);
 		await expect(
-			settings.removeProvider(ADMIN, "webhook", ids[0] as string),
+			settings.removeProvider(ADMIN, "email", ids[0] as string),
 		).rejects.toBeInstanceOf(NotFoundError);
 		await expect(
-			settings.removeProvider(EDITOR, "webhook", ids[1] as string),
+			settings.removeProvider(EDITOR, "email", ids[1] as string),
 		).rejects.toBeInstanceOf(ForbiddenError);
 	});
 
@@ -559,25 +576,6 @@ describe("NotificationSettingsService", () => {
 		await expect(
 			settings.updateChannel(ADMIN, "sms", { revision: -1 }),
 		).rejects.toBeInstanceOf(ValidationError);
-	});
-
-	it("signs with WEBHOOK_SECRET when a webhook provider has no secret", async () => {
-		const t = withKey({ WEBHOOK_SECRET: "env-secret" });
-		const settings = t.services.notificationSettings;
-		await settings.addProvider(ADMIN, "webhook", {
-			type: "webhook",
-			name: "Timeout only",
-			values: { timeoutSeconds: "5" },
-		});
-		await settings.addProvider(ADMIN, "webhook", {
-			type: "webhook",
-			name: "Own secret",
-			values: { signingSecret: "own-secret" },
-		});
-		const secrets = (await settings.resolve()).webhook.providers.map(
-			(provider) => provider.secrets.signingSecret,
-		);
-		expect(secrets).toEqual(["env-secret", "own-secret"]);
 	});
 
 	it("refuses to overwrite a change that somebody else saved meanwhile", async () => {

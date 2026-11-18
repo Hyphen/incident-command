@@ -155,7 +155,7 @@ A person reviews drafts. An agent cannot approve a draft. An agent cannot change
 | `upload_brand_asset`          | `settings.write`      | Store the logo or the favicon. It replaces the stored file.                         |
 | `remove_brand_asset`          | `settings.write`      | Remove the stored logo or favicon.                                                  |
 | `get_notification_settings`   | `channels.read`       | The webhook, email and text messaging channels and their providers. No credentials. |
-| `update_notification_channel` | `channels.write`      | Turn a channel on or off, or set its delivery strategy or sender.                   |
+| `update_notification_channel` | `channels.write`      | Turn a channel on or off, or set its strategy or sender. Webhooks have neither.     |
 | `list_subscribers`            | `subscribers.read`    | Webhook, email and text message subscribers.                                        |
 | `add_subscriber`              | `subscribers.manage`  | Add a confirmed email subscriber, a webhook or an E.164 phone number.               |
 | `remove_subscriber`           | `subscribers.manage`  | Remove a subscriber.                                                                |

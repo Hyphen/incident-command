@@ -18,7 +18,7 @@
 - **Runs anywhere:** Docker image for any container host, plus guides for Cloudflare, DigitalOcean, Google Cloud, AWS and Azure. See [docs/deployment.md](docs/deployment.md).
 - **Pluggable storage:** PostgreSQL, MongoDB or in-memory, chosen from `DATABASE_URI`. Adding an adapter means implementing one small interface.
 - **Keeps working when the database doesn't:** reads go through a [cacheable](https://cacheable.org) layer that never expires entries while the database is offline, so the status page keeps serving the last known state during an outage.
-- **Notifications with [airhorn](https://airhorn.org):** signed webhooks (Slack and Discord compatible), email through SendGrid or Amazon SES, and text messages through Twilio or Amazon SNS. Visitors subscribe through each channel that can send, with double opt-in. Each channel can have more than one provider, active/passive or load balanced. Provider credentials are encrypted in the database with `ENCRYPTION_KEY`.
+- **Notifications with [airhorn](https://airhorn.org):** signed webhooks (Slack and Discord compatible), email through SendGrid or Amazon SES, and text messages through Twilio or Amazon SNS. Visitors subscribe through each channel that can send, with double opt-in. Email and text messaging can have more than one provider, active/passive or load balanced. Provider credentials are encrypted in the database with `ENCRYPTION_KEY`.
 
 <table>
 <tr>

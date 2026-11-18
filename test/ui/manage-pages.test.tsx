@@ -1582,13 +1582,14 @@ describe("admin pages", () => {
 			screen.getByRole("heading", { name }).closest("section") as HTMLElement;
 		const webhooks = within(card("Webhooks"));
 		expect(webhooks.getByText("On")).toBeInTheDocument();
+		// The server sends webhooks, so the card has only the on/off switch.
 		expect(
-			webhooks.getByText(
-				"No providers yet. Until you add one, this channel uses Built-in webhook sender.",
-			),
-		).toBeInTheDocument();
+			webhooks.getByRole("checkbox", { name: "Send webhook notifications" }),
+		).toBeChecked();
+		expect(webhooks.queryByRole("radio")).not.toBeInTheDocument();
+		expect(webhooks.queryByRole("textbox")).not.toBeInTheDocument();
 		expect(
-			webhooks.queryByLabelText("Default from address"),
+			webhooks.queryByRole("heading", { name: "Providers" }),
 		).not.toBeInTheDocument();
 		// Only the webhook channel has the private network switch, and it starts off.
 		expect(
@@ -1597,15 +1598,22 @@ describe("admin pages", () => {
 		expect(
 			within(card("Email")).queryByLabelText("Allow private network addresses"),
 		).not.toBeInTheDocument();
-		const secret = webhooks.getByLabelText("Signing secret");
-		expect(secret).toBeDisabled();
 		expect(
-			webhooks.getByText(
-				"Set ENCRYPTION_KEY on the server to save credentials.",
-			),
+			webhooks.getByRole("button", { name: "Save channel" }),
 		).toBeInTheDocument();
 
 		const email = within(card("Email"));
+		expect(
+			email.getByText(
+				"No providers yet. Until you add one, this channel uses SendGrid (environment variables).",
+			),
+		).toBeInTheDocument();
+		expect(email.getByLabelText("API key")).toBeDisabled();
+		expect(
+			email.getAllByText(
+				"Set ENCRYPTION_KEY on the server to save credentials.",
+			),
+		).toHaveLength(2);
 		expect(email.getByRole("radio", { name: /Active\/passive/ })).toBeChecked();
 		expect(email.getByLabelText("Default from address")).toHaveAttribute(
 			"placeholder",
@@ -1651,20 +1659,12 @@ describe("admin pages", () => {
 				secretAccessKey: "secret",
 			},
 		});
-		await settings.addProvider(actor, "webhook", {
-			type: "webhook",
-			name: "Signed",
-			values: { signingSecret: "whsec" },
-		});
-		await settings.updateChannel(actor, "webhook", {
-			strategy: "load_balanced",
-			enabled: false,
-		});
+		await settings.updateChannel(actor, "webhook", { enabled: false });
 		// A provider whose credentials an unknown key encrypted.
 		await app.store.insert("notification_channels", {
 			id: "sms",
 			enabled: true,
-			strategy: "active_passive",
+			strategy: "load_balanced",
 			providers: [
 				{
 					id: "prv_lost",
@@ -1753,15 +1753,7 @@ describe("admin pages", () => {
 			"Status <status@example.com>",
 		);
 
-		const webhooks = card("Webhooks");
-		expect(
-			webhooks.getByText(/Signed webhook · Load balanced/),
-		).toBeInTheDocument();
-		expect(
-			webhooks.getByRole("radio", { name: /Load balanced/ }),
-		).toBeChecked();
-
-		expect(webhooks.getByText("Off")).toBeInTheDocument();
+		expect(card("Webhooks").getByText("Off")).toBeInTheDocument();
 
 		const sms = card("Text messaging");
 		expect(sms.getByText("Not ready")).toBeInTheDocument();
@@ -1771,8 +1763,13 @@ describe("admin pages", () => {
 		expect(sms.getByRole("alert")).toHaveTextContent(
 			"The saved credentials do not decrypt",
 		);
-		// A saved secret is not required again in the edit form.
 		const [lost] = sms.getAllByRole("listitem");
+		expect(
+			within(lost as HTMLElement).getByText(
+				"Twilio · Load balanced · Auth token saved",
+			),
+		).toBeInTheDocument();
+		// A saved secret is not required again in the edit form.
 		expect(
 			within(lost as HTMLElement).getByLabelText("Auth token"),
 		).not.toBeRequired();
