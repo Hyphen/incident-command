@@ -86,7 +86,9 @@ Admins set up notifications in **Manage → Settings → Notifications**. Incide
 - Email and text messages need a sender. Set a default sender on the channel, or a sender on each provider. A sender on a provider replaces the sender of the channel.
 - A signed webhook adds `x-incident-command-signature: sha256=<hex>` to each request. The value is the HMAC-SHA256 of the raw JSON body, keyed with the signing secret. A webhook provider without its own signing secret signs with `WEBHOOK_SECRET`, if it is set.
 - Amazon SNS takes a sender ID of up to 11 letters and digits. When the sender is a phone number, SNS sends it as the origination number. The number must be an origination number of your AWS account.
-- Admins add phone numbers in **Manage → Subscribers** or with the `add_subscriber` MCP tool. Visitors cannot subscribe by text message. Get consent before you add a number.
+- When **Allow visitors to subscribe** is on, the public subscribe page offers each channel that can send: email, text message and webhook. The channel sends a confirmation link to the address, phone number or URL. Notifications start only after a click on that link.
+- A webhook confirmation has `"event": "subscription.confirm"`, `text`, `content` and `confirmUrl`. Slack and Discord show the text with the link.
+- Admins add subscribers in **Manage → Subscribers** or with the `add_subscriber` MCP tool. These subscribers get no confirmation. Get consent before you add a phone number.
 - `SITE_URL` is used to build the links in notifications, so set it to the public URL.
 
 ### Encrypted provider credentials

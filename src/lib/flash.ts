@@ -28,7 +28,7 @@ const MESSAGE_CODES: Record<string, FlashCode> = {
 	"A member with that email already exists": "member_email_exists",
 	"scheduledEnd must be after scheduledStart": "scheduled_end_before_start",
 	"Subscriptions are not enabled": "subscriptions_disabled",
-	"We couldn't send the confirmation email. Please try again later.":
+	"We couldn't send the confirmation. Please try again later.":
 		"confirmation_not_sent",
 	"You do not have permission to do that": "forbidden",
 	"Authentication required": "unauthorized",

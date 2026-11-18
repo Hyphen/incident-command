@@ -16,9 +16,12 @@ export default async function UnsubscribePage({
 }) {
 	const { token, done } = await searchParams;
 	const { services } = await getApp();
-	const settings = await services.settings.get();
+	const [settings, canSubscribe] = await Promise.all([
+		services.settings.get(),
+		services.subscribers.canSubscribe(),
+	]);
 	return (
-		<PublicPage settings={settings} canSubscribe={false}>
+		<PublicPage settings={settings} canSubscribe={canSubscribe}>
 			{done ? (
 				<NoticeCard title="You've been unsubscribed">
 					<p>You will no longer receive {settings.siteName} updates.</p>

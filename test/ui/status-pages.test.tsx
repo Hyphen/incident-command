@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { UnrecognizedActionError } from "next/dist/client/components/unrecognized-action-error";
 import { renderToStaticMarkup } from "react-dom/server";
 import ErrorPage from "@/app/error";
@@ -87,9 +88,7 @@ describe("root layout", () => {
 describe("status page", () => {
 	it("renders an empty, operational page", async () => {
 		const { services } = await setupApp();
-		await services.notificationSettings.updateChannel(SYSTEM_ACTOR, "email", {
-			enabled: false,
-		});
+		await services.settings.update(SYSTEM_ACTOR, { allowSubscriptions: false });
 		render(await StatusPage());
 		expect(
 			screen.getByRole("heading", { name: "We're fully operational" }),
@@ -455,6 +454,74 @@ describe("subscription pages", () => {
 		expect(screen.getByText("You're already subscribed")).toBeInTheDocument();
 	});
 
+	it("offers each channel that can send", async () => {
+		const user = userEvent.setup();
+		const { services } = await setupApp();
+		// Text messaging has no provider in the test environment.
+		const form = render(await SubscribePage({ searchParams: params({}) }));
+		const picker = screen.getByRole("group", { name: "Channel" });
+		expect(
+			within(picker)
+				.getAllByRole("radio")
+				.map((radio) => (radio as HTMLInputElement).value),
+		).toEqual(["email", "webhook"]);
+		expect(screen.getByRole("radio", { name: "Email" })).toBeChecked();
+		await user.click(screen.getByRole("radio", { name: "Webhook" }));
+		expect(screen.getByLabelText("Webhook URL")).toHaveAttribute("type", "url");
+		expect(
+			screen.getByText(/We post a confirmation link to it\./),
+		).toBeInTheDocument();
+		form.unmount();
+
+		// The redirect after a submit opens the same channel. An unknown channel opens the first one.
+		const again = render(
+			await SubscribePage({ searchParams: params({ channel: "webhook" }) }),
+		);
+		expect(screen.getByRole("radio", { name: "Webhook" })).toBeChecked();
+		again.unmount();
+		const unknown = render(
+			await SubscribePage({ searchParams: params({ channel: "sms" }) }),
+		);
+		expect(screen.getByRole("radio", { name: "Email" })).toBeChecked();
+		unknown.unmount();
+		const sent = render(
+			await SubscribePage({
+				searchParams: params({
+					channel: "webhook",
+					status: "confirmation_sent",
+				}),
+			}),
+		);
+		expect(screen.getByText("Check your webhook")).toBeInTheDocument();
+		sent.unmount();
+		const already = render(
+			await SubscribePage({
+				searchParams: params({
+					channel: "webhook",
+					status: "already_subscribed",
+				}),
+			}),
+		);
+		expect(
+			screen.getByText("That webhook URL already receives updates."),
+		).toBeInTheDocument();
+		already.unmount();
+
+		// With one channel, the form shows no choice.
+		await services.notificationSettings.updateChannel(SYSTEM_ACTOR, "webhook", {
+			enabled: false,
+		});
+		render(await SubscribePage({ searchParams: params({}) }));
+		expect(
+			screen.queryByRole("group", { name: "Channel" }),
+		).not.toBeInTheDocument();
+		expect(document.querySelector('input[name="type"]')).toHaveValue("email");
+		expect(screen.getByLabelText("Email address")).toHaveAttribute(
+			"type",
+			"email",
+		);
+	});
+
 	it("serves the cached status page while the database is offline", async () => {
 		const { app } = await setupApp();
 		render(await StatusPage()).unmount();
@@ -468,11 +535,13 @@ describe("subscription pages", () => {
 		expect(app.store.health.online).toBe(false);
 	});
 
-	it("explains when subscriptions are unavailable", async () => {
+	it("explains when no channel can send", async () => {
 		const { services } = await setupApp();
-		await services.notificationSettings.updateChannel(SYSTEM_ACTOR, "email", {
-			enabled: false,
-		});
+		for (const channel of ["email", "webhook"] as const) {
+			await services.notificationSettings.updateChannel(SYSTEM_ACTOR, channel, {
+				enabled: false,
+			});
+		}
 		render(
 			await SubscribePage({
 				searchParams: params({ status: "confirmation_sent" }),
@@ -489,7 +558,10 @@ describe("subscription pages", () => {
 
 	it("confirms subscriptions", async () => {
 		const { services, notifier } = await setupApp();
-		await services.subscribers.subscribe({ email: "jane@example.com" });
+		await services.subscribers.subscribe({
+			type: "email",
+			target: "jane@example.com",
+		});
 		const token = notifier.confirmations[0]?.subscriber.token;
 		const ok = render(await ConfirmPage({ searchParams: params({ token }) }));
 		expect(screen.getByText("You're subscribed")).toBeInTheDocument();
@@ -516,6 +588,35 @@ describe("subscription pages", () => {
 		empty.unmount();
 		render(await UnsubscribePage({ searchParams: params({ done: "1" }) }));
 		expect(screen.getByText("You've been unsubscribed")).toBeInTheDocument();
+	});
+});
+
+describe("subscribe button", () => {
+	it("shows the subscribe button on each public page with a header", async () => {
+		const { services } = await setupApp();
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Investigating",
+		});
+		const pages = [
+			await StatusPage(),
+			await HistoryPage({ searchParams: params({}) }),
+			await IncidentPage({ params: params({ id: incident.id }) }),
+			await ConfirmPage({ searchParams: params({ token: "nope" }) }),
+			await UnsubscribePage({ searchParams: params({ token: "abc" }) }),
+		];
+		for (const page of pages) {
+			const { unmount } = render(page);
+			expect(
+				screen.getByRole("link", { name: "Subscribe to updates" }),
+			).toHaveAttribute("href", "/subscribe");
+			unmount();
+		}
+		// The subscribe page is the form, so its header has no button.
+		render(await SubscribePage({ searchParams: params({}) }));
+		expect(
+			screen.queryByRole("link", { name: "Subscribe to updates" }),
+		).not.toBeInTheDocument();
 	});
 });
 

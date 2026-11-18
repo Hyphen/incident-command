@@ -13,6 +13,7 @@ import { AirhornNotifier, createNotifier } from "@/lib/notifications/notifier";
 import { ChannelProvider, createProvider } from "@/lib/notifications/providers";
 import { SENDGRID_URL } from "@/lib/notifications/sendgrid";
 import {
+	confirmationText,
 	confirmUrl,
 	emailData,
 	type IncidentNotification,
@@ -240,6 +241,10 @@ describe("templates", () => {
 			"https://f.example.com/subscribe/confirm?token=tok%201",
 		);
 		expect(confirmUrl(subscriber(), settings)).toBeUndefined();
+		// Without a site URL, a text confirmation has no link line.
+		expect(confirmationText(subscriber(), settings)).toBe(
+			"[Acme Status] Confirm your subscription to status updates.",
+		);
 	});
 
 	it("summarizes for chat webhooks", () => {
@@ -563,7 +568,7 @@ describe("AirhornNotifier", () => {
 		);
 	});
 
-	it("sends subscription confirmations through the email channel", async () => {
+	it("sends subscription confirmations through the channel of the subscriber", async () => {
 		const { notifier: n } = notifier();
 		const email = channels().email;
 		await expect(
@@ -581,6 +586,47 @@ describe("AirhornNotifier", () => {
 			n.sendConfirmation(subscriber(), settings, { ...email, enabled: false }),
 		).resolves.toBe(false);
 		expect(requests).toHaveLength(1);
+
+		const link = "https://status.acme.dev/subscribe/confirm?token=tok%201";
+		const text = `[Acme Status] Confirm your subscription to status updates.\n${link}`;
+		await expect(
+			n.sendConfirmation(
+				subscriber({ type: "sms", target: "+15551234567", confirmed: false }),
+				settings,
+				channels().sms,
+			),
+		).resolves.toBe(true);
+		expect(sdk.sends).toEqual([
+			{
+				sdk: "twilio",
+				message: expect.objectContaining({ to: "+15551234567", content: text }),
+				options: undefined,
+			},
+		]);
+
+		await expect(
+			n.sendConfirmation(
+				subscriber({
+					type: "webhook",
+					target: "https://hooks.example.com/a",
+					confirmed: false,
+				}),
+				settings,
+				channels().webhook,
+			),
+		).resolves.toBe(true);
+		const hook = requests[1];
+		expect(hook?.url).toBe("https://hooks.example.com/a");
+		expect(body(hook)).toMatchObject({
+			event: "subscription.confirm",
+			text,
+			content: text,
+			confirmUrl: link,
+			page: { name: "Acme Status", url: "https://status.acme.dev" },
+		});
+		expect(headers(hook)[SIGNATURE_HEADER]).toBe(
+			`sha256=${hmacSha256("whsec", String(hook?.init.body))}`,
+		);
 	});
 
 	it("handles an empty recipient list", async () => {

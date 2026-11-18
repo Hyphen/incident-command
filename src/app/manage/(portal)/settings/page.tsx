@@ -89,7 +89,7 @@ export default async function SettingsPage({
 						</Field>
 						<Checkbox
 							name="allowSubscriptions"
-							label="Allow visitors to subscribe by email"
+							label="Allow visitors to subscribe"
 							defaultChecked={settings.allowSubscriptions}
 						/>
 					</div>
