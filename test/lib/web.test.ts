@@ -21,7 +21,7 @@ import {
 	formatDuration,
 	formatMonth,
 	formatMonthRange,
-	formatTime,
+	formatShortDateTime,
 	fromDateTimeInput,
 	toDateTimeInput,
 } from "@/lib/format";
@@ -461,7 +461,9 @@ describe("format helpers", () => {
 		expect(formatDateTime("2026-11-02T14:05:00.000Z")).toBe(
 			"Nov 2, 2026, 14:05 UTC",
 		);
-		expect(formatTime("2026-11-02T16:05:00.000+02:00")).toBe("14:05 UTC");
+		expect(formatShortDateTime("2026-11-02T16:05:00.000+02:00")).toBe(
+			"Nov 2, 14:05 UTC",
+		);
 		expect(formatDay("2026-11-02")).toBe("Nov 2, 2026");
 		expect(formatDay("2026-11-02T23:59:00.000Z")).toBe("Nov 2, 2026");
 		expect(formatMonth("2026-11")).toBe("November 2026");

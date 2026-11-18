@@ -11,6 +11,7 @@ import {
 	minuteTimeline,
 	periodUptime,
 	startOfUtcDay,
+	timelineWindow,
 	toDateKey,
 	uptimePeriods,
 	uptimeWindow,
@@ -299,18 +300,61 @@ describe("combineUptime", () => {
 	});
 });
 
+describe("timelineWindow", () => {
+	it.each([
+		{
+			name: "an open incident",
+			times: { startedAt: "2026-11-02T10:00:30.000Z" },
+			start: "2026-11-01T22:00:00.000Z",
+			end: "2026-11-02T12:00:00.000Z",
+		},
+		{
+			name: "an incident that closed less than 12 hours ago",
+			times: {
+				startedAt: "2026-11-02T03:00:00.000Z",
+				resolvedAt: "2026-11-02T04:00:00.000Z",
+			},
+			start: "2026-11-01T15:00:00.000Z",
+			end: "2026-11-02T12:00:00.000Z",
+		},
+		{
+			name: "an incident that closed more than 12 hours ago",
+			times: {
+				startedAt: "2026-10-20T08:15:00.000Z",
+				resolvedAt: "2026-10-22T09:45:10.000Z",
+			},
+			start: "2026-10-19T20:15:00.000Z",
+			end: "2026-10-22T21:45:10.000Z",
+		},
+		{
+			name: "maintenance that closed before its scheduled start",
+			times: {
+				startedAt: "2026-11-05T00:00:00.000Z",
+				resolvedAt: "2026-11-02T11:00:00.000Z",
+			},
+			start: "2026-11-01T23:00:00.000Z",
+			end: "2026-11-02T12:00:00.000Z",
+		},
+	])("gives 12 hours on each side of $name", ({ times, start, end }) => {
+		const window = timelineWindow(times, NOW);
+		expect(window.start.toISOString()).toBe(start);
+		expect(window.end.toISOString()).toBe(end);
+	});
+});
+
 describe("minuteTimeline", () => {
 	it("gives each minute its worst status and merges equal minutes", () => {
 		const changes = [
 			change("2026-11-02T10:00:30.000Z", "operational", "major_outage"),
 			change("2026-11-02T10:02:10.000Z", "major_outage", "operational"),
 		];
-		expect(minuteTimeline(service(), changes, NOW)).toEqual([
+		const window = { start: new Date("2026-11-01T22:00:00.000Z"), end: NOW };
+		expect(minuteTimeline(service(), changes, window)).toEqual([
 			{
 				status: "operational",
-				start: "2026-11-01T12:00:00.000Z",
+				start: "2026-11-01T22:00:00.000Z",
 				end: "2026-11-02T10:00:00.000Z",
-				minutes: 1320,
+				minutes: 720,
 			},
 			{
 				status: "major_outage",
@@ -327,10 +371,13 @@ describe("minuteTimeline", () => {
 		]);
 	});
 
-	it("has no data before the service existed and stops at now", () => {
-		const now = new Date("2026-11-02T12:00:20.000Z");
+	it("has no data before the service existed and stops at the window end", () => {
+		const window = {
+			start: new Date("2026-11-01T12:01:00.000Z"),
+			end: new Date("2026-11-02T12:00:20.000Z"),
+		};
 		const created = service({ createdAt: "2026-11-02T09:00:00.000Z" });
-		expect(minuteTimeline(created, [], now)).toEqual([
+		expect(minuteTimeline(created, [], window)).toEqual([
 			{
 				status: null,
 				start: "2026-11-01T12:01:00.000Z",
@@ -344,5 +391,32 @@ describe("minuteTimeline", () => {
 				minutes: 181,
 			},
 		]);
+	});
+
+	it("shows the status in a window that ended, not the status after it", () => {
+		const start = new Date("2026-11-01T00:00:00.000Z");
+		const current = service({ status: "degraded_performance" });
+		const changes = [
+			change("2026-11-01T10:00:00.000Z", "operational", "major_outage"),
+			change("2026-11-01T11:00:00.000Z", "major_outage", "operational"),
+			change("2026-11-02T08:00:00.000Z", "operational", "degraded_performance"),
+		];
+		// The window ends during the outage.
+		expect(
+			minuteTimeline(current, changes, {
+				start,
+				end: new Date("2026-11-01T10:30:00.000Z"),
+			}).map((period) => [period.status, period.end, period.minutes]),
+		).toEqual([
+			["operational", "2026-11-01T10:00:00.000Z", 600],
+			["major_outage", "2026-11-01T10:30:00.000Z", 30],
+		]);
+		// Each change is after the window. The first change gives the status.
+		expect(
+			minuteTimeline(current, changes, {
+				start,
+				end: new Date("2026-11-01T09:00:00.000Z"),
+			}).map((period) => [period.status, period.end, period.minutes]),
+		).toEqual([["operational", "2026-11-01T09:00:00.000Z", 540]]);
 	});
 });

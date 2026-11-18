@@ -30,14 +30,14 @@ describe("LocalTime", () => {
 		await waitFor(() => expect(time?.textContent).not.toContain("UTC,"));
 	});
 
-	it("shows the time without the date", () => {
+	it("shows the date without the year", () => {
 		const iso = "2026-11-02T12:05:00.000Z";
-		expect(renderToStaticMarkup(<LocalTime iso={iso} timeOnly />)).toContain(
-			">12:05 UTC<",
+		expect(renderToStaticMarkup(<LocalTime iso={iso} short />)).toContain(
+			">Nov 2, 12:05 UTC<",
 		);
-		render(<LocalTime iso={iso} timeOnly />);
+		render(<LocalTime iso={iso} short />);
 		const text = document.querySelector("time")?.textContent;
-		expect(text).toMatch(/\d{1,2}:\d{2}/);
+		expect(text).toMatch(/Nov \d{1,2},? .*\d{1,2}:\d{2}/);
 		expect(text).not.toContain("2026");
 	});
 });
@@ -420,10 +420,16 @@ describe("status components", () => {
 			createdAt: "2026-01-01T00:00:00.000Z",
 			updatedAt: "2026-01-01T00:00:00.000Z",
 		};
+		const window = {
+			start: "2026-11-01T12:00:00.000Z",
+			end: "2026-11-02T12:00:00.000Z",
+		};
 		// The server render keeps the times in UTC.
 		const page = document.createElement("div");
-		page.innerHTML = renderToStaticMarkup(
+		const timeline = (
 			<StatusTimeline
+				{...window}
+				untilNow
 				services={[
 					{
 						service,
@@ -482,8 +488,9 @@ describe("status components", () => {
 						],
 					},
 				]}
-			/>,
+			/>
 		);
+		page.innerHTML = renderToStaticMarkup(timeline);
 		document.body.append(page);
 		onTestFinished(() => page.remove());
 		const view = within(page);
@@ -506,23 +513,31 @@ describe("status components", () => {
 			"180",
 			"60",
 		]);
-		expect(text(parts[0] as HTMLElement)).toBe("OperationalUntil 08:00 UTC");
+		expect(text(parts[0] as HTMLElement)).toBe(
+			"OperationalUntil Nov 2, 08:00 UTC",
+		);
+
+		// The labels below the bar show the window.
+		expect(view.getByText(/from 12 hours before the start until now/)).toBe(
+			page.querySelector("section > p"),
+		);
+		expect(
+			text(parts[0]?.closest("ol")?.nextElementSibling as HTMLElement),
+		).toBe("Nov 1, 2026, 12:00 UTCNow");
 
 		// The summary starts at the first disruption and shows the recovery.
 		const summary = within(
 			view.getByRole("list", { name: "API: disruptions" }),
 		).getAllByRole("listitem");
 		expect(summary.map(text)).toEqual([
-			"Major outage08:00 UTC – 11:00 UTC (3h)",
-			"OperationalSince 11:00 UTC (1h)",
+			"Major outageNov 2, 08:00 UTC – Nov 2, 11:00 UTC (3h)",
+			"OperationalSince Nov 2, 11:00 UTC (1h)",
 		]);
 
 		expect(text(bar("Web").getByRole("listitem"))).toBe(
-			"OperationalAll 24 hours",
+			"OperationalThe full period",
 		);
-		expect(
-			view.getByText("No disruption in the last 24 hours."),
-		).toBeInTheDocument();
+		expect(view.getByText("No disruption in this period.")).toBeInTheDocument();
 		expect(view.queryByRole("list", { name: "Web: disruptions" })).toBeNull();
 
 		expect(
@@ -532,7 +547,30 @@ describe("status components", () => {
 			within(view.getByRole("list", { name: "New: disruptions" }))
 				.getAllByRole("listitem")
 				.map(text),
-		).toEqual(["Partial outageSince 11:30 UTC (30m)"]);
+		).toEqual(["Partial outageSince Nov 2, 11:30 UTC (30m)"]);
+
+		// A window that ended shows its end. The last period can continue after
+		// the window, so it shows no duration.
+		page.innerHTML = renderToStaticMarkup(
+			<StatusTimeline {...timeline.props} untilNow={false} />,
+		);
+		expect(
+			view.getByText(
+				/from 12 hours before the start to 12 hours after the end/,
+			),
+		).toBeInTheDocument();
+		const ended = bar("API").getAllByRole("listitem");
+		expect(
+			text(ended[0]?.closest("ol")?.nextElementSibling as HTMLElement),
+		).toBe("Nov 1, 2026, 12:00 UTCNov 2, 2026, 12:00 UTC");
+		expect(
+			within(view.getByRole("list", { name: "API: disruptions" }))
+				.getAllByRole("listitem")
+				.map(text),
+		).toEqual([
+			"Major outageNov 2, 08:00 UTC – Nov 2, 11:00 UTC (3h)",
+			"OperationalFrom Nov 2, 11:00 UTC",
+		]);
 	});
 
 	it("renders incident lists and empty states", () => {
