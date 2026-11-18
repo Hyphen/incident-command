@@ -28,9 +28,11 @@ import {
 } from "../errors";
 import {
 	CHANNELS,
+	hasStrategy,
 	matchesField,
 	PROVIDERS,
 	type ProviderDefinition,
+	providerLimitMessage,
 } from "../notifications/catalog";
 import {
 	type DeliveryChannel,
@@ -40,9 +42,6 @@ import {
 } from "../notifications/delivery";
 import { SecretBox } from "../secrets";
 import { iso, parse, requirePermission, type ServiceContext } from "./context";
-
-/** The most providers that one channel can have. */
-export const MAX_PROVIDERS = 10;
 
 export const NOTIFICATION_SETTINGS_CHANGED =
 	"Somebody else changed these notification settings. Reload the page.";
@@ -100,6 +99,11 @@ export class NotificationSettingsService {
 		requirePermission(actor, "channels.write");
 		const id = parse(notificationChannelSchema, channel);
 		const patch = parse(updateNotificationChannelSchema, input);
+		if (patch.strategy !== undefined && !hasStrategy(id)) {
+			throw new ValidationError(
+				`The ${CHANNELS[id].label} channel has only one provider and no delivery strategy`,
+			);
+		}
 		const from = this.sender(id, patch.from);
 		const saved = await this.mutate(
 			id,
@@ -141,10 +145,8 @@ export class NotificationSettingsService {
 			updatedAt: now,
 		};
 		await this.mutate(id, (current) => {
-			if (current.providers.length >= MAX_PROVIDERS) {
-				throw new ValidationError(
-					`A channel can have at most ${MAX_PROVIDERS} providers`,
-				);
+			if (current.providers.length >= CHANNELS[id].maxProviders) {
+				throw new ValidationError(providerLimitMessage(id));
 			}
 			return { ...current, providers: [...current.providers, provider] };
 		});

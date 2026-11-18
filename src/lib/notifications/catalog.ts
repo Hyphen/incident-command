@@ -27,6 +27,9 @@ export interface ProviderDefinition {
 	together?: readonly (readonly string[])[];
 }
 
+/** The most providers that an email or text messaging channel can have. */
+export const MAX_PROVIDERS = 10;
+
 const AWS_REGION = "[a-z]{2}(-[a-z]+)+-[0-9]";
 
 const awsFields = (service: string): ProviderField[] => [
@@ -128,6 +131,11 @@ export interface ChannelDefinition {
 	description: string;
 	/** The provider types that can send on this channel, in display order. */
 	providers: readonly ProviderType[];
+	/**
+	 * The most providers that the channel can have. A channel with one
+	 * provider has no delivery strategy.
+	 */
+	maxProviders: number;
 	/** The sender field. A channel without it sends without a sender. */
 	sender?: {
 		label: string;
@@ -145,6 +153,8 @@ export const CHANNELS: Record<NotificationChannel, ChannelDefinition> = {
 		description:
 			"Posts a JSON payload to each webhook subscriber (Slack, Discord or any endpoint).",
 		providers: ["webhook"],
+		// Airhorn has no other webhook provider, so a second provider adds nothing.
+		maxProviders: 1,
 	},
 	email: {
 		label: "Email",
@@ -152,6 +162,7 @@ export const CHANNELS: Record<NotificationChannel, ChannelDefinition> = {
 		description:
 			"Emails each email subscriber and sends the confirmation email of the public subscribe form.",
 		providers: ["sendgrid", "ses"],
+		maxProviders: MAX_PROVIDERS,
 		sender: {
 			label: "From address",
 			defaultLabel: "Default from address",
@@ -164,6 +175,7 @@ export const CHANNELS: Record<NotificationChannel, ChannelDefinition> = {
 		noun: "text message",
 		description: "Sends a short text message to each phone subscriber.",
 		providers: ["twilio", "sns"],
+		maxProviders: MAX_PROVIDERS,
 		sender: {
 			label: "From number or sender ID",
 			defaultLabel: "Default from number or sender ID",
@@ -172,6 +184,19 @@ export const CHANNELS: Record<NotificationChannel, ChannelDefinition> = {
 		},
 	},
 };
+
+/** The message that tells the most providers that a channel can have. */
+export function providerLimitMessage(channel: NotificationChannel): string {
+	const { label, maxProviders } = CHANNELS[channel];
+	return maxProviders === 1
+		? `The ${label} channel can have only one provider`
+		: `The ${label} channel can have at most ${maxProviders} providers`;
+}
+
+/** True when the channel can have more than one provider, so it has a delivery strategy. */
+export function hasStrategy(channel: NotificationChannel): boolean {
+	return CHANNELS[channel].maxProviders > 1;
+}
 
 export const STRATEGIES: Record<
 	DeliveryStrategy,

@@ -4,11 +4,9 @@ import {
 	NotFoundError,
 	ValidationError,
 } from "@/lib/errors";
+import { MAX_PROVIDERS } from "@/lib/notifications/catalog";
 import { EncryptionKeyMissingError } from "@/lib/secrets";
-import {
-	MAX_PROVIDERS,
-	NOTIFICATION_SETTINGS_CHANGED,
-} from "@/lib/services/notification-settings";
+import { NOTIFICATION_SETTINGS_CHANGED } from "@/lib/services/notification-settings";
 import { ADMIN, createTestContext, EDITOR, type TestContext } from "../helpers";
 
 const KEY = "k".repeat(32);
@@ -151,6 +149,11 @@ describe("NotificationSettingsService", () => {
 			["sms", { from: "TOOLONGSENDERID" }, /E\.164/],
 			["sms", { from: "ACME CO" }, /E\.164/],
 			["webhook", { from: "x@y.co" }, /Webhooks have no sender/],
+			[
+				"webhook",
+				{ strategy: "active_passive" },
+				/The Webhooks channel has only one provider and no delivery strategy/,
+			],
 			["email", { strategy: "random" }, /strategy/],
 			["fax" as "sms", { enabled: true }, /Invalid option/],
 		];
@@ -289,11 +292,26 @@ describe("NotificationSettingsService", () => {
 		).rejects.toBeInstanceOf(ForbiddenError);
 
 		for (let index = 0; index < MAX_PROVIDERS; index++) {
-			await add("webhook", { type: "webhook", name: `Hook ${index}` });
+			await add("email", {
+				type: "ses",
+				name: `SES ${index}`,
+				values: { region: "us-east-1" },
+			});
 		}
 		await expect(
-			add("webhook", { type: "webhook", name: "One too many" }),
-		).rejects.toThrow(`A channel can have at most ${MAX_PROVIDERS} providers`);
+			add("email", {
+				type: "ses",
+				name: "One too many",
+				values: { region: "us-east-1" },
+			}),
+		).rejects.toThrow(
+			`The Email channel can have at most ${MAX_PROVIDERS} providers`,
+		);
+
+		await add("webhook", { type: "webhook", name: "Hook" });
+		await expect(
+			add("webhook", { type: "webhook", name: "Second hook" }),
+		).rejects.toThrow("The Webhooks channel can have only one provider");
 	});
 
 	it("edits providers and keeps secrets that are left empty", async () => {
@@ -394,39 +412,40 @@ describe("NotificationSettingsService", () => {
 		for (const name of ["A", "B", "C"]) {
 			ids.push(
 				(
-					await settings.addProvider(ADMIN, "webhook", {
-						type: "webhook",
+					await settings.addProvider(ADMIN, "email", {
+						type: "ses",
 						name,
+						values: { region: "us-east-1" },
 					})
 				).id,
 			);
 		}
 		const names = async () =>
-			(await settings.list(ADMIN))[0]?.providers.map(
+			(await settings.list(ADMIN))[1]?.providers.map(
 				(provider) => provider.name,
 			);
-		await settings.moveProvider(ADMIN, "webhook", ids[2] as string, "up");
+		await settings.moveProvider(ADMIN, "email", ids[2] as string, "up");
 		expect(await names()).toEqual(["A", "C", "B"]);
-		await settings.moveProvider(ADMIN, "webhook", ids[0] as string, "down");
+		await settings.moveProvider(ADMIN, "email", ids[0] as string, "down");
 		expect(await names()).toEqual(["C", "A", "B"]);
-		await settings.moveProvider(ADMIN, "webhook", ids[2] as string, "up");
+		await settings.moveProvider(ADMIN, "email", ids[2] as string, "up");
 		expect(await names()).toEqual(["C", "A", "B"]);
-		await settings.moveProvider(ADMIN, "webhook", ids[1] as string, "down");
+		await settings.moveProvider(ADMIN, "email", ids[1] as string, "down");
 		expect(await names()).toEqual(["C", "A", "B"]);
 		await expect(
-			settings.moveProvider(ADMIN, "webhook", ids[1] as string, "left" as "up"),
+			settings.moveProvider(ADMIN, "email", ids[1] as string, "left" as "up"),
 		).rejects.toBeInstanceOf(ValidationError);
 		await expect(
-			settings.moveProvider(ADMIN, "webhook", "prv_missing", "up"),
+			settings.moveProvider(ADMIN, "email", "prv_missing", "up"),
 		).rejects.toBeInstanceOf(NotFoundError);
 
-		await settings.removeProvider(ADMIN, "webhook", ids[0] as string);
+		await settings.removeProvider(ADMIN, "email", ids[0] as string);
 		expect(await names()).toEqual(["C", "B"]);
 		await expect(
-			settings.removeProvider(ADMIN, "webhook", ids[0] as string),
+			settings.removeProvider(ADMIN, "email", ids[0] as string),
 		).rejects.toBeInstanceOf(NotFoundError);
 		await expect(
-			settings.removeProvider(EDITOR, "webhook", ids[1] as string),
+			settings.removeProvider(EDITOR, "email", ids[1] as string),
 		).rejects.toBeInstanceOf(ForbiddenError);
 	});
 
@@ -549,20 +568,20 @@ describe("NotificationSettingsService", () => {
 	it("signs with WEBHOOK_SECRET when a webhook provider has no secret", async () => {
 		const t = withKey({ WEBHOOK_SECRET: "env-secret" });
 		const settings = t.services.notificationSettings;
-		await settings.addProvider(ADMIN, "webhook", {
+		const hook = await settings.addProvider(ADMIN, "webhook", {
 			type: "webhook",
 			name: "Timeout only",
 			values: { timeoutSeconds: "5" },
 		});
-		await settings.addProvider(ADMIN, "webhook", {
-			type: "webhook",
-			name: "Own secret",
+		const secret = async () =>
+			(await settings.resolve()).webhook.providers.map(
+				(provider) => provider.secrets.signingSecret,
+			);
+		expect(await secret()).toEqual(["env-secret"]);
+		await settings.updateProvider(ADMIN, "webhook", hook.id, {
 			values: { signingSecret: "own-secret" },
 		});
-		const secrets = (await settings.resolve()).webhook.providers.map(
-			(provider) => provider.secrets.signingSecret,
-		);
-		expect(secrets).toEqual(["env-secret", "own-secret"]);
+		expect(await secret()).toEqual(["own-secret"]);
 	});
 
 	it("refuses to overwrite a change that somebody else saved meanwhile", async () => {

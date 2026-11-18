@@ -1585,6 +1585,11 @@ describe("admin pages", () => {
 		expect(
 			webhooks.queryByLabelText("Default from address"),
 		).not.toBeInTheDocument();
+		// Webhooks have one provider, so they have no delivery strategy.
+		expect(webhooks.queryByRole("radio")).not.toBeInTheDocument();
+		expect(
+			webhooks.getByRole("button", { name: "Add Signed webhook" }),
+		).toBeInTheDocument();
 		const secret = webhooks.getByLabelText("Signing secret");
 		expect(secret).toBeDisabled();
 		expect(
@@ -1644,15 +1649,12 @@ describe("admin pages", () => {
 			name: "Signed",
 			values: { signingSecret: "whsec" },
 		});
-		await settings.updateChannel(actor, "webhook", {
-			strategy: "load_balanced",
-			enabled: false,
-		});
+		await settings.updateChannel(actor, "webhook", { enabled: false });
 		// A provider whose credentials an unknown key encrypted.
 		await app.store.insert("notification_channels", {
 			id: "sms",
 			enabled: true,
-			strategy: "active_passive",
+			strategy: "load_balanced",
 			providers: [
 				{
 					id: "prv_lost",
@@ -1742,12 +1744,16 @@ describe("admin pages", () => {
 		);
 
 		const webhooks = card("Webhooks");
+		// One webhook provider has no role, and the channel takes no more.
 		expect(
-			webhooks.getByText(/Signed webhook · Load balanced/),
+			webhooks.getByText("Signed webhook · Signing secret saved"),
 		).toBeInTheDocument();
 		expect(
-			webhooks.getByRole("radio", { name: /Load balanced/ }),
-		).toBeChecked();
+			webhooks.getByText("The Webhooks channel can have only one provider."),
+		).toBeInTheDocument();
+		expect(
+			webhooks.queryByRole("button", { name: /^Add / }),
+		).not.toBeInTheDocument();
 
 		expect(webhooks.getByText("Off")).toBeInTheDocument();
 
@@ -1759,8 +1765,13 @@ describe("admin pages", () => {
 		expect(sms.getByRole("alert")).toHaveTextContent(
 			"The saved credentials do not decrypt",
 		);
-		// A saved secret is not required again in the edit form.
 		const [lost] = sms.getAllByRole("listitem");
+		expect(
+			within(lost as HTMLElement).getByText(
+				"Twilio · Load balanced · Auth token saved",
+			),
+		).toBeInTheDocument();
+		// A saved secret is not required again in the edit form.
 		expect(
 			within(lost as HTMLElement).getByLabelText("Auth token"),
 		).not.toBeRequired();

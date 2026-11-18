@@ -72,11 +72,11 @@ Open `/manage/setup` and create the admin there. Set `SETUP_TOKEN` so the page r
 Admins set up notifications in **Manage → Settings → Notifications**. Incident Command sends them through [airhorn](https://airhorn.org).
 
 - There are three channels: webhooks, email and text messaging. Each channel has an on/off switch.
-- Each channel can have more than one provider:
-  - Webhooks: a signed webhook provider, with an optional signing secret and a timeout.
+- Webhooks have one provider: the signed webhook provider, with an optional signing secret and a timeout. Airhorn has no other webhook provider, so webhooks have no delivery strategy.
+- Email and text messaging can have more than one provider:
   - Email: SendGrid and Amazon SES.
   - Text messaging: Twilio and Amazon SNS.
-- Each channel has a delivery strategy:
+- Email and text messaging have a delivery strategy:
   - **Active/passive** (airhorn fail-over): the first provider sends. When a send fails, the next provider sends. Use **Move up** and **Move down** to set the order.
   - **Load balanced** (airhorn round-robin): each message goes through the next provider in turn. A failed send does not go to a different provider.
 - Email and text messages need a sender. Set a default sender on the channel, or a sender on each provider. A sender on a provider replaces the sender of the channel.

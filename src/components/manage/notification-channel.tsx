@@ -14,8 +14,10 @@ import {
 import {
 	CHANNELS,
 	type ChannelDefinition,
+	hasStrategy,
 	PROVIDERS,
 	type ProviderDefinition,
+	providerLimitMessage,
 	STRATEGIES,
 } from "@/lib/notifications/catalog";
 import { ConfirmButton } from "./confirm-button";
@@ -183,7 +185,7 @@ function ProviderItem({
 	);
 	const details = [
 		definition.label,
-		providerRole(channel, index),
+		...(hasStrategy(channel.id) ? [providerRole(channel, index)] : []),
 		...(provider.from ? [`From ${provider.from}`] : []),
 		...definition.fields
 			.filter(
@@ -300,33 +302,35 @@ export function NotificationChannelCard({
 					label={`Send ${definition.noun} notifications`}
 					defaultChecked={channel.enabled}
 				/>
-				<fieldset className="space-y-1.5">
-					<legend className="text-sm font-medium">Delivery strategy</legend>
-					<div className="grid gap-3 sm:grid-cols-2">
-						{DELIVERY_STRATEGIES.map((strategy) => (
-							<label
-								key={strategy}
-								className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-bg px-4 py-3 text-sm has-checked:border-brand has-checked:bg-brand/10"
-							>
-								<input
-									type="radio"
-									name="strategy"
-									value={strategy}
-									defaultChecked={channel.strategy === strategy}
-									className="mt-0.5 size-4 shrink-0 accent-brand"
-								/>
-								<span className="min-w-0">
-									<span className="block font-medium">
-										{STRATEGIES[strategy].label}
+				{hasStrategy(channel.id) && (
+					<fieldset className="space-y-1.5">
+						<legend className="text-sm font-medium">Delivery strategy</legend>
+						<div className="grid gap-3 sm:grid-cols-2">
+							{DELIVERY_STRATEGIES.map((strategy) => (
+								<label
+									key={strategy}
+									className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-bg px-4 py-3 text-sm has-checked:border-brand has-checked:bg-brand/10"
+								>
+									<input
+										type="radio"
+										name="strategy"
+										value={strategy}
+										defaultChecked={channel.strategy === strategy}
+										className="mt-0.5 size-4 shrink-0 accent-brand"
+									/>
+									<span className="min-w-0">
+										<span className="block font-medium">
+											{STRATEGIES[strategy].label}
+										</span>
+										<span className="block text-xs text-muted">
+											{STRATEGIES[strategy].description}
+										</span>
 									</span>
-									<span className="block text-xs text-muted">
-										{STRATEGIES[strategy].description}
-									</span>
-								</span>
-							</label>
-						))}
-					</div>
-				</fieldset>
+								</label>
+							))}
+						</div>
+					</fieldset>
+				)}
 				{definition.sender && (
 					<Field
 						label={definition.sender.defaultLabel}
@@ -374,39 +378,48 @@ export function NotificationChannelCard({
 					</ol>
 				)}
 				<EnvironmentNote channel={channel} />
-				<div className="mt-4 space-y-2">
-					<h4 className="text-sm font-medium">Add a provider</h4>
-					{definition.providers.map((type) => {
-						const provider = PROVIDERS[type];
-						return (
-							<details
-								key={type}
-								className="rounded-lg border border-border bg-bg"
-							>
-								<summary className="cursor-pointer px-4 py-3 text-sm">
-									<span className="font-medium">{provider.label}</span>
-									<span className="text-muted"> · {provider.description}</span>
-								</summary>
-								<form
-									action={addNotificationProviderAction}
-									className="space-y-4 border-t border-border p-4"
+				{channel.providers.length < definition.maxProviders ? (
+					<div className="mt-4 space-y-2">
+						<h4 className="text-sm font-medium">Add a provider</h4>
+						{definition.providers.map((type) => {
+							const provider = PROVIDERS[type];
+							return (
+								<details
+									key={type}
+									className="rounded-lg border border-border bg-bg"
 								>
-									<input type="hidden" name="channel" value={channel.id} />
-									<input type="hidden" name="type" value={type} />
-									<ProviderFields
-										idPrefix={`${channel.id}-new-${type}`}
-										channel={definition}
-										definition={provider}
-										canStoreSecrets={canStoreSecrets}
-									/>
-									<SubmitButton className={buttonClass.primary}>
-										Add {provider.label}
-									</SubmitButton>
-								</form>
-							</details>
-						);
-					})}
-				</div>
+									<summary className="cursor-pointer px-4 py-3 text-sm">
+										<span className="font-medium">{provider.label}</span>
+										<span className="text-muted">
+											{" "}
+											· {provider.description}
+										</span>
+									</summary>
+									<form
+										action={addNotificationProviderAction}
+										className="space-y-4 border-t border-border p-4"
+									>
+										<input type="hidden" name="channel" value={channel.id} />
+										<input type="hidden" name="type" value={type} />
+										<ProviderFields
+											idPrefix={`${channel.id}-new-${type}`}
+											channel={definition}
+											definition={provider}
+											canStoreSecrets={canStoreSecrets}
+										/>
+										<SubmitButton className={buttonClass.primary}>
+											Add {provider.label}
+										</SubmitButton>
+									</form>
+								</details>
+							);
+						})}
+					</div>
+				) : (
+					<p className="mt-4 text-xs text-muted">
+						{providerLimitMessage(channel.id)}.
+					</p>
+				)}
 			</div>
 		</Card>
 	);
