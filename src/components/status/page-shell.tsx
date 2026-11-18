@@ -4,6 +4,7 @@ import { LogoImage } from "@/components/logo-image";
 import { PoweredBy } from "@/components/powered-by";
 import { publicLogoSrc } from "@/lib/brand";
 import type { Settings } from "@/lib/domain/types";
+import { FEED_PATH } from "@/lib/feed";
 
 export function SiteHeader({
 	settings,
@@ -60,6 +61,9 @@ export function SiteFooter() {
 				<Link href="/history" className="hover:text-fg">
 					History
 				</Link>
+				<a href={FEED_PATH} className="hover:text-fg">
+					RSS
+				</a>
 				<a href="/api/v1/status" className="hover:text-fg">
 					API
 				</a>
