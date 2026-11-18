@@ -39,7 +39,11 @@ import {
 	updateNotificationProviderAction,
 	updateServiceAction,
 } from "@/app/manage/actions";
-import { subscribeAction, unsubscribeAction } from "@/app/subscribe/actions";
+import {
+	subscribeAction,
+	unsubscribeAction,
+	unsubscribeAddressAction,
+} from "@/app/subscribe/actions";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { BRAND_ASSET_MESSAGES } from "@/lib/domain/brand-asset";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
@@ -1043,7 +1047,6 @@ describe("subscriber and settings actions", () => {
 					description: "Hello",
 					siteUrl: "https://status.acme.dev",
 					supportUrl: "https://acme.dev/help",
-					allowSubscriptions: "on",
 					uptimeDays: "30",
 				}),
 			),
@@ -1056,7 +1059,6 @@ describe("subscriber and settings actions", () => {
 			siteUrl: "https://status.acme.dev",
 			theme: "ocean",
 			uptimeDays: 30,
-			allowSubscriptions: true,
 		});
 		expectFlashRedirect(
 			await redirectOf(
@@ -1071,10 +1073,7 @@ describe("subscriber and settings actions", () => {
 	it("saves branding without touching the general settings", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");
-		await services.settings.update(SYSTEM_ACTOR, {
-			allowSubscriptions: true,
-			uptimeDays: 30,
-		});
+		await services.settings.update(SYSTEM_ACTOR, { uptimeDays: 30 });
 		vi.mocked(revalidatePath).mockClear();
 		const url = await redirectOf(
 			updateBrandingAction(
@@ -1094,7 +1093,6 @@ describe("subscriber and settings actions", () => {
 			brandColor: "#ff0066",
 			customCss: ":root{}",
 			showPoweredBy: false,
-			allowSubscriptions: true,
 			uptimeDays: 30,
 		});
 		await redirectOf(
@@ -1505,6 +1503,37 @@ describe("public subscribe actions", () => {
 		expect(await redirectOf(unsubscribeAction(new FormData()))).toBe(
 			"/subscribe/unsubscribe?done=1",
 		);
+	});
+
+	it("unsubscribes an address that the visitor enters", async () => {
+		const { services } = await setupApp();
+		await services.subscribers.addWebhook(SYSTEM_ACTOR, {
+			url: "https://hooks.example.com/a",
+		});
+		expect(
+			await redirectOf(
+				unsubscribeAddressAction(
+					form({ type: "webhook", target: "https://hooks.example.com/a" }),
+				),
+			),
+		).toBe("/subscribe/unsubscribe?done=1");
+		expect(await services.subscribers.list(SYSTEM_ACTOR)).toEqual([]);
+		// An error opens the same channel again.
+		const bad = await redirectOf(
+			unsubscribeAddressAction(form({ type: "sms", target: "555" })),
+		);
+		const badUrl = new URL(bad, "http://localhost");
+		expect(badUrl.pathname).toBe("/subscribe/unsubscribe");
+		expect(badUrl.searchParams.get("channel")).toBe("sms");
+		expect(flashMessage(bad, "error")).toBe("Check the form and try again.");
+		const empty = await redirectOf(unsubscribeAddressAction(new FormData()));
+		expect(new URL(empty, "http://localhost").search).toMatch(/^\?error=/);
+		vi.spyOn(services.subscribers, "unsubscribeAddress").mockRejectedValueOnce(
+			new Error("db down"),
+		);
+		await expect(
+			unsubscribeAddressAction(form({ type: "email", target: "a@b.co" })),
+		).rejects.toThrow("db down");
 	});
 
 	it("rethrows unexpected subscribe errors", async () => {

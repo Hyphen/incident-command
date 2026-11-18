@@ -101,7 +101,6 @@ export interface Settings {
 	theme: string;
 	brandColor?: string;
 	customCss?: string;
-	allowSubscriptions: boolean;
 	/** When false, the public pages do not show "Powered by Incident Command". */
 	showPoweredBy: boolean;
 	uptimeDays: number;

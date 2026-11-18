@@ -88,7 +88,11 @@ describe("root layout", () => {
 describe("status page", () => {
 	it("renders an empty, operational page", async () => {
 		const { services } = await setupApp();
-		await services.settings.update(SYSTEM_ACTOR, { allowSubscriptions: false });
+		for (const channel of ["email", "webhook"] as const) {
+			await services.notificationSettings.updateChannel(SYSTEM_ACTOR, channel, {
+				enabled: false,
+			});
+		}
 		render(await StatusPage());
 		expect(
 			screen.getByRole("heading", { name: "We're fully operational" }),
@@ -413,6 +417,10 @@ describe("subscription pages", () => {
 		expect(
 			screen.getByRole("heading", { name: "Get Acme updates" }),
 		).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "unsubscribe" })).toHaveAttribute(
+			"href",
+			"/subscribe/unsubscribe",
+		);
 		expect(screen.getByLabelText("Email address")).toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "RSS feed" })).toHaveAttribute(
 			"href",
@@ -454,23 +462,51 @@ describe("subscription pages", () => {
 		expect(screen.getByText("You're already subscribed")).toBeInTheDocument();
 	});
 
-	it("offers each channel that can send", async () => {
+	it("shows a toggle of the three channels and checks the field", async () => {
 		const user = userEvent.setup();
 		const { services } = await setupApp();
-		// Text messaging has no provider in the test environment.
+		await services.notificationSettings.updateChannel(SYSTEM_ACTOR, "sms", {
+			from: "ACME",
+		});
+		await services.notificationSettings.addProvider(SYSTEM_ACTOR, "sms", {
+			type: "sns",
+			name: "SNS",
+			values: { region: "us-east-1" },
+		});
 		const form = render(await SubscribePage({ searchParams: params({}) }));
 		const picker = screen.getByRole("group", { name: "Channel" });
 		expect(
 			within(picker)
 				.getAllByRole("radio")
 				.map((radio) => (radio as HTMLInputElement).value),
-		).toEqual(["email", "webhook"]);
+		).toEqual(["email", "sms", "webhook"]);
 		expect(screen.getByRole("radio", { name: "Email" })).toBeChecked();
+		expect(screen.getByLabelText("Email address")).toHaveAttribute(
+			"type",
+			"email",
+		);
+
+		// The field follows the channel, and the browser checks the value.
+		const valid = async (value: string) => {
+			const field = screen.getByRole("textbox") as HTMLInputElement;
+			await user.clear(field);
+			await user.type(field, value);
+			return field.checkValidity();
+		};
+		await user.click(screen.getByRole("radio", { name: "Text message" }));
+		expect(screen.getByLabelText("Phone number")).toHaveAttribute(
+			"type",
+			"tel",
+		);
+		await expect(valid("555-1234")).resolves.toBe(false);
+		await expect(valid("+1 (555) 123-4567")).resolves.toBe(true);
 		await user.click(screen.getByRole("radio", { name: "Webhook" }));
 		expect(screen.getByLabelText("Webhook URL")).toHaveAttribute("type", "url");
 		expect(
 			screen.getByText(/We post a confirmation link to it\./),
 		).toBeInTheDocument();
+		await expect(valid("ftp://hooks.example.com/a")).resolves.toBe(false);
+		await expect(valid("https://hooks.example.com/a")).resolves.toBe(true);
 		form.unmount();
 
 		// The redirect after a submit opens the same channel. An unknown channel opens the first one.
@@ -480,7 +516,7 @@ describe("subscription pages", () => {
 		expect(screen.getByRole("radio", { name: "Webhook" })).toBeChecked();
 		again.unmount();
 		const unknown = render(
-			await SubscribePage({ searchParams: params({ channel: "sms" }) }),
+			await SubscribePage({ searchParams: params({ channel: "fax" }) }),
 		);
 		expect(screen.getByRole("radio", { name: "Email" })).toBeChecked();
 		unknown.unmount();
@@ -507,19 +543,16 @@ describe("subscription pages", () => {
 		).toBeInTheDocument();
 		already.unmount();
 
-		// With one channel, the form shows no choice.
-		await services.notificationSettings.updateChannel(SYSTEM_ACTOR, "webhook", {
-			enabled: false,
-		});
-		render(await SubscribePage({ searchParams: params({}) }));
-		expect(
-			screen.queryByRole("group", { name: "Channel" }),
-		).not.toBeInTheDocument();
-		expect(document.querySelector('input[name="type"]')).toHaveValue("email");
-		expect(screen.getByLabelText("Email address")).toHaveAttribute(
-			"type",
-			"email",
-		);
+		// A channel that cannot send stays in the toggle, but nobody can select it.
+		for (const channel of ["email", "sms"] as const) {
+			await services.notificationSettings.updateChannel(SYSTEM_ACTOR, channel, {
+				enabled: false,
+			});
+		}
+		render(await SubscribePage({ searchParams: params({ channel: "email" }) }));
+		expect(screen.getByRole("radio", { name: "Email" })).toBeDisabled();
+		expect(screen.getByRole("radio", { name: "Text message" })).toBeDisabled();
+		expect(screen.getByRole("radio", { name: "Webhook" })).toBeChecked();
 	});
 
 	it("serves the cached status page while the database is offline", async () => {
@@ -582,12 +615,41 @@ describe("subscription pages", () => {
 			screen.getByRole("button", { name: "Unsubscribe" }),
 		).toBeInTheDocument();
 		expect(document.querySelector('input[name="token"]')).toHaveValue("abc");
+		expect(screen.queryByRole("group", { name: "Channel" })).toBeNull();
 		page.unmount();
-		const empty = render(await UnsubscribePage({ searchParams: params({}) }));
-		expect(document.querySelector('input[name="token"]')).toHaveValue("");
-		empty.unmount();
 		render(await UnsubscribePage({ searchParams: params({ done: "1" }) }));
 		expect(screen.getByText("You've been unsubscribed")).toBeInTheDocument();
+	});
+
+	it("asks for the address without a token", async () => {
+		await setupApp();
+		// Text messaging cannot send in the test environment, but a visitor can still leave it.
+		const form = render(await UnsubscribePage({ searchParams: params({}) }));
+		const picker = screen.getByRole("group", { name: "Channel" });
+		for (const radio of within(picker).getAllByRole("radio")) {
+			expect(radio).toBeEnabled();
+		}
+		expect(screen.getByRole("radio", { name: "Email" })).toBeChecked();
+		expect(screen.getByLabelText("Email address")).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "Unsubscribe" }),
+		).toBeInTheDocument();
+		expect(document.querySelector('input[name="token"]')).toBeNull();
+		form.unmount();
+
+		// After an error, the page opens the same channel and shows the error.
+		render(
+			await UnsubscribePage({
+				searchParams: params({
+					channel: "sms",
+					...flashQueryParams({ error: "validation_failed" }),
+				}),
+			}),
+		);
+		expect(screen.getByRole("radio", { name: "Text message" })).toBeChecked();
+		expect(screen.getByRole("alert")).toHaveTextContent(
+			"Check the form and try again.",
+		);
 	});
 });
 

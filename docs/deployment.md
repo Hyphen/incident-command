@@ -84,10 +84,12 @@ Admins set up notifications in **Manage → Settings → Notifications**. Incide
   - **Active/passive** (airhorn fail-over): the first provider sends. When a send fails, the next provider sends. Use **Move up** and **Move down** to set the order.
   - **Load balanced** (airhorn round-robin): each message goes through the next provider in turn. A failed send does not go to a different provider.
 - Email and text messages need a sender. Set a default sender on the channel, or a sender on each provider. A sender on a provider replaces the sender of the channel.
+- A webhook posts only to public internet addresses. The server refuses a URL whose host is, or resolves to, a private, loopback, link-local or reserved address. It does not follow redirects. To post to a webhook inside your own network, set `WEBHOOK_ALLOW_PRIVATE_NETWORKS=true`.
 - When `WEBHOOK_SECRET` is set, each webhook request has the header `x-incident-command-signature: sha256=<hex>`. The value is the HMAC-SHA256 of the raw JSON body, keyed with `WEBHOOK_SECRET`.
 - Amazon SNS takes a sender ID of up to 11 letters and digits. When the sender is a phone number, SNS sends it as the origination number. The number must be an origination number of your AWS account.
-- When **Allow visitors to subscribe** is on, the public subscribe page offers each channel that can send: email, text message and webhook. The channel sends a confirmation link to the address, phone number or URL. Notifications start only after a click on that link.
+- The public subscribe page offers each channel that is on and can send: email, text message and webhook. To stop public sign-ups through a channel, turn that channel off. The channel sends a confirmation link to the address, phone number or URL. Notifications start only after a click on that link.
 - A webhook confirmation has `"event": "subscription.confirm"`, `text`, `content` and `confirmUrl`. Slack and Discord show the text with the link.
+- A visitor unsubscribes on `/subscribe/unsubscribe`. The visitor chooses the channel and enters the email address, phone number or webhook URL. The page gives the same answer when the address has no subscription. The link in each email opens the same page and unsubscribes with one click.
 - Admins add subscribers in **Manage → Subscribers** or with the `add_subscriber` MCP tool. These subscribers get no confirmation. Get consent before you add a phone number.
 - `SITE_URL` is used to build the links in notifications, so set it to the public URL.
 
@@ -153,6 +155,7 @@ All are optional, and empty values are treated as unset. Durations accept `ms`, 
 | `ENCRYPTION_KEY_PREVIOUS`            | unset                  | Old keys, separated by commas. They decrypt stored values until a save encrypts them again with `ENCRYPTION_KEY`.                                                     |
 | `EMAIL_FROM`                         | unset                  | Default sender of the email channel.                                                                                                                                  |
 | `WEBHOOK_SECRET`                     | unset                  | Signs each webhook with HMAC-SHA256. When it is unset, the server sends unsigned webhooks.                                                                            |
+| `WEBHOOK_ALLOW_PRIVATE_NETWORKS`     | `false`                | Set to `true` to let webhooks post to private network addresses, such as `10.0.0.0/8`, `192.168.0.0/16` or `localhost`. Off by default.                               |
 | `EMAIL_PROVIDER`                     | auto                   | `sendgrid` or `ses`, for an email channel without providers. Auto: `sendgrid` if `SENDGRID_API_KEY` is set, else `ses` if `AWS_SES_REGION` is set.                    |
 | `SENDGRID_API_KEY`                   | unset                  | SendGrid API key, for an email channel without providers.                                                                                                             |
 | `AWS_SES_REGION`                     | unset                  | SES region; takes precedence over `AWS_REGION`.                                                                                                                       |

@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ChannelForm } from "@/components/status/channel-form";
 import { NoticeCard } from "@/components/status/notice";
 import { PublicPage } from "@/components/status/page-shell";
-import { SubscribeForm } from "@/components/status/subscribe-form";
 import { getApp } from "@/lib/app";
 import type { SubscriberType } from "@/lib/domain/types";
 import { FEED_PATH } from "@/lib/feed";
 import { resolveFlash } from "@/lib/flash";
+import { subscribeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Subscribe to updates" };
@@ -38,6 +39,14 @@ const SENT: Record<SubscriberType, { title: string; text: string }> = {
 		title: "Check your webhook",
 		text: "We posted a confirmation link to your webhook. Open it to start receiving updates.",
 	},
+};
+
+/** The hint under the field of each channel. */
+const HINTS: Record<SubscriberType, string> = {
+	email: "We email you a confirmation link.",
+	sms: "Include the country code. We text you a confirmation link.",
+	webhook:
+		"Slack, Discord or any JSON endpoint. We post a confirmation link to it.",
 };
 
 const TARGET_NAMES: Record<SubscriberType, string> = {
@@ -94,8 +103,24 @@ export default async function SubscribePage({ searchParams }: Props) {
 						{error}
 					</p>
 				)}
-				<SubscribeForm channels={channels} initial={channel} />
+				<ChannelForm
+					action={subscribeAction}
+					available={channels}
+					initial={channel}
+					submitLabel="Subscribe"
+					hints={HINTS}
+				/>
 				<FeedHint />
+				<p className="text-sm">
+					To stop updates,{" "}
+					<Link
+						href="/subscribe/unsubscribe"
+						className="underline hover:text-fg"
+					>
+						unsubscribe
+					</Link>
+					.
+				</p>
 			</NoticeCard>
 		);
 	}

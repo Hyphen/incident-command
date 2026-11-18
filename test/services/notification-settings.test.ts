@@ -51,6 +51,14 @@ describe("NotificationSettingsService", () => {
 		expect(resolved.webhook.providers).toEqual([
 			expect.objectContaining({ secrets: { signingSecret: "whsec" } }),
 		]);
+		// Webhooks post only to public addresses, unless the deployment allows private networks.
+		expect(resolved.webhook).not.toHaveProperty("allowPrivateNetworks");
+		const internal = createTestContext({
+			env: { WEBHOOK_ALLOW_PRIVATE_NETWORKS: "true" },
+		});
+		const open = await internal.services.notificationSettings.resolve();
+		expect(open.webhook.allowPrivateNetworks).toBe(true);
+		expect(open.email).not.toHaveProperty("allowPrivateNetworks");
 		expect(resolved.email.providers).toEqual([
 			expect.objectContaining({
 				type: "sendgrid",

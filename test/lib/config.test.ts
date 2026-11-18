@@ -25,9 +25,23 @@ describe("loadConfig", () => {
 			sendGridApiKey: undefined,
 			aws: undefined,
 			webhookSecret: undefined,
+			webhookAllowPrivateNetworks: false,
 			encryption: { key: undefined, previousKeys: [] },
 			seedDemo: false,
 		});
+	});
+
+	it("reads WEBHOOK_ALLOW_PRIVATE_NETWORKS", () => {
+		for (const value of ["true", "1"]) {
+			expect(
+				loadConfig({ WEBHOOK_ALLOW_PRIVATE_NETWORKS: value })
+					.webhookAllowPrivateNetworks,
+			).toBe(true);
+		}
+		expect(
+			loadConfig({ WEBHOOK_ALLOW_PRIVATE_NETWORKS: "no" })
+				.webhookAllowPrivateNetworks,
+		).toBe(false);
 	});
 
 	it("reads process.env by default", () => {

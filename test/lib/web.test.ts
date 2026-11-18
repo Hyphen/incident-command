@@ -26,7 +26,7 @@ import {
 	toDateTimeInput,
 } from "@/lib/format";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
-import { loadSiteSettings } from "@/lib/site";
+import { fallbackSettings, loadSiteSettings } from "@/lib/site";
 import { CachedStore } from "@/lib/store/cached";
 import {
 	brandStyle,
@@ -452,7 +452,7 @@ describe("site settings", () => {
 		await setup({ SITE_NAME: "Acme" });
 		expect((await loadSiteSettings()).siteName).toBe("Acme");
 		setApp(Promise.reject(new Error("db down")));
-		expect((await loadSiteSettings()).allowSubscriptions).toBe(false);
+		expect(await loadSiteSettings()).toEqual(fallbackSettings());
 	});
 });
 

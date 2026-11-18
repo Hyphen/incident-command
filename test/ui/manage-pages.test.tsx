@@ -1492,7 +1492,6 @@ describe("admin pages", () => {
 			within(tabs).getByRole("link", { name: "Notifications" }),
 		).toHaveAttribute("href", "/manage/settings/notifications");
 		expect(screen.getByLabelText("Uptime window (days)")).toHaveValue(30);
-		expect(screen.getByLabelText("Allow visitors to subscribe")).toBeChecked();
 		expect(screen.queryByLabelText("Brand color")).not.toBeInTheDocument();
 	});
 
@@ -1514,9 +1513,6 @@ describe("admin pages", () => {
 		expect(screen.getByLabelText("Favicon")).toHaveAttribute("type", "file");
 		// The admin uploads each file. The form has no URL field.
 		expect(screen.queryByLabelText(/URL/)).not.toBeInTheDocument();
-		expect(
-			screen.queryByLabelText("Allow visitors to subscribe by email"),
-		).not.toBeInTheDocument();
 		expect(
 			screen.queryByLabelText("Uptime window (days)"),
 		).not.toBeInTheDocument();
