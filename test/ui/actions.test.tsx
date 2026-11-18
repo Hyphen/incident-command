@@ -1088,13 +1088,19 @@ describe("subscriber and settings actions", () => {
 		expectSameFlash(url, "/manage/settings/branding?notice=Branding saved");
 		// The new theme applies without a reload.
 		expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
+		// The form did not send the box, thus the admin cleared it.
 		expect(await services.settings.get()).toMatchObject({
 			theme: "midnight",
 			brandColor: "#ff0066",
 			customCss: ":root{}",
+			showPoweredBy: false,
 			allowSubscriptions: true,
 			uptimeDays: 30,
 		});
+		await redirectOf(
+			updateBrandingAction(form({ theme: "midnight", showPoweredBy: "on" })),
+		);
+		expect((await services.settings.get()).showPoweredBy).toBe(true);
 		expectFlashRedirect(
 			await redirectOf(
 				updateBrandingAction(form({ theme: "default", brandColor: "pink" })),

@@ -104,6 +104,8 @@ export interface Settings {
 	brandColor?: string;
 	customCss?: string;
 	allowSubscriptions: boolean;
+	/** When false, the public pages do not show "Powered by Incident Command". */
+	showPoweredBy: boolean;
 	uptimeDays: number;
 	/** Set when an admin uploads a logo. The image is at /brand/logo. */
 	logoUpdatedAt?: string;
