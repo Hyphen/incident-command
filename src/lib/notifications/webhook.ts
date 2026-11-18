@@ -5,6 +5,7 @@ import {
 	AirhornSendType,
 } from "airhorn";
 import { hmacSha256 } from "../crypto";
+import { assertPublicUrl, publicDispatcher } from "./private-network";
 
 export const SIGNATURE_HEADER = "x-incident-command-signature";
 
@@ -12,6 +13,11 @@ export interface WebhookProviderOptions {
 	/** When set, requests carry an HMAC-SHA256 signature of the body. */
 	secret?: string;
 	timeoutMs?: number;
+	/**
+	 * Allows requests to private network addresses (`WEBHOOK_ALLOW_PRIVATE_NETWORKS`).
+	 * Off by default, so a webhook URL cannot reach a host inside the network of the server.
+	 */
+	allowPrivateNetworks?: boolean;
 	fetch?: typeof fetch;
 }
 
@@ -42,12 +48,19 @@ export class WebhookProvider implements AirhornProvider {
 				`sha256=${hmacSha256(this.options.secret, body)}`;
 		}
 		const doFetch = this.options.fetch ?? fetch;
+		const publicOnly = !this.options.allowPrivateNetworks;
 		try {
+			if (publicOnly) {
+				assertPublicUrl(message.to);
+			}
 			const response = await doFetch(message.to, {
 				method: "POST",
 				headers,
 				body,
+				// A redirect could lead to a private address. A webhook receiver answers itself.
+				redirect: "manual",
 				signal: AbortSignal.timeout(this.options.timeoutMs ?? 10_000),
+				...(publicOnly ? { dispatcher: publicDispatcher() } : {}),
 			});
 			return {
 				success: response.ok,
@@ -57,7 +70,12 @@ export class WebhookProvider implements AirhornProvider {
 					: [new Error(`Webhook responded with status ${response.status}`)],
 			};
 		} catch (error) {
-			const err = error instanceof Error ? error : new Error(String(error));
+			// `fetch` reports "fetch failed" and keeps the reason in `cause`.
+			const reason =
+				error instanceof Error && error.cause instanceof Error
+					? error.cause
+					: error;
+			const err = reason instanceof Error ? reason : new Error(String(reason));
 			return {
 				success: false,
 				response: { error: err.message },

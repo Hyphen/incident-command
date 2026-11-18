@@ -394,6 +394,33 @@ describe("AirhornNotifier", () => {
 		]);
 	});
 
+	it("posts to a private webhook address only when the channel allows it", async () => {
+		const internal = subscriber({
+			type: "webhook",
+			target: "http://10.0.0.5/hook",
+		});
+		const blocked = await notifier().notifier.notifyIncident(
+			notification,
+			[internal],
+			channels(),
+		);
+		expect(blocked).toEqual({ sent: 0, failed: 1 });
+		expect(requests).toEqual([]);
+		const allowed = await notifier().notifier.notifyIncident(
+			notification,
+			[internal],
+			channels({
+				webhook: channel("webhook", [provider("webhook")], {
+					allowPrivateNetworks: true,
+				}),
+			}),
+		);
+		expect(allowed).toEqual({ sent: 1, failed: 0 });
+		expect(requests.map((request) => request.url)).toEqual([
+			"http://10.0.0.5/hook",
+		]);
+	});
+
 	it("renders emails without links or services when unavailable", async () => {
 		const n = new AirhornNotifier();
 		await n.notifyIncident(

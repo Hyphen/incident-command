@@ -543,6 +543,10 @@ export class NotificationSettingsService {
 			strategy: channel.strategy,
 			providers,
 			version: `${channel.updatedAt}#${channel.revision}`,
+			...(channel.id === "webhook" &&
+			this.ctx.config.webhookAllowPrivateNetworks
+				? { allowPrivateNetworks: true }
+				: {}),
 		};
 	}
 
