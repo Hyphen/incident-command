@@ -11,6 +11,7 @@ export function fallbackSettings(): Settings {
 		description: "",
 		theme: "default",
 		allowSubscriptions: false,
+		showPoweredBy: true,
 		uptimeDays: 90,
 		updatedAt: new Date(0).toISOString(),
 	};

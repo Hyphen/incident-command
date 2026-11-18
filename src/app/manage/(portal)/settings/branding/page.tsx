@@ -3,7 +3,13 @@ import { updateBrandingAction } from "@/app/manage/actions";
 import { LogoImage } from "@/components/logo-image";
 import { SettingsTabs } from "@/components/manage/settings-tabs";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
-import { buttonClass, Card, Field, inputClass } from "@/components/manage/ui";
+import {
+	buttonClass,
+	Card,
+	Checkbox,
+	Field,
+	inputClass,
+} from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
 import { publicFaviconSrc, publicLogoSrc } from "@/lib/brand";
@@ -206,6 +212,13 @@ export default async function BrandingPage({
 								className={`${inputClass} font-mono`}
 							/>
 						</Field>
+					</div>
+					<div className="mt-4">
+						<Checkbox
+							name="showPoweredBy"
+							label="Show “Powered by Incident Command” on the public pages"
+							defaultChecked={settings.showPoweredBy}
+						/>
 					</div>
 				</Card>
 				<SubmitButton className={buttonClass.primary}>

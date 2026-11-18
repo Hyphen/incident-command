@@ -5,6 +5,7 @@ import { PoweredBy } from "@/components/powered-by";
 import { publicLogoSrc } from "@/lib/brand";
 import type { Settings } from "@/lib/domain/types";
 import { FEED_PATH } from "@/lib/feed";
+import { LLMS_PATH } from "@/lib/llms";
 
 export function SiteHeader({
 	settings,
@@ -53,11 +54,11 @@ export function SiteHeader({
 	);
 }
 
-export function SiteFooter() {
+export function SiteFooter({ settings }: { settings: Settings }) {
 	return (
 		<footer className="ic-footer mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-4 pb-10 text-xs text-muted">
-			<PoweredBy />
-			<span className="flex gap-4">
+			{settings.showPoweredBy ? <PoweredBy /> : null}
+			<span className="ml-auto flex gap-4">
 				<Link href="/history" className="hover:text-fg">
 					History
 				</Link>
@@ -66,6 +67,9 @@ export function SiteFooter() {
 				</a>
 				<a href="/api/v1/status" className="hover:text-fg">
 					API
+				</a>
+				<a href={LLMS_PATH} className="hover:text-fg">
+					llms.txt
 				</a>
 			</span>
 		</footer>
@@ -92,7 +96,7 @@ export function PublicPage({
 			<main className="ic-main mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 pb-16">
 				{children}
 			</main>
-			<SiteFooter />
+			<SiteFooter settings={settings} />
 		</div>
 	);
 }

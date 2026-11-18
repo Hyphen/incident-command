@@ -112,6 +112,10 @@ describe("status page", () => {
 			"href",
 			"/feed.xml",
 		);
+		expect(screen.getByRole("link", { name: "llms.txt" })).toHaveAttribute(
+			"href",
+			"/llms.txt",
+		);
 		expect(statusMetadata.alternates).toEqual({
 			types: {
 				"application/rss+xml": "/feed.xml",
@@ -188,6 +192,21 @@ describe("status page", () => {
 		).toBeGreaterThan(0);
 		expect(screen.getByText("Aug 2026 – Nov 2026")).toBeInTheDocument();
 		expect(screen.getAllByText("API errors").length).toBeGreaterThan(1);
+	});
+
+	it("removes the product credit when the admin turns it off", async () => {
+		const { services } = await setupApp();
+		await services.settings.update(SYSTEM_ACTOR, { showPoweredBy: false });
+		render(await StatusPage());
+		expect(screen.queryByText(/Powered by/)).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("link", { name: "Incident Command" }),
+		).not.toBeInTheDocument();
+		// The other links of the footer stay.
+		expect(screen.getByRole("link", { name: "RSS" })).toHaveAttribute(
+			"href",
+			"/feed.xml",
+		);
 	});
 
 	it("shows an uploaded logo in the header", async () => {
