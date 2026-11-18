@@ -113,6 +113,10 @@ describe("status page", () => {
 			"href",
 			"/feed.xml",
 		);
+		expect(screen.getByRole("link", { name: "llms.txt" })).toHaveAttribute(
+			"href",
+			"/llms.txt",
+		);
 		expect(statusMetadata.alternates).toEqual({
 			types: {
 				"application/rss+xml": "/feed.xml",
