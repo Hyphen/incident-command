@@ -18,6 +18,8 @@ import {
 } from "./delivery";
 import {
 	CONFIRM_TEMPLATE,
+	confirmationPayload,
+	confirmationText,
 	confirmUrl,
 	EMAIL_TEMPLATE,
 	emailData,
@@ -183,18 +185,32 @@ export class AirhornNotifier implements Notifier {
 		return { sent, failed: results.length - sent };
 	}
 
+	/** Sends the confirmation link through the channel of the subscriber. */
 	async sendConfirmation(
 		subscriber: Subscriber,
 		settings: Settings,
 		channel: DeliveryChannel,
 	): Promise<boolean> {
-		if (subscriber.type !== "email" || !canDeliver(channel)) {
+		if (channel.channel !== subscriber.type || !canDeliver(channel)) {
 			return false;
 		}
-		return this.deliver(channel, subscriber.target, CONFIRM_TEMPLATE, {
-			siteName: settings.siteName,
-			confirmUrl: confirmUrl(subscriber, settings, this.siteUrl),
-		});
+		switch (subscriber.type) {
+			case "email":
+				return this.deliver(channel, subscriber.target, CONFIRM_TEMPLATE, {
+					siteName: settings.siteName,
+					confirmUrl: confirmUrl(subscriber, settings, this.siteUrl),
+				});
+			case "sms":
+				return this.deliver(channel, subscriber.target, SMS_TEMPLATE, {
+					text: confirmationText(subscriber, settings, this.siteUrl),
+				});
+			case "webhook":
+				return this.deliver(channel, subscriber.target, WEBHOOK_TEMPLATE, {
+					payload: JSON.stringify(
+						confirmationPayload(subscriber, settings, this.siteUrl),
+					),
+				});
+		}
 	}
 
 	/**

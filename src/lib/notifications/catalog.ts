@@ -125,14 +125,14 @@ export const CHANNELS: Record<NotificationChannel, ChannelDefinition> = {
 		label: "Webhooks",
 		noun: "webhook",
 		description:
-			"Posts a JSON payload to each webhook subscriber (Slack, Discord or any endpoint). The server sends each webhook and signs it with WEBHOOK_SECRET, if it is set.",
+			"Posts a JSON payload to each webhook subscriber (Slack, Discord or any endpoint) and posts the confirmation of the public subscribe page. The server sends each webhook and signs it with WEBHOOK_SECRET, if it is set.",
 		providers: [],
 	},
 	email: {
 		label: "Email",
 		noun: "email",
 		description:
-			"Emails each email subscriber and sends the confirmation email of the public subscribe form.",
+			"Emails each email subscriber and sends the confirmation email of the public subscribe page.",
 		providers: ["sendgrid", "ses"],
 		sender: {
 			label: "From address",
@@ -144,7 +144,8 @@ export const CHANNELS: Record<NotificationChannel, ChannelDefinition> = {
 	sms: {
 		label: "Text messaging",
 		noun: "text message",
-		description: "Sends a short text message to each phone subscriber.",
+		description:
+			"Sends a short text message to each phone subscriber and texts the confirmation of the public subscribe page.",
 		providers: ["twilio", "sns"],
 		sender: {
 			label: "From number or sender ID",

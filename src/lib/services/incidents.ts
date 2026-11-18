@@ -75,6 +75,12 @@ export interface IncidentListOptions {
 	since?: string;
 	/** ISO timestamp: only events created before this time. */
 	before?: string;
+	/**
+	 * The sort order, newest first. `createdAt` (default) sorts by the
+	 * creation time. `updatedAt` sorts by the time of the latest change,
+	 * such as a new update or a resolution.
+	 */
+	orderBy?: "createdAt" | "updatedAt";
 	limit?: number;
 }
 
@@ -155,7 +161,7 @@ export class IncidentService {
 		}
 		return this.ctx.store.find("incidents", {
 			where,
-			sort: [{ field: "createdAt", direction: "desc" }],
+			sort: [{ field: options.orderBy ?? "createdAt", direction: "desc" }],
 			limit: options.limit,
 		});
 	}

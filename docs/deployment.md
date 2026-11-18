@@ -2,13 +2,17 @@
 
 Incident Command is one Next.js server (standalone output). Run it as a container on any host, or on Cloudflare Containers behind a Worker.
 
-| Path             | What it serves                                                                                                                    |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `/`              | Public status page                                                                                                                |
-| `/manage`        | Management portal                                                                                                                 |
-| `/api/mcp`       | MCP server for AI agents (Streamable HTTP; bearer tokens `icmd_...` created in the portal)                                        |
-| `/api/v1/status` | Public status JSON                                                                                                                |
-| `/healthz`       | Health check: `200` with `"status":"ok"` (`"degraded"` while the database is down after boot), or `503` when the app cannot start |
+| Path                 | What it serves                                                                                                                    |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                  | Public status page                                                                                                                |
+| `/manage`            | Management portal                                                                                                                 |
+| `/api/mcp`           | MCP server for AI agents (Streamable HTTP; bearer tokens `icmd_...` created in the portal)                                        |
+| `/api/v1/status`     | Public status JSON                                                                                                                |
+| `/feed.xml`          | RSS feed. Each incident and maintenance update is one item.                                                                       |
+| `/llms.txt`          | The status page in Markdown, for agents ([llms.txt](https://llmstxt.org))                                                         |
+| `/history.md`        | The incident history in Markdown. `?month=YYYY-MM` selects the newest month.                                                      |
+| `/incidents/{id}.md` | An incident page in Markdown                                                                                                      |
+| `/healthz`           | Health check: `200` with `"status":"ok"` (`"degraded"` while the database is down after boot), or `503` when the app cannot start |
 
 ## Quick start
 
@@ -82,7 +86,9 @@ Admins set up notifications in **Manage → Settings → Notifications**. Incide
 - Email and text messages need a sender. Set a default sender on the channel, or a sender on each provider. A sender on a provider replaces the sender of the channel.
 - When `WEBHOOK_SECRET` is set, each webhook request has the header `x-incident-command-signature: sha256=<hex>`. The value is the HMAC-SHA256 of the raw JSON body, keyed with `WEBHOOK_SECRET`.
 - Amazon SNS takes a sender ID of up to 11 letters and digits. When the sender is a phone number, SNS sends it as the origination number. The number must be an origination number of your AWS account.
-- Admins add phone numbers in **Manage → Subscribers** or with the `add_subscriber` MCP tool. Visitors cannot subscribe by text message. Get consent before you add a number.
+- When **Allow visitors to subscribe** is on, the public subscribe page offers each channel that can send: email, text message and webhook. The channel sends a confirmation link to the address, phone number or URL. Notifications start only after a click on that link.
+- A webhook confirmation has `"event": "subscription.confirm"`, `text`, `content` and `confirmUrl`. Slack and Discord show the text with the link.
+- Admins add subscribers in **Manage → Subscribers** or with the `add_subscriber` MCP tool. These subscribers get no confirmation. Get consent before you add a phone number.
 - `SITE_URL` is used to build the links in notifications, so set it to the public URL.
 
 ### Encrypted provider credentials

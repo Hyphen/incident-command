@@ -14,12 +14,13 @@ export default async function ConfirmPage({
 }) {
 	const { token } = await searchParams;
 	const { services } = await getApp();
-	const [settings, subscriber] = await Promise.all([
+	const [settings, subscriber, canSubscribe] = await Promise.all([
 		services.settings.get(),
 		services.subscribers.confirm(token ?? ""),
+		services.subscribers.canSubscribe(),
 	]);
 	return (
-		<PublicPage settings={settings} canSubscribe={false}>
+		<PublicPage settings={settings} canSubscribe={canSubscribe}>
 			{subscriber ? (
 				<NoticeCard title="You're subscribed">
 					<p>

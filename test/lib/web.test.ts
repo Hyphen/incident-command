@@ -14,7 +14,7 @@ import { createApp, setApp } from "@/lib/app";
 import { loadConfig } from "@/lib/config";
 import { DESIGN_TOKENS } from "@/lib/design";
 import { ValidationError } from "@/lib/errors";
-import { buildRssFeed, escapeXml } from "@/lib/feed";
+import { escapeXml, FEED_ITEM_LIMIT } from "@/lib/feed";
 import {
 	formatDateTime,
 	formatDay,
@@ -26,7 +26,7 @@ import {
 	toDateTimeInput,
 } from "@/lib/format";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
-import { fallbackSettings, loadSiteSettings } from "@/lib/site";
+import { loadSiteSettings } from "@/lib/site";
 import { CachedStore } from "@/lib/store/cached";
 import {
 	brandStyle,
@@ -283,12 +283,42 @@ describe("API routes", () => {
 		expect(body.page).toEqual({ name: "Status", url: null });
 	});
 
-	it("serves an rss feed", async () => {
-		const { services } = await setup();
-		await services.incidents.create(SYSTEM_ACTOR, {
-			title: "Down & out",
-			message: "<b>Looking</b>",
+	it("serves an rss feed with one item for each update", async () => {
+		const { services, clock } = await setup();
+		const empty = await (
+			await feed(new Request("https://status.acme.dev/feed.xml"))
+		).text();
+		expect(empty).toContain(
+			'<atom:link href="https://status.acme.dev/feed.xml" rel="self" type="application/rss+xml"/>',
+		);
+		expect(empty).not.toContain("<item>");
+		expect(empty).not.toContain("<lastBuildDate>");
+
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		const hidden = await services.catalog.create(SYSTEM_ACTOR, {
+			name: "Secret",
+			hidden: true,
 		});
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Down & out",
+			message: "<b>Looking</b>\nsecond line",
+			serviceIds: [api.id, hidden.id],
+		});
+		clock.advance(60_000);
+		await services.incidents.create(SYSTEM_ACTOR, {
+			kind: "maintenance",
+			title: "DB upgrade",
+			message: "Upgrading",
+			scheduledStart: "2026-11-05T00:00:00.000Z",
+			scheduledEnd: "2026-11-05T02:00:00.000Z",
+		});
+		clock.advance(60_000);
+		const fixed = await services.incidents.resolve(
+			SYSTEM_ACTOR,
+			incident.id,
+			"Fixed",
+		);
+
 		const response = await feed(
 			new Request("https://status.acme.dev/feed.xml"),
 		);
@@ -296,9 +326,35 @@ describe("API routes", () => {
 			"application/rss+xml",
 		);
 		const xml = await response.text();
-		expect(xml).toContain("<title>Down &amp; out</title>");
-		expect(xml).toContain("https://status.acme.dev/incidents/inc_");
-		expect(xml).toContain("Investigating: &lt;b&gt;Looking&lt;/b&gt;");
+		const items = xml.split("<item>").slice(1);
+		expect(
+			items.map((item) => /<title>(.*?)<\/title>/.exec(item)?.[1]),
+		).toEqual([
+			"Resolved: Down &amp; out",
+			"Scheduled: DB upgrade",
+			"Investigating: Down &amp; out",
+		]);
+		expect(items[0]).toContain(
+			`<guid isPermaLink="false">${fixed.updates[1]?.id}</guid>`,
+		);
+		expect(items[0]).toContain(
+			`<link>https://status.acme.dev/incidents/${incident.id}</link>`,
+		);
+		expect(items[0]).toContain(
+			"<pubDate>Mon, 02 Nov 2026 12:02:00 GMT</pubDate>",
+		);
+		expect(xml).toContain(
+			"<lastBuildDate>Mon, 02 Nov 2026 12:02:00 GMT</lastBuildDate>",
+		);
+		expect(items[1]).toContain("<category>Maintenance</category>");
+		expect(items[1]).toContain(
+			"&lt;p&gt;Window: Nov 5, 2026, 00:00 UTC to Nov 5, 2026, 02:00 UTC&lt;/p&gt;",
+		);
+		expect(items[2]).toContain("<category>Incident</category>");
+		expect(items[2]).toContain(
+			"<description>&lt;p&gt;&amp;lt;b&amp;gt;Looking&amp;lt;/b&amp;gt;&lt;br&gt;second line&lt;/p&gt;&lt;p&gt;Affected services: API&lt;/p&gt;</description>",
+		);
+		expect(xml).not.toContain("Secret");
 
 		await services.settings.update(SYSTEM_ACTOR, {
 			siteUrl: "https://configured.example.com",
@@ -306,6 +362,43 @@ describe("API routes", () => {
 		expect(
 			await (await feed(new Request("http://internal/feed.xml"))).text(),
 		).toContain("https://configured.example.com/incidents/");
+	});
+
+	it("puts the newest updates in the feed, also from an older incident", async () => {
+		const { services, clock } = await setup();
+		const old = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Long outage",
+			message: "Looking",
+		});
+		for (let index = 0; index < FEED_ITEM_LIMIT; index++) {
+			clock.advance(60_000);
+			await services.incidents.create(SYSTEM_ACTOR, {
+				title: `Blip ${index}`,
+				message: "Gone",
+				status: "resolved",
+			});
+		}
+		clock.advance(60_000);
+		await services.incidents.postUpdate(SYSTEM_ACTOR, old.id, {
+			message: "Still looking",
+		});
+		clock.advance(60_000);
+		await services.incidents.resolve(SYSTEM_ACTOR, old.id, "Fixed");
+		const xml = await (
+			await feed(
+				new Request("http://internal/feed.xml", {
+					headers: { "x-forwarded-host": "status.acme.dev" },
+				}),
+			)
+		).text();
+		const items = xml.split("<item>").slice(1);
+		expect(items).toHaveLength(FEED_ITEM_LIMIT);
+		expect(items[0]).toContain("<title>Resolved: Long outage</title>");
+		expect(items[0]).toContain(
+			`<link>https://status.acme.dev/incidents/${old.id}</link>`,
+		);
+		expect(items[1]).toContain("<title>Investigating: Long outage</title>");
+		expect(xml).not.toContain("Blip 1<");
 	});
 
 	it("routes MCP requests through the app", async () => {
@@ -347,33 +440,10 @@ describe("API routes", () => {
 });
 
 describe("feed helpers", () => {
-	it("escapes xml and handles empty feeds and incidents without updates", () => {
+	it("escapes each xml special character", () => {
 		expect(escapeXml(`<a href="x">'&'</a>`)).toBe(
 			"&lt;a href=&quot;x&quot;&gt;&apos;&amp;&apos;&lt;/a&gt;",
 		);
-		const xml = buildRssFeed(fallbackSettings(), [], "");
-		expect(xml).toContain("<link>/</link>");
-		const bare = buildRssFeed(
-			fallbackSettings(),
-			[
-				{
-					id: "i",
-					kind: "incident",
-					title: "T",
-					status: "investigating",
-					impact: "minor",
-					serviceIds: [],
-					updates: [],
-					startedAt: "2026-11-02T00:00:00.000Z",
-					createdBy: { type: "system", id: "s", name: "S" },
-					createdAt: "2026-11-02T00:00:00.000Z",
-					updatedAt: "2026-11-02T00:00:00.000Z",
-				},
-			],
-			"https://x.co/",
-		);
-		expect(bare).toContain("<description></description>");
-		expect(bare).toContain("<link>https://x.co/incidents/i</link>");
 	});
 });
 

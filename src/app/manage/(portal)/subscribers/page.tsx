@@ -39,9 +39,8 @@ export default async function SubscribersPage({
 				<p className="rounded-lg border border-border bg-surface-muted px-4 py-3 text-sm text-muted">
 					These channels cannot send now:{" "}
 					{unavailable.map((type) => CHANNELS[type].label).join(", ")}. Their
-					subscribers get no notifications
-					{available.email ? "" : " and the public subscribe form is hidden"}.
-					Turn them on and add providers in{" "}
+					subscribers get no notifications, and the public subscribe page does
+					not offer them. Turn them on and add providers in{" "}
 					<Link
 						href="/manage/settings/notifications"
 						className="underline hover:text-fg"

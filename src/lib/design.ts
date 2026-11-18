@@ -149,7 +149,7 @@ export function designGuide() {
 			"The brandColor setting is stronger than --ic-brand in the custom CSS. Set brandColor to null to control --ic-brand in the CSS.",
 			"The default preset has a dark mode. Each other preset has one color scheme. Use @media (prefers-color-scheme: dark) for dark mode values.",
 			"Keep sufficient contrast between text and background. Keep a different color for each status.",
-			'Do not hide the line "Powered by Incident Command".',
+			'Do not hide the line "Powered by Incident Command" with the custom CSS. To remove it from the public pages, call update_settings with showPoweredBy set to false.',
 		],
 		limits: {
 			customCssMaxLength: CUSTOM_CSS_MAX_LENGTH,

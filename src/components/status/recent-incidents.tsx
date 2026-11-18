@@ -12,6 +12,11 @@ export function groupByDay(incidents: Incident[]): [string, Incident[]][] {
 	return [...groups.entries()];
 }
 
+/**
+ * Incidents grouped by day, with the latest update of each incident.
+ * The title link of an incident covers its full row. A click on any part of
+ * the row opens the incident page.
+ */
 export function IncidentList({
 	incidents,
 	empty,
@@ -35,11 +40,14 @@ export function IncidentList({
 					</h3>
 					<ul className="ic-incident-list divide-y divide-border rounded-card border border-border bg-surface">
 						{items.map((incident) => (
-							<li key={incident.id} className="ic-incident-item px-5 py-4">
+							<li
+								key={incident.id}
+								className="ic-incident-item group relative px-5 py-4 transition-colors first:rounded-t-card last:rounded-b-card hover:bg-surface-muted has-[a:focus-visible]:outline-2 has-[a:focus-visible]:-outline-offset-2 has-[a:focus-visible]:outline-brand"
+							>
 								<div className="flex flex-wrap items-center justify-between gap-2">
 									<Link
 										href={`/incidents/${incident.id}`}
-										className="font-medium hover:underline"
+										className="font-medium outline-none after:absolute after:inset-0 group-hover:underline"
 									>
 										{incident.title}
 									</Link>

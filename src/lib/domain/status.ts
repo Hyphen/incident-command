@@ -6,6 +6,7 @@ import type {
 	IncidentImpact,
 	IncidentKind,
 	Role,
+	Service,
 	ServiceStatus,
 } from "./types";
 import { ROLES, SERVICE_STATUSES } from "./types";
@@ -107,6 +108,16 @@ const IMPACT_TO_STATUS: Record<IncidentImpact, ServiceStatus> = {
 /** The service status an incident of a given impact implies. */
 export function impactToStatus(impact: IncidentImpact): ServiceStatus {
 	return IMPACT_TO_STATUS[impact];
+}
+
+/** The names of the services in the list that the incident affects. */
+export function affectedNames(
+	incident: Pick<Incident, "serviceIds">,
+	services: readonly Service[],
+): string[] {
+	return services
+		.filter((service) => incident.serviceIds.includes(service.id))
+		.map((service) => service.name);
 }
 
 export function isClosedStatus(status: EventStatus): boolean {

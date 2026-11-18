@@ -5,6 +5,7 @@ Incident Command ships a [Model Context Protocol](https://modelcontextprotocol.i
 - **Endpoint:** `POST https://<your-host>/api/mcp`
 - **Transport:** Streamable HTTP, stateless (every request is independent, so it scales horizontally and runs on serverless hosts). `GET`/`DELETE` return `405`.
 - **Auth:** OAuth 2.1 (recommended) or an API token. See [Connect](#connect).
+- **Read without credentials:** `GET /llms.txt` gives the public status page in Markdown. Each incident page has a Markdown version at `/incidents/{id}.md`. Use these pages when an agent only reads the status.
 
 ## Connect
 
@@ -150,7 +151,7 @@ A person reviews drafts. An agent cannot approve a draft. An agent cannot change
 | `list_agent_activity`         | `agents.read`         | Recent activity for one agent.                                                      |
 | `get_settings`                | `settings.read`       | Status page settings and branding, with `logoUrl` and `faviconUrl`.                 |
 | `get_design_guide`            | `settings.write`      | The theme presets, design tokens, CSS selectors, rules and limits for a design.     |
-| `update_settings`             | `settings.write`      | Change name, URLs, theme, brand color, CSS and uptime.                              |
+| `update_settings`             | `settings.write`      | Change name, URLs, theme, brand color, CSS, uptime and the "Powered by" line.       |
 | `upload_brand_asset`          | `settings.write`      | Store the logo or the favicon. It replaces the stored file.                         |
 | `remove_brand_asset`          | `settings.write`      | Remove the stored logo or favicon.                                                  |
 | `get_notification_settings`   | `channels.read`       | The webhook, email and text messaging channels and their providers. No credentials. |
@@ -232,6 +233,8 @@ An agent that has `settings.read` and `settings.write` can do the full design of
 The rules for a file are the same as in the portal. The maximum size of a file is 512 KB. A logo is a PNG, JPEG, WebP, GIF or SVG file. A favicon can also be an ICO file. An SVG file cannot contain a script or an event handler. The tool does not download a file from a URL.
 
 The result of `get_settings`, `update_settings`, `upload_brand_asset` and `remove_brand_asset` has `logoUrl` and `faviconUrl` when a file is stored. The activity log of the agent records which file changed. It does not record the file.
+
+Set `showPoweredBy` to `false` to remove "Powered by Incident Command" from the public pages. Set it to `true` to show the line again. Do not hide the line with `customCss`.
 
 A value of `customCss` replaces the stored stylesheet. Thus the agent must call `get_settings` first, then send the full stylesheet. Pass `null` to remove the stylesheet. [Theming](theming.md#2-custom-css) lists the tokens and the selectors that the stylesheet can use.
 
