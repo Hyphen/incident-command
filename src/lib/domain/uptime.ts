@@ -11,7 +11,7 @@ export const DAY_MS = 86_400_000;
 export const MINUTE_MS = 60_000;
 
 /** The time that the minute timeline shows before and after an incident. */
-export const TIMELINE_MARGIN_MS = DAY_MS / 2;
+export const TIMELINE_MARGIN_MS = 120 * MINUTE_MS;
 
 /** The standard uptime periods in days. */
 export const UPTIME_PERIODS = [7, 30, 90] as const;

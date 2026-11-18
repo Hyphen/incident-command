@@ -93,9 +93,9 @@ export interface ServiceTimeline {
 
 /** The status of the affected services before, during and after an incident. */
 export interface IncidentTimeline {
-	/** The start of the window: 12 hours before the incident started. */
+	/** The start of the window: 2 hours before the incident started. */
 	start: string;
-	/** The end of the window: 12 hours after the incident closed, or now. */
+	/** The end of the window: 2 hours after the incident closed, or now. */
 	end: string;
 	/** `true` when the window ends now. */
 	untilNow: boolean;
@@ -272,8 +272,8 @@ export class StatusService {
 
 	/**
 	 * The status for each minute of the incident, for each visible service that
-	 * the incident affects. The window also shows 12 hours before the incident
-	 * started and 12 hours after it closed. The window does not continue after
+	 * the incident affects. The window also shows 2 hours before the incident
+	 * started and 2 hours after it closed. The window does not continue after
 	 * now. The result has no services when the maintenance did not start.
 	 */
 	async incidentTimeline(incident: Incident): Promise<IncidentTimeline> {

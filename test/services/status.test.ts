@@ -128,7 +128,7 @@ describe("StatusService", () => {
 		const resolved = await t.services.incidents.resolve(EDITOR, incident.id);
 		t.clock.set("2026-11-02T12:00:00.000Z");
 
-		// The window starts 12 hours before the incident and stops at now.
+		// The window starts 2 hours before the incident and stops at now.
 		const timeline = await t.services.status.incidentTimeline(resolved);
 		expect(timeline.untilNow).toBe(true);
 		expect(timeline.services.map((entry) => entry.service.name)).toEqual([
@@ -141,20 +141,20 @@ describe("StatusService", () => {
 				period.end,
 			]),
 		).toEqual([
-			["operational", "2026-11-01T22:00:00.000Z", "2026-11-02T10:00:00.000Z"],
+			["operational", "2026-11-02T08:00:00.000Z", "2026-11-02T10:00:00.000Z"],
 			["major_outage", "2026-11-02T10:00:00.000Z", "2026-11-02T11:00:00.000Z"],
 			["operational", "2026-11-02T11:00:00.000Z", "2026-11-02T12:00:00.000Z"],
 		]);
 
-		// Later, the window stops 12 hours after the incident. A status change
+		// Later, the window stops 2 hours after the incident. A status change
 		// after the window does not show.
 		t.clock.set("2026-11-05T09:00:00.000Z");
 		await t.services.catalog.setStatus(EDITOR, api.id, "degraded_performance");
 		t.clock.set("2026-11-20T00:00:00.000Z");
 		const later = await t.services.status.incidentTimeline(resolved);
 		expect(later).toMatchObject({
-			start: "2026-11-01T22:00:00.000Z",
-			end: "2026-11-02T23:00:00.000Z",
+			start: "2026-11-02T08:00:00.000Z",
+			end: "2026-11-02T13:00:00.000Z",
 			untilNow: false,
 		});
 		expect(
@@ -162,7 +162,7 @@ describe("StatusService", () => {
 		).toEqual([
 			["operational", "2026-11-02T10:00:00.000Z"],
 			["major_outage", "2026-11-02T11:00:00.000Z"],
-			["operational", "2026-11-02T23:00:00.000Z"],
+			["operational", "2026-11-02T13:00:00.000Z"],
 		]);
 	});
 

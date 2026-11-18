@@ -305,26 +305,26 @@ describe("timelineWindow", () => {
 		{
 			name: "an open incident",
 			times: { startedAt: "2026-11-02T10:00:30.000Z" },
-			start: "2026-11-01T22:00:00.000Z",
+			start: "2026-11-02T08:00:00.000Z",
 			end: "2026-11-02T12:00:00.000Z",
 		},
 		{
-			name: "an incident that closed less than 12 hours ago",
+			name: "an incident that closed less than 2 hours ago",
 			times: {
-				startedAt: "2026-11-02T03:00:00.000Z",
-				resolvedAt: "2026-11-02T04:00:00.000Z",
+				startedAt: "2026-11-02T10:00:00.000Z",
+				resolvedAt: "2026-11-02T11:00:00.000Z",
 			},
-			start: "2026-11-01T15:00:00.000Z",
+			start: "2026-11-02T08:00:00.000Z",
 			end: "2026-11-02T12:00:00.000Z",
 		},
 		{
-			name: "an incident that closed more than 12 hours ago",
+			name: "an incident that closed more than 2 hours ago",
 			times: {
 				startedAt: "2026-10-20T08:15:00.000Z",
 				resolvedAt: "2026-10-22T09:45:10.000Z",
 			},
-			start: "2026-10-19T20:15:00.000Z",
-			end: "2026-10-22T21:45:10.000Z",
+			start: "2026-10-20T06:15:00.000Z",
+			end: "2026-10-22T11:45:10.000Z",
 		},
 		{
 			name: "maintenance that closed before its scheduled start",
@@ -332,10 +332,10 @@ describe("timelineWindow", () => {
 				startedAt: "2026-11-05T00:00:00.000Z",
 				resolvedAt: "2026-11-02T11:00:00.000Z",
 			},
-			start: "2026-11-01T23:00:00.000Z",
+			start: "2026-11-02T09:00:00.000Z",
 			end: "2026-11-02T12:00:00.000Z",
 		},
-	])("gives 12 hours on each side of $name", ({ times, start, end }) => {
+	])("gives 2 hours on each side of $name", ({ times, start, end }) => {
 		const window = timelineWindow(times, NOW);
 		expect(window.start.toISOString()).toBe(start);
 		expect(window.end.toISOString()).toBe(end);

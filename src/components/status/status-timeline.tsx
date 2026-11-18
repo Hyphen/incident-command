@@ -154,7 +154,7 @@ function ServiceRow({
 
 /**
  * The status of each affected service for each minute of the incident, with
- * 12 hours before the incident and 12 hours after it. The list below each bar
+ * 2 hours before the incident and 2 hours after it. The list below each bar
  * shows when a disruption started and when the service recovered.
  */
 export function StatusTimeline({ services, ...window }: IncidentTimeline) {
@@ -163,8 +163,8 @@ export function StatusTimeline({ services, ...window }: IncidentTimeline) {
 			<h2 className="font-semibold">Status of the affected services</h2>
 			<p className="mt-1 text-sm text-muted">
 				{window.untilNow
-					? "The status for each minute, from 12 hours before the start until now."
-					: "The status for each minute, from 12 hours before the start to 12 hours after the end."}
+					? "The status for each minute, from 2 hours before the start until now."
+					: "The status for each minute, from 2 hours before the start to 2 hours after the end."}
 			</p>
 			<ul className="mt-6 space-y-6">
 				{services.map((timeline) => (
