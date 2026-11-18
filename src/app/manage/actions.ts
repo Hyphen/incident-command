@@ -125,6 +125,26 @@ export async function changePasswordAction(form: FormData): Promise<void> {
 
 // ---- incidents ------------------------------------------------------------------
 
+/**
+ * The status of each single service, from the `serviceStatus:<id>` selects.
+ * A form with a service picker sends `serviceIds`. In that form, only a
+ * selected service keeps its status.
+ */
+function serviceStatuses(form: FormData) {
+	const selected = form.has("serviceIds")
+		? list(form, "serviceIds")
+		: undefined;
+	return Object.entries(prefixed(form, "serviceStatus:"))
+		.filter(
+			([serviceId, status]) =>
+				status !== "" && (selected?.includes(serviceId) ?? true),
+		)
+		.map(([serviceId, status]) => ({
+			serviceId,
+			status: status as ServiceStatus,
+		}));
+}
+
 export async function createIncidentAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("editor");
 	const kind = (text(form, "kind") || "incident") as IncidentKind;
@@ -139,6 +159,7 @@ export async function createIncidentAction(form: FormData): Promise<void> {
 			serviceStatus: nonEmpty(form, "serviceStatus") as
 				| ServiceStatus
 				| undefined,
+			serviceStatuses: serviceStatuses(form),
 			scheduledStart: dateTime(form, "scheduledStart"),
 			scheduledEnd: dateTime(form, "scheduledEnd"),
 			notify: checkbox(form, "notify"),
@@ -162,6 +183,7 @@ export async function postIncidentUpdateAction(form: FormData): Promise<void> {
 			serviceStatus: nonEmpty(form, "serviceStatus") as
 				| ServiceStatus
 				| undefined,
+			serviceStatuses: serviceStatuses(form),
 			notify: checkbox(form, "notify"),
 		}),
 	);
@@ -204,6 +226,7 @@ function draftContent(form: FormData) {
 		status: nonEmpty(form, "status") as EventStatus | undefined,
 		message: text(form, "message"),
 		serviceStatus: nonEmpty(form, "serviceStatus") as ServiceStatus | undefined,
+		serviceStatuses: serviceStatuses(form),
 	};
 }
 
@@ -523,7 +546,6 @@ export async function updateGeneralSettingsAction(
 			description: text(form, "description"),
 			siteUrl: optionalText(form, "siteUrl"),
 			supportUrl: optionalText(form, "supportUrl"),
-			allowSubscriptions: checkbox(form, "allowSubscriptions"),
 			uptimeDays: integer(form, "uptimeDays"),
 		}),
 	);
@@ -554,6 +576,7 @@ export async function updateBrandingAction(form: FormData): Promise<void> {
 				theme: text(form, "theme"),
 				brandColor: optionalText(form, "brandColor"),
 				customCss: optionalText(form, "customCss"),
+				showPoweredBy: checkbox(form, "showPoweredBy"),
 			},
 			{
 				logo: await brandAssetChange(form, "logo", "removeLogo"),
@@ -577,12 +600,18 @@ export async function updateNotificationChannelAction(
 	form: FormData,
 ): Promise<void> {
 	const { actor, services } = await requireMemberForAction("admin");
+	const channel = channelOf(form);
 	await attempt(NOTIFICATIONS_PATH, () =>
-		services.notificationSettings.updateChannel(actor, channelOf(form), {
+		services.notificationSettings.updateChannel(actor, channel, {
 			revision: integer(form, "revision"),
 			enabled: checkbox(form, "enabled"),
-			strategy: text(form, "strategy") as DeliveryStrategy,
+			// The webhook form has no strategy field.
+			strategy: optionalText(form, "strategy") as DeliveryStrategy | undefined,
 			from: optionalText(form, "from"),
+			// Only the webhook card has this box.
+			...(channel === "webhook"
+				? { allowPrivateNetworks: checkbox(form, "allowPrivateNetworks") }
+				: {}),
 		}),
 	);
 	redirect(flash(NOTIFICATIONS_PATH, "notification_channel_saved"));

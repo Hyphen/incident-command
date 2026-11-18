@@ -11,6 +11,7 @@ import { ConfirmButton } from "@/components/manage/confirm-button";
 import {
 	ImpactSelect,
 	ServicePicker,
+	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
 	WindowFields,
@@ -130,12 +131,25 @@ function ReviewForm({
 					/>
 				</Field>
 				{isCreate && (
-					<ServicePicker services={catalog} selected={content.serviceIds} />
+					<ServicePicker
+						services={catalog}
+						selected={content.serviceIds}
+						withStatus
+						statuses={content.serviceStatuses}
+					/>
 				)}
 				<ServiceStatusSelect
 					value={content.serviceStatus}
 					hint="Automatic follows the impact and the status. It restores services on resolution and starts maintenance mode when maintenance is in progress."
 				/>
+				{!isCreate && (
+					<ServiceStatusList
+						services={catalog.filter((service) =>
+							(incident as Incident).serviceIds.includes(service.id),
+						)}
+						values={content.serviceStatuses}
+					/>
+				)}
 				<div className="flex flex-wrap gap-2">
 					<SubmitButton
 						formAction={saveDraftAction}
@@ -175,6 +189,12 @@ function DraftSummary({
 	const affected = catalog.filter((service) =>
 		content.serviceIds?.includes(service.id),
 	);
+	const own = catalog.flatMap((service) => {
+		const entry = content.serviceStatuses?.find(
+			({ serviceId }) => serviceId === service.id,
+		);
+		return entry ? [{ service, status: entry.status }] : [];
+	});
 	return (
 		<Card title="Notification">
 			<dl className="space-y-4 text-sm">
@@ -198,6 +218,17 @@ function DraftSummary({
 				{content.serviceStatus && (
 					<Item label="Set affected services to">
 						{SERVICE_STATUS_LABELS[content.serviceStatus]}
+					</Item>
+				)}
+				{own.length > 0 && (
+					<Item label="Status of each service">
+						<ul>
+							{own.map(({ service, status }) => (
+								<li key={service.id}>
+									{service.name}: {SERVICE_STATUS_LABELS[status]}
+								</li>
+							))}
+						</ul>
 					</Item>
 				)}
 				<Item label="Message">

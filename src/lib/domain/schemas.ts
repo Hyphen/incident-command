@@ -51,6 +51,23 @@ export const impactSchema = z.enum(INCIDENT_IMPACTS);
 export const roleSchema = z.enum(ROLES);
 export const kindSchema = z.enum(INCIDENT_KINDS);
 
+/**
+ * Statuses for single affected services. Each status replaces `serviceStatus`
+ * and the automatic status for its service. An empty list is not set.
+ */
+const serviceStatusesSchema = z
+	.array(
+		z.object({ serviceId: z.string().min(1), status: serviceStatusSchema }),
+	)
+	.max(100)
+	.refine(
+		(entries) =>
+			new Set(entries.map((entry) => entry.serviceId)).size === entries.length,
+		"Give each service only one status",
+	)
+	.optional()
+	.transform((entries) => (entries?.length ? entries : undefined));
+
 export const createServiceSchema = z.object({
 	name: z.string().trim().min(1).max(120),
 	description: text(500),
@@ -79,6 +96,7 @@ export const createIncidentSchema = z.object({
 	impact: impactSchema.optional(),
 	serviceIds: z.array(z.string().min(1)).max(100).optional(),
 	serviceStatus: serviceStatusSchema.optional(),
+	serviceStatuses: serviceStatusesSchema,
 	scheduledStart: isoDate.optional(),
 	scheduledEnd: isoDate.optional(),
 	notify: z.boolean().optional(),
@@ -89,6 +107,7 @@ export const incidentUpdateSchema = z.object({
 	status: eventStatusSchema.optional(),
 	message: z.string().trim().min(1).max(10_000),
 	serviceStatus: serviceStatusSchema.optional(),
+	serviceStatuses: serviceStatusesSchema,
 	notify: z.boolean().optional(),
 });
 export type IncidentUpdateInput = z.input<typeof incidentUpdateSchema>;
@@ -189,6 +208,9 @@ export const registerClientSchema = z.object({
 	client_name: z.string().trim().max(120).optional(),
 });
 
+/** The largest custom stylesheet that the settings accept, in characters. */
+export const CUSTOM_CSS_MAX_LENGTH = 50_000;
+
 export const updateSettingsSchema = z.object({
 	siteName: z.string().trim().min(1).max(120).optional(),
 	description: z.string().trim().max(500).optional(),
@@ -205,13 +227,11 @@ export const updateSettingsSchema = z.object({
 		.nullable()
 		.optional()
 		.transform((value) => (value === "" ? null : value)),
-	customCss: patchText(50_000),
-	allowSubscriptions: z.boolean().optional(),
+	customCss: patchText(CUSTOM_CSS_MAX_LENGTH),
+	showPoweredBy: z.boolean().optional(),
 	uptimeDays: z.number().int().min(7).max(365).optional(),
 });
 export type UpdateSettingsInput = z.input<typeof updateSettingsSchema>;
-
-export const subscribeSchema = z.object({ email });
 
 const PHONE = /^\+[1-9][0-9]{6,14}$/;
 
@@ -230,11 +250,18 @@ const phone = z
 
 export const smsSubscriberSchema = z.object({ phone });
 
-export const webhookSubscriberSchema = z.object({
-	url: z.url({ protocol: /^https?$/ }).max(2000),
-});
+const webhookUrl = z.url({ protocol: /^https?$/ }).max(2000);
+
+export const webhookSubscriberSchema = z.object({ url: webhookUrl });
 
 export const emailSubscriberSchema = z.object({ email });
+
+/** A public subscription. The format of `target` follows `type`. */
+export const subscribeSchema = z.discriminatedUnion("type", [
+	z.object({ type: z.literal("email"), target: email }),
+	z.object({ type: z.literal("sms"), target: phone }),
+	z.object({ type: z.literal("webhook"), target: webhookUrl }),
+]);
 
 export const notificationChannelSchema = z.enum(SUBSCRIBER_TYPES);
 
@@ -277,6 +304,7 @@ export const updateNotificationChannelSchema = z.object({
 	enabled: z.boolean().optional(),
 	strategy: z.enum(DELIVERY_STRATEGIES).optional(),
 	from: patchText(200),
+	allowPrivateNetworks: z.boolean().optional(),
 });
 export type UpdateNotificationChannelInput = z.input<
 	typeof updateNotificationChannelSchema

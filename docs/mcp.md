@@ -1,10 +1,11 @@
 # MCP server
 
-Incident Command ships a [Model Context Protocol](https://modelcontextprotocol.io) server so AI agents can run the whole thing: declare and update incidents, change service status, schedule maintenance, and (with an admin token) manage members, tokens, subscribers and settings.
+Incident Command ships a [Model Context Protocol](https://modelcontextprotocol.io) server so AI agents can run the whole thing: declare and update incidents, change service status, schedule maintenance, and (with an admin token) manage members, tokens, subscribers and settings. An agent can also [design the status page](#design-the-status-page).
 
 - **Endpoint:** `POST https://<your-host>/api/mcp`
 - **Transport:** Streamable HTTP, stateless (every request is independent, so it scales horizontally and runs on serverless hosts). `GET`/`DELETE` return `405`.
 - **Auth:** OAuth 2.1 (recommended) or an API token. See [Connect](#connect).
+- **Read without credentials:** `GET /llms.txt` gives the public status page in Markdown. Each incident page has a Markdown version at `/incidents/{id}.md`. Use these pages when an agent only reads the status.
 
 ## Connect
 
@@ -128,7 +129,7 @@ A person reviews drafts. An agent cannot approve a draft. An agent cannot change
 | `set_service_status`          | `services.set_status` | Change a service's status without an incident. Feeds uptime history.                |
 | `delete_service`              | `services.delete`     | Delete a service and its status history.                                            |
 | `create_incident`             | `incidents.publish`   | Declare an incident. Affected services move to a status derived from the impact.    |
-| `post_incident_update`        | `incidents.publish`   | Add a timeline update, optionally changing status and service status.               |
+| `post_incident_update`        | `incidents.publish`   | Add a timeline update. Optionally change the status and the status of each service. |
 | `resolve_incident`            | `incidents.publish`   | Resolve an incident or complete maintenance; restores affected services.            |
 | `edit_incident`               | `incidents.edit`      | Change title, impact, services or the maintenance window without posting an update. |
 | `delete_incident`             | `incidents.delete`    | Delete an incident or maintenance.                                                  |
@@ -148,10 +149,13 @@ A person reviews drafts. An agent cannot approve a draft. An agent cannot change
 | `update_agent`                | `agents.manage`       | Change the name, description or permissions.                                        |
 | `delete_agent`                | `agents.manage`       | Delete an agent and its credentials.                                                |
 | `list_agent_activity`         | `agents.read`         | Recent activity for one agent.                                                      |
-| `get_settings`                | `settings.read`       | Status page settings and branding.                                                  |
-| `update_settings`             | `settings.write`      | Change name, URLs, theme, brand color, CSS and uptime.                              |
+| `get_settings`                | `settings.read`       | Status page settings and branding, with `logoUrl` and `faviconUrl`.                 |
+| `get_design_guide`            | `settings.write`      | The theme presets, design tokens, CSS selectors, rules and limits for a design.     |
+| `update_settings`             | `settings.write`      | Change name, URLs, theme, brand color, CSS, uptime and the "Powered by" line.       |
+| `upload_brand_asset`          | `settings.write`      | Store the logo or the favicon. It replaces the stored file.                         |
+| `remove_brand_asset`          | `settings.write`      | Remove the stored logo or favicon.                                                  |
 | `get_notification_settings`   | `channels.read`       | The webhook, email and text messaging channels and their providers. No credentials. |
-| `update_notification_channel` | `channels.write`      | Turn a channel on or off, or set its delivery strategy or sender.                   |
+| `update_notification_channel` | `channels.write`      | Turn a channel on or off, or set its strategy or sender. Webhooks have neither.     |
 | `list_subscribers`            | `subscribers.read`    | Webhook, email and text message subscribers.                                        |
 | `add_subscriber`              | `subscribers.manage`  | Add a confirmed email subscriber, a webhook or an E.164 phone number.               |
 | `remove_subscriber`           | `subscribers.manage`  | Remove a subscriber.                                                                |
@@ -171,6 +175,22 @@ Results are JSON in a text content block. Expected failures (validation, not fou
 | Maintenance moves to `in_progress`        | `under_maintenance`                                      |
 | Incident resolved / maintenance completed | `operational`, unless another open incident affects them |
 | Any update with `serviceStatus`           | exactly `serviceStatus`                                  |
+| Any update with `serviceStatuses`         | the status in its entry, for each service in the list    |
+
+`create_incident`, `post_incident_update` and `draft_notification` accept `serviceStatuses`. Use it to give each affected service a different status. Each entry replaces `serviceStatus` and the automatic status for its service only. The other affected services keep `serviceStatus` or the automatic status.
+
+```json
+{
+	"id": "inc_123",
+	"message": "The API is back. The dashboard is still slow.",
+	"serviceStatuses": [
+		{ "serviceId": "svc_api", "status": "operational" },
+		{ "serviceId": "svc_dashboard", "status": "degraded_performance" }
+	]
+}
+```
+
+Each service in `serviceStatuses` must be an affected service. For a new incident, put the service in `serviceIds`. For an update, use `edit_incident` first to add the service to the incident. An entry also applies when a different open incident affects the service. Thus, when you resolve an incident, do not list a service that must go back to `operational`. Resolution restores that service, but keeps it as it is while a different open incident affects it.
 
 Every status change is recorded and drives the 90-day uptime bars. Partial outages count as 30% downtime, major outages as 100%; degraded performance and maintenance do not count as downtime.
 
@@ -180,7 +200,7 @@ Use a notification draft when a person must approve a notification before subscr
 
 1. The agent calls `draft_notification`. Without `incidentId`, the draft declares a new incident or maintenance. With `incidentId`, the draft is an update to that incident.
 2. The tool returns a `reviewUrl`, for example `https://status.example.com/manage/drafts/drf_...`. The agent gives this link to a person.
-3. The person opens the link and signs in, if necessary. The portal then shows the draft. An editor can change the title, status, impact, message, services and maintenance window.
+3. The person opens the link and signs in, if necessary. The portal then shows the draft. An editor can change the title, status, impact, message, services, the status of each service and the maintenance window.
 4. The editor selects **Save draft** to keep the changes, or **Approve and send** to publish the draft. Approval publishes the update on the status page and notifies subscribers. **Discard draft** closes the draft and sends nothing.
 5. The agent calls `get_notification_draft` to read the result. The `state` is `pending`, `approved` or `discarded`. After approval, `incidentId` is the incident that has the published update.
 
@@ -189,6 +209,46 @@ The status page and subscribers see nothing until a person approves the draft. T
 For safe retries, pass a UUID in `requestId` to `draft_notification`. Use a new UUID for each draft. With the same agent and UUID, a retry returns the first draft, including any review decision. After approval, `draft.publishedAt` tells you when the status page received the update.
 
 An agent publishes only when it has `incidents.publish`. It notifies subscribers only when it has `notifications.send`. Without that permission, pass `notify: false` or use `draft_notification`.
+
+## Design the status page
+
+An agent that has `settings.read` and `settings.write` can do the full design of the status page. It selects a theme, sets the brand color, uploads the logo and the favicon, and writes custom CSS.
+
+1. The agent calls `get_design_guide`. The result lists the theme presets, the design tokens, the CSS selectors, the rules, the limits and an example stylesheet.
+2. The agent calls `update_settings` with `theme` and `brandColor`.
+3. The agent calls `upload_brand_asset` for the logo and for the favicon.
+4. The agent calls `update_settings` with `customCss` for all other changes.
+
+`upload_brand_asset` takes a `kind` (`logo` or `favicon`) and the file in `data`. The `data` value is one of these:
+
+- The file as base64 text.
+- A base64 data URL, such as `data:image/png;base64,iVBORw0…`.
+- The source text of an SVG image, such as `<svg xmlns="http://www.w3.org/2000/svg" …>`.
+
+```json
+{
+	"kind": "logo",
+	"data": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 32\"><text x=\"0\" y=\"24\" font-size=\"24\">Acme</text></svg>"
+}
+```
+
+The rules for a file are the same as in the portal. The maximum size of a file is 512 KB. A logo is a PNG, JPEG, WebP, GIF or SVG file. A favicon can also be an ICO file. An SVG file cannot contain a script or an event handler. The tool does not download a file from a URL.
+
+The result of `get_settings`, `update_settings`, `upload_brand_asset` and `remove_brand_asset` has `logoUrl` and `faviconUrl` when a file is stored. The activity log of the agent records which file changed. It does not record the file.
+
+Set `showPoweredBy` to `false` to remove "Powered by Incident Command" from the public pages. Set it to `true` to show the line again. Do not hide the line with `customCss`.
+
+A value of `customCss` replaces the stored stylesheet. Thus the agent must call `get_settings` first, then send the full stylesheet. Pass `null` to remove the stylesheet. [Theming](theming.md#2-custom-css) lists the tokens and the selectors that the stylesheet can use.
+
+```json
+{
+	"theme": "carbon",
+	"brandColor": null,
+	"customCss": ":root:has(.ic-page) { --ic-brand: #7c5cff; --ic-radius: 1rem; }\n.ic-uptime-bar { border-radius: 9999px; }"
+}
+```
+
+The public status page shows the new design without a review by a person. Give `settings.write` only to an agent that you trust with the look of the page.
 
 ## Attribution and notifications
 

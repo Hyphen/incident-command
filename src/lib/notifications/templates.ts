@@ -115,6 +115,34 @@ export function confirmUrl(
 	);
 }
 
+/** The text of a confirmation by text message or webhook. */
+export function confirmationText(
+	subscriber: Subscriber,
+	settings: Settings,
+	fallback?: string,
+): string {
+	const url = confirmUrl(subscriber, settings, fallback);
+	const text = `[${settings.siteName}] Confirm your subscription to status updates.`;
+	return url ? `${text}\n${url}` : text;
+}
+
+/** The payload of a webhook confirmation. The text fields suit Slack and Discord. */
+export function confirmationPayload(
+	subscriber: Subscriber,
+	settings: Settings,
+	fallback?: string,
+) {
+	const text = confirmationText(subscriber, settings, fallback);
+	return {
+		event: "subscription.confirm",
+		text,
+		content: text,
+		confirmUrl: confirmUrl(subscriber, settings, fallback),
+		page: { name: settings.siteName, url: siteUrlFor(settings, fallback) },
+		timestamp: new Date().toISOString(),
+	};
+}
+
 /** One-line human summary (used as Slack `text` / Discord `content`). */
 export function summaryText(notification: IncidentNotification): string {
 	const { incident, update, settings, event } = notification;

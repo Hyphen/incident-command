@@ -48,28 +48,6 @@ const awsFields = (service: string): ProviderField[] => [
 ];
 
 export const PROVIDERS: Record<ProviderType, ProviderDefinition> = {
-	webhook: {
-		type: "webhook",
-		channel: "webhook",
-		label: "Signed webhook",
-		description:
-			"Posts the JSON payload to each webhook subscriber, optionally signed.",
-		fields: [
-			{
-				key: "signingSecret",
-				label: "Signing secret",
-				secret: true,
-				hint: "Signs each body with HMAC-SHA256 in the x-incident-command-signature header. When it is empty, WEBHOOK_SECRET signs, if it is set.",
-			},
-			{
-				key: "timeoutSeconds",
-				label: "Timeout (seconds)",
-				pattern: "[1-9]|[1-5][0-9]|60",
-				placeholder: "10",
-				hint: "From 1 to 60. The default is 10.",
-			},
-		],
-	},
 	sendgrid: {
 		type: "sendgrid",
 		channel: "email",
@@ -126,7 +104,11 @@ export interface ChannelDefinition {
 	/** The singular noun of one notification, such as "text message". */
 	noun: string;
 	description: string;
-	/** The provider types that can send on this channel, in display order. */
+	/**
+	 * The provider types that can send on this channel, in display order. A
+	 * channel without provider types has only an on/off switch, and the
+	 * server sends its notifications.
+	 */
 	providers: readonly ProviderType[];
 	/** The sender field. A channel without it sends without a sender. */
 	sender?: {
@@ -143,14 +125,14 @@ export const CHANNELS: Record<NotificationChannel, ChannelDefinition> = {
 		label: "Webhooks",
 		noun: "webhook",
 		description:
-			"Posts a JSON payload to each webhook subscriber (Slack, Discord or any endpoint).",
-		providers: ["webhook"],
+			"Posts a JSON payload to each webhook subscriber (Slack, Discord or any endpoint) and posts the confirmation of the public subscribe page. The server sends each webhook and signs it with WEBHOOK_SECRET, if it is set.",
+		providers: [],
 	},
 	email: {
 		label: "Email",
 		noun: "email",
 		description:
-			"Emails each email subscriber and sends the confirmation email of the public subscribe form.",
+			"Emails each email subscriber and sends the confirmation email of the public subscribe page.",
 		providers: ["sendgrid", "ses"],
 		sender: {
 			label: "From address",
@@ -162,7 +144,8 @@ export const CHANNELS: Record<NotificationChannel, ChannelDefinition> = {
 	sms: {
 		label: "Text messaging",
 		noun: "text message",
-		description: "Sends a short text message to each phone subscriber.",
+		description:
+			"Sends a short text message to each phone subscriber and texts the confirmation of the public subscribe page.",
 		providers: ["twilio", "sns"],
 		sender: {
 			label: "From number or sender ID",

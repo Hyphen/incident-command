@@ -39,7 +39,11 @@ import {
 	updateNotificationProviderAction,
 	updateServiceAction,
 } from "@/app/manage/actions";
-import { subscribeAction, unsubscribeAction } from "@/app/subscribe/actions";
+import {
+	subscribeAction,
+	unsubscribeAction,
+	unsubscribeAddressAction,
+} from "@/app/subscribe/actions";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { BRAND_ASSET_MESSAGES } from "@/lib/domain/brand-asset";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
@@ -308,6 +312,53 @@ describe("incident actions", () => {
 		);
 	});
 
+	it("sets the status of each service from the form", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "editor");
+		const [api, web, db] = await Promise.all(
+			["API", "Web", "DB"].map((name) =>
+				services.catalog.create(SYSTEM_ACTOR, { name }),
+			),
+		);
+		const statusOf = async (id = "") => (await services.catalog.get(id)).status;
+		// The picker sends an empty serviceIds value. DB is not selected, so its status has no effect.
+		const created = await redirectOf(
+			createIncidentAction(
+				form({
+					title: "Errors",
+					message: "Looking",
+					impact: "critical",
+					serviceIds: ["", api?.id ?? "", web?.id ?? ""],
+					[`serviceStatus:${api?.id}`]: "partial_outage",
+					[`serviceStatus:${web?.id}`]: "",
+					[`serviceStatus:${db?.id}`]: "major_outage",
+				}),
+			),
+		);
+		expect(flashMessage(created, "notice")).toBe("Incident declared");
+		const [incident] = await services.incidents.list();
+		expect(incident?.serviceIds).toEqual([api?.id, web?.id]);
+		expect(await statusOf(api?.id)).toBe("partial_outage");
+		expect(await statusOf(web?.id)).toBe("major_outage");
+		expect(await statusOf(db?.id)).toBe("operational");
+
+		// The update form has no picker. Each status with a value counts.
+		await redirectOf(
+			postIncidentUpdateAction(
+				form({
+					id: incident?.id ?? "",
+					message: "Better",
+					status: "",
+					serviceStatus: "",
+					[`serviceStatus:${api?.id}`]: "",
+					[`serviceStatus:${web?.id}`]: "degraded_performance",
+				}),
+			),
+		);
+		expect(await statusOf(api?.id)).toBe("partial_outage");
+		expect(await statusOf(web?.id)).toBe("degraded_performance");
+	});
+
 	it("schedules maintenance from datetime-local inputs", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");
@@ -390,6 +441,7 @@ describe("notification draft actions", () => {
 			message: "We found the cause.",
 			serviceIds: [api.id, ""],
 			serviceStatus: "",
+			[`serviceStatus:${api.id}`]: "partial_outage",
 		};
 		expectSameFlash(
 			await redirectOf(saveDraftAction(form(fields))),
@@ -401,6 +453,7 @@ describe("notification draft actions", () => {
 			impact: "major",
 			message: "We found the cause.",
 			serviceIds: [api.id],
+			serviceStatuses: [{ serviceId: api.id, status: "partial_outage" }],
 		});
 		expect(notifier.incidents).toHaveLength(0);
 
@@ -429,7 +482,12 @@ describe("notification draft actions", () => {
 		expectSameFlash(
 			await redirectOf(
 				saveDraftAction(
-					form({ id: update.id, status: "monitoring", message: "Edited" }),
+					form({
+						id: update.id,
+						status: "monitoring",
+						message: "Edited",
+						[`serviceStatus:${api.id}`]: "degraded_performance",
+					}),
 				),
 			),
 			`/manage/drafts/${update.id}?notice=Draft saved`,
@@ -437,6 +495,7 @@ describe("notification draft actions", () => {
 		expect((await services.drafts.get(update.id)).content).toMatchObject({
 			status: "monitoring",
 			message: "Edited",
+			serviceStatuses: [{ serviceId: api.id, status: "degraded_performance" }],
 		});
 		expectSameFlash(
 			await redirectOf(discardDraftAction(form({ id: update.id }))),
@@ -988,7 +1047,6 @@ describe("subscriber and settings actions", () => {
 					description: "Hello",
 					siteUrl: "https://status.acme.dev",
 					supportUrl: "https://acme.dev/help",
-					allowSubscriptions: "on",
 					uptimeDays: "30",
 				}),
 			),
@@ -1001,7 +1059,6 @@ describe("subscriber and settings actions", () => {
 			siteUrl: "https://status.acme.dev",
 			theme: "ocean",
 			uptimeDays: 30,
-			allowSubscriptions: true,
 		});
 		expectFlashRedirect(
 			await redirectOf(
@@ -1016,10 +1073,7 @@ describe("subscriber and settings actions", () => {
 	it("saves branding without touching the general settings", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");
-		await services.settings.update(SYSTEM_ACTOR, {
-			allowSubscriptions: true,
-			uptimeDays: 30,
-		});
+		await services.settings.update(SYSTEM_ACTOR, { uptimeDays: 30 });
 		vi.mocked(revalidatePath).mockClear();
 		const url = await redirectOf(
 			updateBrandingAction(
@@ -1033,13 +1087,18 @@ describe("subscriber and settings actions", () => {
 		expectSameFlash(url, "/manage/settings/branding?notice=Branding saved");
 		// The new theme applies without a reload.
 		expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
+		// The form did not send the box, thus the admin cleared it.
 		expect(await services.settings.get()).toMatchObject({
 			theme: "midnight",
 			brandColor: "#ff0066",
 			customCss: ":root{}",
-			allowSubscriptions: true,
+			showPoweredBy: false,
 			uptimeDays: 30,
 		});
+		await redirectOf(
+			updateBrandingAction(form({ theme: "midnight", showPoweredBy: "on" })),
+		);
+		expect((await services.settings.get()).showPoweredBy).toBe(true);
 		expectFlashRedirect(
 			await redirectOf(
 				updateBrandingAction(form({ theme: "default", brandColor: "pink" })),
@@ -1214,12 +1273,25 @@ describe("notification settings actions", () => {
 		});
 		await redirectOf(
 			updateNotificationChannelAction(
-				form({ channel: "webhook", enabled: "on", strategy: "active_passive" }),
+				form({ channel: "webhook", enabled: "on", allowPrivateNetworks: "on" }),
 			),
 		);
-		expect((await services.notificationSettings.list(actor))[0]?.enabled).toBe(
-			true,
+		expect((await services.notificationSettings.list(actor))[0]).toMatchObject({
+			enabled: true,
+			allowPrivateNetworks: true,
+		});
+		// The webhook form has no strategy field and no sender field. A form
+		// without the boxes turns the channel and private network addresses off.
+		expectSameFlash(
+			await redirectOf(
+				updateNotificationChannelAction(form({ channel: "webhook" })),
+			),
+			`${PATH}?notice=Channel saved`,
 		);
+		expect((await services.notificationSettings.list(actor))[0]).toMatchObject({
+			enabled: false,
+			allowPrivateNetworks: false,
+		});
 		expectFlashRedirect(
 			await redirectOf(
 				updateNotificationChannelAction(
@@ -1411,22 +1483,29 @@ describe("public subscribe actions", () => {
 	it("subscribes and unsubscribes", async () => {
 		const { notifier } = await setupApp();
 		expect(
-			await redirectOf(subscribeAction(form({ email: "jane@example.com" }))),
-		).toBe("/subscribe?status=confirmation_sent");
-		const badEmail = await redirectOf(subscribeAction(form({ email: "bad" })));
-		expect(new URL(badEmail, "http://localhost").pathname).toBe("/subscribe");
+			await redirectOf(
+				subscribeAction(form({ type: "email", target: "jane@example.com" })),
+			),
+		).toBe("/subscribe?channel=email&status=confirmation_sent");
+		// An error opens the same channel again.
+		const badEmail = await redirectOf(
+			subscribeAction(form({ type: "webhook", target: "bad" })),
+		);
+		const badUrl = new URL(badEmail, "http://localhost");
+		expect(badUrl.pathname).toBe("/subscribe");
+		expect(badUrl.searchParams.get("channel")).toBe("webhook");
 		expect(flashMessage(badEmail, "error")).toBe(
 			"Check the form and try again.",
 		);
-		const emptyEmail = await redirectOf(subscribeAction(new FormData()));
-		expect(new URL(emptyEmail, "http://localhost").pathname).toBe("/subscribe");
-		expect(flashMessage(emptyEmail, "error")).toBeTruthy();
+		const empty = await redirectOf(subscribeAction(new FormData()));
+		expect(new URL(empty, "http://localhost").pathname).toBe("/subscribe");
+		expect(flashMessage(empty, "error")).toBeTruthy();
 		notifier.confirmationResult = false;
 		const notSent = await redirectOf(
-			subscribeAction(form({ email: "sam@example.com" })),
+			subscribeAction(form({ type: "email", target: "sam@example.com" })),
 		);
 		expect(flashMessage(notSent, "error")).toBe(
-			"We couldn't send the confirmation email. Please try again later.",
+			"We couldn't send the confirmation. Please try again later.",
 		);
 		const token = notifier.confirmations[0]?.subscriber.token ?? "";
 		expect(await redirectOf(unsubscribeAction(form({ token })))).toBe(
@@ -1437,13 +1516,44 @@ describe("public subscribe actions", () => {
 		);
 	});
 
+	it("unsubscribes an address that the visitor enters", async () => {
+		const { services } = await setupApp();
+		await services.subscribers.addWebhook(SYSTEM_ACTOR, {
+			url: "https://hooks.example.com/a",
+		});
+		expect(
+			await redirectOf(
+				unsubscribeAddressAction(
+					form({ type: "webhook", target: "https://hooks.example.com/a" }),
+				),
+			),
+		).toBe("/subscribe/unsubscribe?done=1");
+		expect(await services.subscribers.list(SYSTEM_ACTOR)).toEqual([]);
+		// An error opens the same channel again.
+		const bad = await redirectOf(
+			unsubscribeAddressAction(form({ type: "sms", target: "555" })),
+		);
+		const badUrl = new URL(bad, "http://localhost");
+		expect(badUrl.pathname).toBe("/subscribe/unsubscribe");
+		expect(badUrl.searchParams.get("channel")).toBe("sms");
+		expect(flashMessage(bad, "error")).toBe("Check the form and try again.");
+		const empty = await redirectOf(unsubscribeAddressAction(new FormData()));
+		expect(new URL(empty, "http://localhost").search).toMatch(/^\?error=/);
+		vi.spyOn(services.subscribers, "unsubscribeAddress").mockRejectedValueOnce(
+			new Error("db down"),
+		);
+		await expect(
+			unsubscribeAddressAction(form({ type: "email", target: "a@b.co" })),
+		).rejects.toThrow("db down");
+	});
+
 	it("rethrows unexpected subscribe errors", async () => {
 		const { services } = await setupApp();
 		vi.spyOn(services.subscribers, "subscribe").mockRejectedValueOnce(
 			new Error("db down"),
 		);
-		await expect(subscribeAction(form({ email: "a@b.co" }))).rejects.toThrow(
-			"db down",
-		);
+		await expect(
+			subscribeAction(form({ type: "email", target: "a@b.co" })),
+		).rejects.toThrow("db down");
 	});
 });

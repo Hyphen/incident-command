@@ -51,14 +51,12 @@ export const NOTIFICATION_CHANNELS: readonly NotificationChannel[] =
 export const DELIVERY_STRATEGIES = ["active_passive", "load_balanced"] as const;
 export type DeliveryStrategy = (typeof DELIVERY_STRATEGIES)[number];
 
-export const PROVIDER_TYPES = [
-	"webhook",
-	"sendgrid",
-	"ses",
-	"twilio",
-	"sns",
-] as const;
+/** The provider types that an admin can add to the email or text messaging channel. */
+export const PROVIDER_TYPES = ["sendgrid", "ses", "twilio", "sns"] as const;
 export type ProviderType = (typeof PROVIDER_TYPES)[number];
+
+/** A provider type, or `webhook`: the built-in webhook sender of the server. */
+export type SenderType = ProviderType | "webhook";
 
 export type DraftAction = "create" | "update";
 export type DraftState = "pending" | "approved" | "discarded";
@@ -103,7 +101,8 @@ export interface Settings {
 	theme: string;
 	brandColor?: string;
 	customCss?: string;
-	allowSubscriptions: boolean;
+	/** When false, the public pages do not show "Powered by Incident Command". */
+	showPoweredBy: boolean;
 	uptimeDays: number;
 	/** Set when an admin uploads a logo. The image is at /brand/logo. */
 	logoUpdatedAt?: string;
@@ -151,6 +150,12 @@ export interface NotificationChannelSettings {
 	from?: string;
 	/** In order. With `active_passive`, the first provider is the active one. */
 	providers: NotificationProvider[];
+	/**
+	 * The webhook channel only: when true, webhooks may post to private network
+	 * addresses. Off by default, so a webhook URL cannot reach a host inside the
+	 * network of the server.
+	 */
+	allowPrivateNetworks?: boolean;
 	/** Incremented on every write; used for optimistic concurrency. */
 	revision: number;
 	updatedAt: string;
@@ -167,7 +172,7 @@ export interface PublicNotificationProvider
 
 /** A provider that environment variables configure. */
 export interface EnvironmentProvider {
-	type: ProviderType;
+	type: SenderType;
 	name: string;
 }
 
@@ -193,6 +198,12 @@ export interface Service {
 	hidden: boolean;
 	createdAt: string;
 	updatedAt: string;
+}
+
+/** The status for one affected service of an incident or maintenance. */
+export interface ServiceStatusOverride {
+	serviceId: string;
+	status: ServiceStatus;
 }
 
 export interface ServiceStatusChange {
@@ -426,6 +437,8 @@ export interface DraftContent {
 	message: string;
 	/** Sets the affected services to this status instead of the automatic status. */
 	serviceStatus?: ServiceStatus;
+	/** Statuses for single affected services. Each one replaces `serviceStatus` for its service. */
+	serviceStatuses?: ServiceStatusOverride[];
 }
 
 /**

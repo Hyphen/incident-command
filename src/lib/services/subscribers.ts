@@ -13,6 +13,9 @@ import type { SettingsService } from "./settings";
 
 export type SubscribeOutcome = "confirmation_sent" | "already_subscribed";
 
+/** The order of the channels on the public subscribe page. */
+const PUBLIC_CHANNELS: readonly SubscriberType[] = ["email", "sms", "webhook"];
+
 export class SubscriberService {
 	private readonly ctx: ServiceContext;
 	private readonly settings: SettingsService;
@@ -28,26 +31,35 @@ export class SubscriberService {
 		this.notificationSettings = notificationSettings;
 	}
 
-	/** Whether the public status page can offer email subscriptions. */
-	async canSubscribe(): Promise<boolean> {
-		const [settings, available] = await Promise.all([
-			this.settings.get(),
-			this.notificationSettings.availability(),
-		]);
-		return settings.allowSubscriptions && available.email;
+	/** The channels that the public subscribe page offers: each channel that can send. */
+	async channels(): Promise<SubscriberType[]> {
+		const available = await this.notificationSettings.availability();
+		return PUBLIC_CHANNELS.filter((type) => available[type]);
 	}
 
-	/** Public double opt-in email subscription. */
-	async subscribe(input: { email: string }): Promise<SubscribeOutcome> {
-		if (!(await this.canSubscribe())) {
+	/** Whether the public status page can offer subscriptions. */
+	async canSubscribe(): Promise<boolean> {
+		return (await this.channels()).length > 0;
+	}
+
+	/**
+	 * Public double opt-in subscription through one of `channels()`. The
+	 * channel sends a confirmation link. Notifications start only after a
+	 * click on that link.
+	 */
+	async subscribe(input: {
+		type: string;
+		target: string;
+	}): Promise<SubscribeOutcome> {
+		const { type, target } = parse(subscribeSchema, input);
+		if (!(await this.channels()).includes(type)) {
 			throw new ForbiddenError("Subscriptions are not enabled");
 		}
-		const { email } = parse(subscribeSchema, input);
-		const existing = await this.findByTarget(email);
+		const existing = await this.findByTarget(target);
 		if (existing?.confirmed) {
 			return "already_subscribed";
 		}
-		const subscriber = existing ?? (await this.insert("email", email, false));
+		const subscriber = existing ?? (await this.insert(type, target, false));
 		const [settings, channels] = await Promise.all([
 			this.settings.get(),
 			this.notificationSettings.resolve(),
@@ -55,12 +67,12 @@ export class SubscriberService {
 		const sent = await this.ctx.notifier.sendConfirmation(
 			subscriber,
 			settings,
-			channels.email,
+			channels[subscriber.type],
 		);
 		if (!sent) {
 			throw new AppError(
 				"unavailable",
-				"We couldn't send the confirmation email. Please try again later.",
+				"We couldn't send the confirmation. Please try again later.",
 			);
 		}
 		return "confirmation_sent";
@@ -88,6 +100,22 @@ export class SubscriberService {
 		return subscriber
 			? this.ctx.store.delete("subscribers", subscriber.id)
 			: false;
+	}
+
+	/**
+	 * Removes the subscriber of an address, as a visitor enters it on the
+	 * public unsubscribe page. The result is the same when the address has no
+	 * subscription, so the page does not show who subscribes.
+	 */
+	async unsubscribeAddress(input: {
+		type: string;
+		target: string;
+	}): Promise<void> {
+		const { target } = parse(subscribeSchema, input);
+		const subscriber = await this.findByTarget(target);
+		if (subscriber) {
+			await this.ctx.store.delete("subscribers", subscriber.id);
+		}
 	}
 
 	async list(actor: Actor): Promise<Omit<Subscriber, "token">[]> {

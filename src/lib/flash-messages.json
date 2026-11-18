@@ -272,7 +272,7 @@
 	"confirmation_not_sent": {
 		"id": "fls_pye5rd8qoeommboz",
 		"kind": "error",
-		"text": "We couldn't send the confirmation email. Please try again later."
+		"text": "We couldn't send the confirmation. Please try again later."
 	},
 	"draft_already_approved": {
 		"id": "fls_x9crneg3caa5nhv1",

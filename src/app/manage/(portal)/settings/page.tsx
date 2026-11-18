@@ -2,13 +2,7 @@ import type { Metadata } from "next";
 import { updateGeneralSettingsAction } from "@/app/manage/actions";
 import { SettingsTabs } from "@/components/manage/settings-tabs";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
-import {
-	buttonClass,
-	Card,
-	Checkbox,
-	Field,
-	inputClass,
-} from "@/components/manage/ui";
+import { buttonClass, Card, Field, inputClass } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
 
@@ -87,11 +81,6 @@ export default async function SettingsPage({
 								className={inputClass}
 							/>
 						</Field>
-						<Checkbox
-							name="allowSubscriptions"
-							label="Allow visitors to subscribe by email"
-							defaultChecked={settings.allowSubscriptions}
-						/>
 					</div>
 				</Card>
 				<SubmitButton className={buttonClass.primary}>

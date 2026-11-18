@@ -4,6 +4,8 @@ import { LogoImage } from "@/components/logo-image";
 import { PoweredBy } from "@/components/powered-by";
 import { publicLogoSrc } from "@/lib/brand";
 import type { Settings } from "@/lib/domain/types";
+import { FEED_PATH } from "@/lib/feed";
+import { LLMS_PATH } from "@/lib/llms";
 
 export function SiteHeader({
 	settings,
@@ -14,21 +16,21 @@ export function SiteHeader({
 }) {
 	const logoSrc = publicLogoSrc(settings);
 	return (
-		<header className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-4 px-4 pt-10 pb-6">
+		<header className="ic-header mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-4 px-4 pt-10 pb-6">
 			<Link href="/" className="flex items-center gap-3">
 				{logoSrc ? (
 					<LogoImage
 						src={logoSrc}
 						alt={settings.siteName}
-						className="h-8 w-auto max-w-48 object-contain"
+						className="ic-logo h-8 w-auto max-w-48 object-contain"
 					/>
 				) : (
-					<span className="text-lg font-semibold tracking-tight">
+					<span className="ic-site-name text-lg font-semibold tracking-tight">
 						{settings.siteName}
 					</span>
 				)}
 			</Link>
-			<nav className="flex items-center gap-2 text-sm">
+			<nav className="ic-nav flex items-center gap-2 text-sm">
 				{settings.supportUrl && (
 					<a
 						href={settings.supportUrl}
@@ -42,7 +44,7 @@ export function SiteHeader({
 				{canSubscribe && (
 					<Link
 						href="/subscribe"
-						className="rounded-full bg-brand px-4 py-1.5 font-medium text-brand-fg hover:opacity-90"
+						className="ic-subscribe rounded-full bg-brand px-4 py-1.5 font-medium text-brand-fg hover:opacity-90"
 					>
 						Subscribe to updates
 					</Link>
@@ -52,23 +54,33 @@ export function SiteHeader({
 	);
 }
 
-export function SiteFooter() {
+export function SiteFooter({ settings }: { settings: Settings }) {
 	return (
-		<footer className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-4 pb-10 text-xs text-muted">
-			<PoweredBy />
-			<span className="flex gap-4">
+		<footer className="ic-footer mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-4 pb-10 text-xs text-muted">
+			{settings.showPoweredBy ? <PoweredBy /> : null}
+			<span className="ml-auto flex gap-4">
 				<Link href="/history" className="hover:text-fg">
 					History
 				</Link>
+				<a href={FEED_PATH} className="hover:text-fg">
+					RSS
+				</a>
 				<a href="/api/v1/status" className="hover:text-fg">
 					API
+				</a>
+				<a href={LLMS_PATH} className="hover:text-fg">
+					llms.txt
 				</a>
 			</span>
 		</footer>
 	);
 }
 
-/** Layout used by every public page. */
+/**
+ * Layout used by every public page. The `ic-*` class names on the public
+ * pages are the selectors of the design guide (`src/lib/design.ts`). Custom
+ * CSS uses them, thus do not rename or remove one.
+ */
 export function PublicPage({
 	settings,
 	canSubscribe,
@@ -79,12 +91,12 @@ export function PublicPage({
 	children: ReactNode;
 }) {
 	return (
-		<div className="flex min-h-dvh flex-col">
+		<div className="ic-page flex min-h-dvh flex-col">
 			<SiteHeader settings={settings} canSubscribe={canSubscribe} />
-			<main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 pb-16">
+			<main className="ic-main mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 pb-16">
 				{children}
 			</main>
-			<SiteFooter />
+			<SiteFooter settings={settings} />
 		</div>
 	);
 }

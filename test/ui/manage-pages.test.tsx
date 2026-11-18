@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import AccountPage from "@/app/manage/(portal)/account/page";
 import AgentPage from "@/app/manage/(portal)/agents/[id]/page";
 import AgentsLoading from "@/app/manage/(portal)/agents/loading";
@@ -18,6 +18,7 @@ import BrandingPage from "@/app/manage/(portal)/settings/branding/page";
 import NotificationsSettingsPage from "@/app/manage/(portal)/settings/notifications/page";
 import SettingsPage from "@/app/manage/(portal)/settings/page";
 import SubscribersPage from "@/app/manage/(portal)/subscribers/page";
+import { createIncidentAction } from "@/app/manage/actions";
 import AuthorizePage from "@/app/manage/authorize/page";
 import InvitePage from "@/app/manage/invite/page";
 import LoginPage from "@/app/manage/login/page";
@@ -585,11 +586,13 @@ describe("incident pages", () => {
 		);
 		page.unmount();
 
-		await services.catalog.create(SYSTEM_ACTOR, {
+		const api = await services.catalog.create(SYSTEM_ACTOR, {
 			name: "API",
 			group: "Core",
 		});
-		render(await NewIncidentPage(flash({ kind: "maintenance" })));
+		const maintenance = render(
+			await NewIncidentPage(flash({ kind: "maintenance" })),
+		);
 		expect(
 			screen.getByRole("heading", { name: "Schedule maintenance" }),
 		).toBeInTheDocument();
@@ -601,12 +604,39 @@ describe("incident pages", () => {
 				.getAllByRole("option")
 				.map((o) => o.textContent),
 		).toEqual(["Scheduled", "In progress", "Verifying", "Completed"]);
+		// Like the status for all services, a status for each service is for incidents only.
+		expect(
+			screen.queryByRole("combobox", { name: "Status of API" }),
+		).not.toBeInTheDocument();
+		maintenance.unmount();
+
+		render(await NewIncidentPage(flash()));
+		const own = screen.getByRole("combobox", { name: "Status of API" });
+		expect(own).toHaveValue("");
+		// A status of a service that is not selected has no effect, also when no service is selected.
+		fireEvent.change(screen.getByLabelText("Title"), {
+			target: { value: "Errors" },
+		});
+		fireEvent.change(screen.getByLabelText("Message"), {
+			target: { value: "Looking" },
+		});
+		fireEvent.change(own, { target: { value: "major_outage" } });
+		const declared = await redirectOf(
+			createIncidentAction(
+				new FormData(own.closest("form") as HTMLFormElement),
+			),
+		);
+		expect(declared).toContain("notice=incident_declared");
+		const [incident] = await services.incidents.list();
+		expect(incident?.serviceIds).toEqual([]);
+		expect((await services.catalog.get(api.id)).status).toBe("operational");
 	});
 
 	it("renders incident management for editors", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "editor");
 		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		const incident = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "API errors",
 			message: "Looking",
@@ -618,6 +648,14 @@ describe("incident pages", () => {
 				searchParams: params({}),
 			}),
 		);
+		// The update form offers a status for each affected service only.
+		const own = screen.getByRole("combobox", { name: "Status of API" });
+		expect(own).toHaveAttribute("name", `serviceStatus:${api.id}`);
+		expect(own).toHaveValue("");
+		expect(screen.getByText("Now: Degraded performance")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("combobox", { name: "Status of Web" }),
+		).not.toBeInTheDocument();
 		expect(
 			screen.getByRole("heading", { level: 1, name: "API errors" }),
 		).toBeInTheDocument();
@@ -775,6 +813,7 @@ describe("notification draft pages", () => {
 			impact: "critical",
 			serviceIds: [api.id],
 			serviceStatus: "partial_outage",
+			serviceStatuses: [{ serviceId: api.id, status: "major_outage" }],
 		});
 		render(await draftPage(draft.id));
 		expect(
@@ -791,6 +830,12 @@ describe("notification draft pages", () => {
 		expect(screen.getByRole("checkbox", { name: /Web/ })).not.toBeChecked();
 		expect(screen.getByLabelText("Set affected services to")).toHaveValue(
 			"partial_outage",
+		);
+		expect(screen.getByRole("combobox", { name: "Status of API" })).toHaveValue(
+			"major_outage",
+		);
+		expect(screen.getByRole("combobox", { name: "Status of Web" })).toHaveValue(
+			"",
 		);
 		const buttons = screen
 			.getAllByRole("button")
@@ -828,15 +873,19 @@ describe("notification draft pages", () => {
 		expect(screen.queryByLabelText("Impact")).not.toBeInTheDocument();
 		page.unmount();
 
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		const incident = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "API errors",
 			message: "x",
 			status: "identified",
+			serviceIds: [api.id],
 			notify: false,
 		});
 		const update = await services.drafts.create(AGENT, {
 			incidentId: incident.id,
 			message: "A fix is ready.",
+			serviceStatuses: [{ serviceId: api.id, status: "partial_outage" }],
 		});
 		render(await draftPage(update.id));
 		expect(
@@ -852,6 +901,13 @@ describe("notification draft pages", () => {
 		).toHaveValue("");
 		expect(screen.queryByLabelText("Title")).not.toBeInTheDocument();
 		expect(screen.queryByText("Affected services")).not.toBeInTheDocument();
+		// An update offers a status for each affected service of the incident.
+		expect(screen.getByRole("combobox", { name: "Status of API" })).toHaveValue(
+			"partial_outage",
+		);
+		expect(
+			screen.queryByRole("combobox", { name: "Status of Web" }),
+		).not.toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "View incident" })).toHaveAttribute(
 			"href",
 			`/manage/incidents/${incident.id}`,
@@ -869,6 +925,7 @@ describe("notification draft pages", () => {
 			impact: "minor",
 			serviceIds: [api.id],
 			serviceStatus: "under_maintenance",
+			serviceStatuses: [{ serviceId: api.id, status: "partial_outage" }],
 			scheduledStart: "2026-11-05T00:00:00.000Z",
 			scheduledEnd: "2026-11-05T01:00:00.000Z",
 		});
@@ -880,6 +937,7 @@ describe("notification draft pages", () => {
 			"API",
 			"Under maintenance",
 			"We upgrade the database.",
+			"API: Partial outage",
 		]) {
 			expect(screen.getByText(text)).toBeInTheDocument();
 		}
@@ -1373,7 +1431,6 @@ describe("admin pages", () => {
 		expect(
 			screen.getByText(/These channels cannot send now: Text messaging\./),
 		).toBeInTheDocument();
-		expect(screen.queryByText(/public subscribe form/)).not.toBeInTheDocument();
 		expect(screen.getByRole("radio", { name: /Text message/ })).toBeDisabled();
 		expect(
 			screen.getByRole("link", { name: "Settings → Notifications" }),
@@ -1391,7 +1448,7 @@ describe("admin pages", () => {
 		const off = render(await SubscribersPage(flash()));
 		expect(
 			screen.getByText(
-				/cannot send now: Email, Text messaging\. .* and the public subscribe form is hidden/,
+				/cannot send now: Email, Text messaging\. Their subscribers get no notifications, and the public subscribe page does not offer them\./,
 			),
 		).toBeInTheDocument();
 		expect(screen.getByText("Subscribers (2)")).toBeInTheDocument();
@@ -1410,7 +1467,10 @@ describe("admin pages", () => {
 			name: "SNS",
 			values: { region: "us-east-1" },
 		});
-		await services.subscribers.subscribe({ email: "pending@example.com" });
+		await services.subscribers.subscribe({
+			type: "email",
+			target: "pending@example.com",
+		});
 		render(await SubscribersPage(flash()));
 		expect(screen.queryByText(/cannot send now/)).not.toBeInTheDocument();
 		expect(
@@ -1432,9 +1492,6 @@ describe("admin pages", () => {
 			within(tabs).getByRole("link", { name: "Notifications" }),
 		).toHaveAttribute("href", "/manage/settings/notifications");
 		expect(screen.getByLabelText("Uptime window (days)")).toHaveValue(30);
-		expect(
-			screen.getByLabelText("Allow visitors to subscribe by email"),
-		).toBeChecked();
 		expect(screen.queryByLabelText("Brand color")).not.toBeInTheDocument();
 	});
 
@@ -1456,17 +1513,23 @@ describe("admin pages", () => {
 		expect(screen.getByLabelText("Favicon")).toHaveAttribute("type", "file");
 		// The admin uploads each file. The form has no URL field.
 		expect(screen.queryByLabelText(/URL/)).not.toBeInTheDocument();
-		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
 		expect(
 			screen.queryByLabelText("Uptime window (days)"),
 		).not.toBeInTheDocument();
+		expect(screen.getByLabelText(/Powered by Incident Command/)).toBeChecked();
 		first.unmount();
 
 		// A stored id of a removed preset selects the preset that the site shows.
 		// With no selection, the form sends no theme and the save fails.
-		await services.settings.update(SYSTEM_ACTOR, { theme: "midnight" });
+		await services.settings.update(SYSTEM_ACTOR, {
+			theme: "midnight",
+			showPoweredBy: false,
+		});
 		render(await BrandingPage(flash()));
 		expect(screen.getByDisplayValue("carbon")).toBeChecked();
+		expect(
+			screen.getByLabelText(/Powered by Incident Command/),
+		).not.toBeChecked();
 	});
 
 	it("shows each uploaded file and a control to remove it", async () => {
@@ -1519,23 +1582,38 @@ describe("admin pages", () => {
 			screen.getByRole("heading", { name }).closest("section") as HTMLElement;
 		const webhooks = within(card("Webhooks"));
 		expect(webhooks.getByText("On")).toBeInTheDocument();
+		// The server sends webhooks, so the card has only the on/off switch.
 		expect(
-			webhooks.getByText(
-				"No providers yet. Until you add one, this channel uses Built-in webhook sender.",
-			),
-		).toBeInTheDocument();
+			webhooks.getByRole("checkbox", { name: "Send webhook notifications" }),
+		).toBeChecked();
+		expect(webhooks.queryByRole("radio")).not.toBeInTheDocument();
+		expect(webhooks.queryByRole("textbox")).not.toBeInTheDocument();
 		expect(
-			webhooks.queryByLabelText("Default from address"),
+			webhooks.queryByRole("heading", { name: "Providers" }),
 		).not.toBeInTheDocument();
-		const secret = webhooks.getByLabelText("Signing secret");
-		expect(secret).toBeDisabled();
+		// Only the webhook channel has the private network switch, and it starts off.
 		expect(
-			webhooks.getByText(
-				"Set ENCRYPTION_KEY on the server to save credentials.",
-			),
+			webhooks.getByLabelText("Allow private network addresses"),
+		).not.toBeChecked();
+		expect(
+			within(card("Email")).queryByLabelText("Allow private network addresses"),
+		).not.toBeInTheDocument();
+		expect(
+			webhooks.getByRole("button", { name: "Save channel" }),
 		).toBeInTheDocument();
 
 		const email = within(card("Email"));
+		expect(
+			email.getByText(
+				"No providers yet. Until you add one, this channel uses SendGrid (environment variables).",
+			),
+		).toBeInTheDocument();
+		expect(email.getByLabelText("API key")).toBeDisabled();
+		expect(
+			email.getAllByText(
+				"Set ENCRYPTION_KEY on the server to save credentials.",
+			),
+		).toHaveLength(2);
 		expect(email.getByRole("radio", { name: /Active\/passive/ })).toBeChecked();
 		expect(email.getByLabelText("Default from address")).toHaveAttribute(
 			"placeholder",
@@ -1581,20 +1659,12 @@ describe("admin pages", () => {
 				secretAccessKey: "secret",
 			},
 		});
-		await settings.addProvider(actor, "webhook", {
-			type: "webhook",
-			name: "Signed",
-			values: { signingSecret: "whsec" },
-		});
-		await settings.updateChannel(actor, "webhook", {
-			strategy: "load_balanced",
-			enabled: false,
-		});
+		await settings.updateChannel(actor, "webhook", { enabled: false });
 		// A provider whose credentials an unknown key encrypted.
 		await app.store.insert("notification_channels", {
 			id: "sms",
 			enabled: true,
-			strategy: "active_passive",
+			strategy: "load_balanced",
 			providers: [
 				{
 					id: "prv_lost",
@@ -1683,15 +1753,7 @@ describe("admin pages", () => {
 			"Status <status@example.com>",
 		);
 
-		const webhooks = card("Webhooks");
-		expect(
-			webhooks.getByText(/Signed webhook · Load balanced/),
-		).toBeInTheDocument();
-		expect(
-			webhooks.getByRole("radio", { name: /Load balanced/ }),
-		).toBeChecked();
-
-		expect(webhooks.getByText("Off")).toBeInTheDocument();
+		expect(card("Webhooks").getByText("Off")).toBeInTheDocument();
 
 		const sms = card("Text messaging");
 		expect(sms.getByText("Not ready")).toBeInTheDocument();
@@ -1701,8 +1763,13 @@ describe("admin pages", () => {
 		expect(sms.getByRole("alert")).toHaveTextContent(
 			"The saved credentials do not decrypt",
 		);
-		// A saved secret is not required again in the edit form.
 		const [lost] = sms.getAllByRole("listitem");
+		expect(
+			within(lost as HTMLElement).getByText(
+				"Twilio · Load balanced · Auth token saved",
+			),
+		).toBeInTheDocument();
+		// A saved secret is not required again in the edit form.
 		expect(
 			within(lost as HTMLElement).getByLabelText("Auth token"),
 		).not.toBeRequired();

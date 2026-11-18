@@ -67,7 +67,8 @@ function publicProvider(
 /**
  * The delivery settings of the webhook, email and text messaging channels:
  * on or off, the airhorn send strategy, the sender, and the providers with
- * their encrypted credentials.
+ * their encrypted credentials. The webhook channel has only the on/off
+ * switch, because the server sends each webhook.
  */
 export class NotificationSettingsService {
 	private readonly ctx: ServiceContext;
@@ -100,6 +101,14 @@ export class NotificationSettingsService {
 		requirePermission(actor, "channels.write");
 		const id = parse(notificationChannelSchema, channel);
 		const patch = parse(updateNotificationChannelSchema, input);
+		if (id === "webhook" && patch.strategy !== undefined) {
+			throw new ValidationError("Webhooks have no delivery strategy");
+		}
+		if (patch.allowPrivateNetworks !== undefined && id !== "webhook") {
+			throw new ValidationError(
+				"Only the webhook channel can allow private network addresses",
+			);
+		}
 		const from = this.sender(id, patch.from);
 		const saved = await this.mutate(
 			id,
@@ -108,6 +117,8 @@ export class NotificationSettingsService {
 				enabled: patch.enabled ?? current.enabled,
 				strategy: patch.strategy ?? current.strategy,
 				from: from === undefined ? current.from : (from ?? undefined),
+				allowPrivateNetworks:
+					patch.allowPrivateNetworks ?? current.allowPrivateNetworks,
 			}),
 			patch.revision,
 		);
@@ -484,16 +495,6 @@ export class NotificationSettingsService {
 		);
 	}
 
-	/** A webhook provider without its own signing secret signs with `WEBHOOK_SECRET`. */
-	private defaultSecrets(
-		provider: NotificationProvider,
-	): Record<string, string> {
-		const secret = this.ctx.config.webhookSecret;
-		return provider.type === "webhook" && secret
-			? { signingSecret: secret }
-			: {};
-	}
-
 	private readable(
 		channel: NotificationChannel,
 		provider: NotificationProvider,
@@ -543,6 +544,7 @@ export class NotificationSettingsService {
 			strategy: channel.strategy,
 			providers,
 			version: `${channel.updatedAt}#${channel.revision}`,
+			...(channel.allowPrivateNetworks ? { allowPrivateNetworks: true } : {}),
 		};
 	}
 
@@ -559,10 +561,7 @@ export class NotificationSettingsService {
 					name: provider.name,
 					from: provider.from ?? sender,
 					options: provider.options,
-					secrets: {
-						...this.defaultSecrets(provider),
-						...this.decryptSecrets(channel, provider),
-					},
+					secrets: this.decryptSecrets(channel, provider),
 				},
 			];
 		} catch (error) {

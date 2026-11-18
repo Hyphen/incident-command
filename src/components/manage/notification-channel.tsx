@@ -284,6 +284,8 @@ export function NotificationChannelCard({
 	canStoreSecrets: boolean;
 }) {
 	const definition = CHANNELS[channel.id];
+	// A channel without provider types, such as webhooks, has only an on/off switch.
+	const configurable = definition.providers.length > 0;
 	const hasProviders =
 		channel.providers.length > 0 || channel.environmentProviders.length > 0;
 	return (
@@ -300,33 +302,50 @@ export function NotificationChannelCard({
 					label={`Send ${definition.noun} notifications`}
 					defaultChecked={channel.enabled}
 				/>
-				<fieldset className="space-y-1.5">
-					<legend className="text-sm font-medium">Delivery strategy</legend>
-					<div className="grid gap-3 sm:grid-cols-2">
-						{DELIVERY_STRATEGIES.map((strategy) => (
-							<label
-								key={strategy}
-								className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-bg px-4 py-3 text-sm has-checked:border-brand has-checked:bg-brand/10"
-							>
-								<input
-									type="radio"
-									name="strategy"
-									value={strategy}
-									defaultChecked={channel.strategy === strategy}
-									className="mt-0.5 size-4 shrink-0 accent-brand"
-								/>
-								<span className="min-w-0">
-									<span className="block font-medium">
-										{STRATEGIES[strategy].label}
+				{configurable && (
+					<fieldset className="space-y-1.5">
+						<legend className="text-sm font-medium">Delivery strategy</legend>
+						<div className="grid gap-3 sm:grid-cols-2">
+							{DELIVERY_STRATEGIES.map((strategy) => (
+								<label
+									key={strategy}
+									className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-bg px-4 py-3 text-sm has-checked:border-brand has-checked:bg-brand/10"
+								>
+									<input
+										type="radio"
+										name="strategy"
+										value={strategy}
+										defaultChecked={channel.strategy === strategy}
+										className="mt-0.5 size-4 shrink-0 accent-brand"
+									/>
+									<span className="min-w-0">
+										<span className="block font-medium">
+											{STRATEGIES[strategy].label}
+										</span>
+										<span className="block text-xs text-muted">
+											{STRATEGIES[strategy].description}
+										</span>
 									</span>
-									<span className="block text-xs text-muted">
-										{STRATEGIES[strategy].description}
-									</span>
-								</span>
-							</label>
-						))}
+								</label>
+							))}
+						</div>
+					</fieldset>
+				)}
+				{channel.id === "webhook" && (
+					<div className="space-y-1">
+						<Checkbox
+							name="allowPrivateNetworks"
+							label="Allow private network addresses"
+							defaultChecked={channel.allowPrivateNetworks}
+						/>
+						<p className="pl-6 text-xs text-muted">
+							Lets webhooks post to hosts inside your network, such as
+							10.0.0.0/8, 192.168.0.0/16 or localhost. Anyone can add a webhook
+							on the public subscribe page, so turn this on only for an internal
+							webhook.
+						</p>
 					</div>
-				</fieldset>
+				)}
 				{definition.sender && (
 					<Field
 						label={definition.sender.defaultLabel}
@@ -358,56 +377,61 @@ export function NotificationChannelCard({
 					Save channel
 				</SubmitButton>
 			</form>
-			<div className="mt-6 border-t border-border pt-5">
-				<h3 className="text-sm font-semibold">Providers</h3>
-				{channel.providers.length > 0 && (
-					<ol className="divide-y divide-border">
-						{channel.providers.map((provider, index) => (
-							<ProviderItem
-								key={provider.id}
-								channel={channel}
-								provider={provider}
-								index={index}
-								canStoreSecrets={canStoreSecrets}
-							/>
-						))}
-					</ol>
-				)}
-				<EnvironmentNote channel={channel} />
-				<div className="mt-4 space-y-2">
-					<h4 className="text-sm font-medium">Add a provider</h4>
-					{definition.providers.map((type) => {
-						const provider = PROVIDERS[type];
-						return (
-							<details
-								key={type}
-								className="rounded-lg border border-border bg-bg"
-							>
-								<summary className="cursor-pointer px-4 py-3 text-sm">
-									<span className="font-medium">{provider.label}</span>
-									<span className="text-muted"> · {provider.description}</span>
-								</summary>
-								<form
-									action={addNotificationProviderAction}
-									className="space-y-4 border-t border-border p-4"
+			{configurable && (
+				<div className="mt-6 border-t border-border pt-5">
+					<h3 className="text-sm font-semibold">Providers</h3>
+					{channel.providers.length > 0 && (
+						<ol className="divide-y divide-border">
+							{channel.providers.map((provider, index) => (
+								<ProviderItem
+									key={provider.id}
+									channel={channel}
+									provider={provider}
+									index={index}
+									canStoreSecrets={canStoreSecrets}
+								/>
+							))}
+						</ol>
+					)}
+					<EnvironmentNote channel={channel} />
+					<div className="mt-4 space-y-2">
+						<h4 className="text-sm font-medium">Add a provider</h4>
+						{definition.providers.map((type) => {
+							const provider = PROVIDERS[type];
+							return (
+								<details
+									key={type}
+									className="rounded-lg border border-border bg-bg"
 								>
-									<input type="hidden" name="channel" value={channel.id} />
-									<input type="hidden" name="type" value={type} />
-									<ProviderFields
-										idPrefix={`${channel.id}-new-${type}`}
-										channel={definition}
-										definition={provider}
-										canStoreSecrets={canStoreSecrets}
-									/>
-									<SubmitButton className={buttonClass.primary}>
-										Add {provider.label}
-									</SubmitButton>
-								</form>
-							</details>
-						);
-					})}
+									<summary className="cursor-pointer px-4 py-3 text-sm">
+										<span className="font-medium">{provider.label}</span>
+										<span className="text-muted">
+											{" "}
+											· {provider.description}
+										</span>
+									</summary>
+									<form
+										action={addNotificationProviderAction}
+										className="space-y-4 border-t border-border p-4"
+									>
+										<input type="hidden" name="channel" value={channel.id} />
+										<input type="hidden" name="type" value={type} />
+										<ProviderFields
+											idPrefix={`${channel.id}-new-${type}`}
+											channel={definition}
+											definition={provider}
+											canStoreSecrets={canStoreSecrets}
+										/>
+										<SubmitButton className={buttonClass.primary}>
+											Add {provider.label}
+										</SubmitButton>
+									</form>
+								</details>
+							);
+						})}
+					</div>
 				</div>
-			</div>
+			)}
 		</Card>
 	);
 }

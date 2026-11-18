@@ -15,7 +15,10 @@ describe("SubscriberService", () => {
 	it("runs the double opt-in flow", async () => {
 		await expect(t.services.subscribers.canSubscribe()).resolves.toBe(true);
 		await expect(
-			t.services.subscribers.subscribe({ email: "Jane@Example.com" }),
+			t.services.subscribers.subscribe({
+				type: "email",
+				target: "Jane@Example.com",
+			}),
 		).resolves.toBe("confirmation_sent");
 		const pending = t.notifier.confirmations[0]?.subscriber;
 		expect(pending).toMatchObject({
@@ -32,7 +35,10 @@ describe("SubscriberService", () => {
 		await expect(t.services.subscribers.recipients()).resolves.toEqual([]);
 
 		// re-subscribing before confirming resends without duplicating
-		await t.services.subscribers.subscribe({ email: "jane@example.com" });
+		await t.services.subscribers.subscribe({
+			type: "email",
+			target: "jane@example.com",
+		});
 		expect(t.notifier.confirmations).toHaveLength(2);
 		expect(await t.store.count("subscribers")).toBe(1);
 
@@ -48,7 +54,10 @@ describe("SubscriberService", () => {
 		).resolves.toMatchObject({ confirmed: true });
 		await expect(t.services.subscribers.recipients()).resolves.toHaveLength(1);
 		await expect(
-			t.services.subscribers.subscribe({ email: "jane@example.com" }),
+			t.services.subscribers.subscribe({
+				type: "email",
+				target: "jane@example.com",
+			}),
 		).resolves.toBe("already_subscribed");
 
 		await expect(
@@ -65,22 +74,125 @@ describe("SubscriberService", () => {
 		).resolves.toBeUndefined();
 		await expect(t.services.subscribers.confirm("")).resolves.toBeUndefined();
 		await expect(
-			t.services.subscribers.subscribe({ email: "not-an-email" }),
+			t.services.subscribers.subscribe({
+				type: "email",
+				target: "not-an-email",
+			}),
+		).rejects.toBeInstanceOf(ValidationError);
+		await expect(
+			t.services.subscribers.subscribe({ type: "webhook", target: "ftp://x" }),
+		).rejects.toBeInstanceOf(ValidationError);
+		await expect(
+			t.services.subscribers.subscribe({ type: "fax", target: "+15551234567" }),
 		).rejects.toBeInstanceOf(ValidationError);
 	});
 
-	it("refuses public subscriptions when disabled or email is not configured", async () => {
-		await t.services.settings.update(ADMIN, { allowSubscriptions: false });
+	it("offers each channel that can send and refuses the others", async () => {
+		// Text messaging has no provider in the test environment.
+		await expect(t.services.subscribers.channels()).resolves.toEqual([
+			"email",
+			"webhook",
+		]);
 		await expect(
-			t.services.subscribers.subscribe({ email: "a@b.co" }),
+			t.services.subscribers.subscribe({ type: "sms", target: "+15551234567" }),
 		).rejects.toBeInstanceOf(ForbiddenError);
-		const noEmail = createTestContext();
-		await noEmail.services.notificationSettings.updateChannel(ADMIN, "email", {
+
+		await t.services.notificationSettings.updateChannel(ADMIN, "email", {
 			enabled: false,
 		});
-		await expect(noEmail.services.subscribers.canSubscribe()).resolves.toBe(
-			false,
-		);
+		await expect(t.services.subscribers.channels()).resolves.toEqual([
+			"webhook",
+		]);
+		await expect(
+			t.services.subscribers.subscribe({ type: "email", target: "a@b.co" }),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		await expect(t.services.subscribers.canSubscribe()).resolves.toBe(true);
+
+		await t.services.notificationSettings.updateChannel(ADMIN, "webhook", {
+			enabled: false,
+		});
+		await expect(t.services.subscribers.channels()).resolves.toEqual([]);
+		await expect(t.services.subscribers.canSubscribe()).resolves.toBe(false);
+		await expect(
+			t.services.subscribers.subscribe({
+				type: "webhook",
+				target: "https://hooks.example.com/a",
+			}),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		expect(await t.store.count("subscribers")).toBe(0);
+	});
+
+	it("confirms a phone number or a webhook through its own channel", async () => {
+		await t.services.notificationSettings.updateChannel(ADMIN, "sms", {
+			from: "ACME",
+		});
+		await t.services.notificationSettings.addProvider(ADMIN, "sms", {
+			type: "sns",
+			name: "SNS",
+			values: { region: "us-east-1" },
+		});
+		await expect(
+			t.services.subscribers.subscribe({
+				type: "sms",
+				target: "+1 (555) 123-4567",
+			}),
+		).resolves.toBe("confirmation_sent");
+		await expect(
+			t.services.subscribers.subscribe({
+				type: "webhook",
+				target: "https://hooks.example.com/a",
+			}),
+		).resolves.toBe("confirmation_sent");
+		expect(
+			t.notifier.confirmations.map(({ subscriber, channel }) => [
+				subscriber.type,
+				subscriber.target,
+				subscriber.confirmed,
+				channel.channel,
+			]),
+		).toEqual([
+			["sms", "+15551234567", false, "sms"],
+			["webhook", "https://hooks.example.com/a", false, "webhook"],
+		]);
+		await expect(t.services.subscribers.recipients()).resolves.toEqual([]);
+		for (const { subscriber } of t.notifier.confirmations) {
+			await t.services.subscribers.confirm(subscriber.token);
+		}
+		await expect(t.services.subscribers.recipients()).resolves.toHaveLength(2);
+	});
+
+	it("removes the subscriber of an address that a visitor enters", async () => {
+		await t.services.subscribers.addEmail(ADMIN, { email: "ops@acme.dev" });
+		await t.services.subscribers.addSms(ADMIN, { phone: "+15551234567" });
+		await t.services.subscribers.addWebhook(ADMIN, {
+			url: "https://hooks.example.com/a",
+		});
+		// The address is read the same way as on the subscribe page.
+		await t.services.subscribers.unsubscribeAddress({
+			type: "email",
+			target: "OPS@acme.dev",
+		});
+		await t.services.subscribers.unsubscribeAddress({
+			type: "sms",
+			target: "+1 (555) 123-4567",
+		});
+		expect(
+			(await t.services.subscribers.list(ADMIN)).map(({ target }) => target),
+		).toEqual(["https://hooks.example.com/a"]);
+		// An address without a subscription gives the same result.
+		await expect(
+			t.services.subscribers.unsubscribeAddress({
+				type: "email",
+				target: "nobody@acme.dev",
+			}),
+		).resolves.toBeUndefined();
+		await expect(
+			t.services.subscribers.unsubscribeAddress({
+				type: "email",
+				target: "https://hooks.example.com/a",
+			}),
+		).rejects.toBeInstanceOf(ValidationError);
+		expect(await t.store.count("subscribers")).toBe(1);
 	});
 
 	it("lets admins manage webhook and email subscribers", async () => {

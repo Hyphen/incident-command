@@ -8,7 +8,7 @@ import { UptimeAxis, UptimeBars } from "./uptime-bars";
 
 function ServiceRow({ service }: { service: ServiceView }) {
 	return (
-		<li className="px-5 py-4">
+		<li data-status={service.status} className="ic-service px-5 py-4">
 			<div className="flex items-center justify-between gap-4">
 				<div className="flex min-w-0 items-center gap-2">
 					<span className={STATUS_TEXT[service.status]}>
@@ -44,7 +44,7 @@ export function SystemStatus({
 	window: UptimeWindow;
 }) {
 	return (
-		<section className="rounded-card border border-border bg-surface">
+		<section className="ic-services rounded-card border border-border bg-surface">
 			<header className="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
 				<h2 className="font-semibold">System status</h2>
 				<span className="text-sm text-muted">
@@ -60,7 +60,7 @@ export function SystemStatus({
 					{groups.map((group) => (
 						<div key={group.name ?? "__ungrouped"}>
 							{group.name && (
-								<h3 className="flex items-center gap-2 bg-surface-muted px-5 py-2 text-xs font-semibold tracking-wide text-muted uppercase">
+								<h3 className="ic-group flex items-center gap-2 bg-surface-muted px-5 py-2 text-xs font-semibold tracking-wide text-muted uppercase">
 									{group.name}
 								</h3>
 							)}
