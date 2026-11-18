@@ -301,7 +301,7 @@ describe("incident page", () => {
 		expect(screen.getByText("API", { selector: "dd" })).toBeInTheDocument();
 		expect(screen.queryByText(/Secret/)).not.toBeInTheDocument();
 		expect(
-			screen.getByRole("heading", { name: "Status in the last 24 hours" }),
+			screen.getByRole("heading", { name: "Status of the affected services" }),
 		).toBeInTheDocument();
 		expect(
 			within(
@@ -341,7 +341,9 @@ describe("incident page", () => {
 		).toBeInTheDocument();
 		expect(screen.queryByText(/impact$/)).not.toBeInTheDocument();
 		expect(
-			screen.queryByRole("heading", { name: "Status in the last 24 hours" }),
+			screen.queryByRole("heading", {
+				name: "Status of the affected services",
+			}),
 		).not.toBeInTheDocument();
 	});
 

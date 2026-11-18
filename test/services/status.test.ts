@@ -128,18 +128,42 @@ describe("StatusService", () => {
 		const resolved = await t.services.incidents.resolve(EDITOR, incident.id);
 		t.clock.set("2026-11-02T12:00:00.000Z");
 
+		// The window starts 12 hours before the incident and stops at now.
 		const timeline = await t.services.status.incidentTimeline(resolved);
-		expect(timeline.map((entry) => entry.service.name)).toEqual(["API"]);
+		expect(timeline.untilNow).toBe(true);
+		expect(timeline.services.map((entry) => entry.service.name)).toEqual([
+			"API",
+		]);
 		expect(
-			timeline[0]?.periods.map((period) => [period.status, period.start]),
+			timeline.services[0]?.periods.map((period) => [
+				period.status,
+				period.start,
+				period.end,
+			]),
 		).toEqual([
-			["operational", "2026-11-01T12:00:00.000Z"],
-			["major_outage", "2026-11-02T10:00:00.000Z"],
-			["operational", "2026-11-02T11:00:00.000Z"],
+			["operational", "2026-11-01T22:00:00.000Z", "2026-11-02T10:00:00.000Z"],
+			["major_outage", "2026-11-02T10:00:00.000Z", "2026-11-02T11:00:00.000Z"],
+			["operational", "2026-11-02T11:00:00.000Z", "2026-11-02T12:00:00.000Z"],
 		]);
 
-		t.clock.set("2026-11-03T11:01:00.000Z");
-		expect(await t.services.status.incidentTimeline(resolved)).toEqual([]);
+		// Later, the window stops 12 hours after the incident. A status change
+		// after the window does not show.
+		t.clock.set("2026-11-05T09:00:00.000Z");
+		await t.services.catalog.setStatus(EDITOR, api.id, "degraded_performance");
+		t.clock.set("2026-11-20T00:00:00.000Z");
+		const later = await t.services.status.incidentTimeline(resolved);
+		expect(later).toMatchObject({
+			start: "2026-11-01T22:00:00.000Z",
+			end: "2026-11-02T23:00:00.000Z",
+			untilNow: false,
+		});
+		expect(
+			later.services[0]?.periods.map((period) => [period.status, period.end]),
+		).toEqual([
+			["operational", "2026-11-02T10:00:00.000Z"],
+			["major_outage", "2026-11-02T11:00:00.000Z"],
+			["operational", "2026-11-02T23:00:00.000Z"],
+		]);
 	});
 
 	it("gives no minute timeline for maintenance that did not start", async () => {
@@ -152,7 +176,9 @@ describe("StatusService", () => {
 			scheduledStart: "2026-11-10T00:00:00.000Z",
 			scheduledEnd: "2026-11-10T01:00:00.000Z",
 		});
-		expect(await t.services.status.incidentTimeline(scheduled)).toEqual([]);
+		expect(
+			(await t.services.status.incidentTimeline(scheduled)).services,
+		).toEqual([]);
 	});
 
 	it("adds uptime periods and incident metrics for the overview", async () => {

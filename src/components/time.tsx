@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatDateTime, formatTime } from "@/lib/format";
+import { formatDateTime, formatShortDateTime } from "@/lib/format";
 
 const local = new Intl.DateTimeFormat(undefined, {
 	month: "short",
@@ -11,7 +11,9 @@ const local = new Intl.DateTimeFormat(undefined, {
 	minute: "2-digit",
 	timeZoneName: "short",
 });
-const localTime = new Intl.DateTimeFormat(undefined, {
+const localShort = new Intl.DateTimeFormat(undefined, {
+	month: "short",
+	day: "numeric",
 	hour: "2-digit",
 	minute: "2-digit",
 	timeZoneName: "short",
@@ -19,23 +21,23 @@ const localTime = new Intl.DateTimeFormat(undefined, {
 
 /**
  * Renders a timestamp in UTC on the server and switches to the viewer's
- * local time zone once hydrated. `timeOnly` shows the time without the date.
+ * local time zone once hydrated. `short` shows the date without the year.
  */
 export function LocalTime({
 	iso,
 	className,
-	timeOnly = false,
+	short = false,
 }: {
 	iso: string;
 	className?: string;
-	timeOnly?: boolean;
+	short?: boolean;
 }) {
 	const [text, setText] = useState(() =>
-		timeOnly ? formatTime(iso) : formatDateTime(iso),
+		short ? formatShortDateTime(iso) : formatDateTime(iso),
 	);
 	useEffect(() => {
-		setText((timeOnly ? localTime : local).format(new Date(iso)));
-	}, [iso, timeOnly]);
+		setText((short ? localShort : local).format(new Date(iso)));
+	}, [iso, short]);
 	return (
 		<time dateTime={iso} className={className} suppressHydrationWarning>
 			{text}

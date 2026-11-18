@@ -14,7 +14,7 @@ import {
 	minuteTimeline,
 	periodUptime,
 	type StatusPeriod,
-	timelineStart,
+	timelineWindow,
 	type UptimeResult,
 	type UptimeWindow,
 	uptimePeriods,
@@ -84,11 +84,22 @@ export interface StatusOverview {
 	metrics: IncidentMetrics;
 }
 
-/** The status of one service for each minute of the last 24 hours. */
+/** The status of one service for each minute of the timeline window. */
 export interface ServiceTimeline {
 	service: Service;
-	/** The periods of the 24 hours, oldest first. */
+	/** The periods of the window, oldest first. */
 	periods: StatusPeriod[];
+}
+
+/** The status of the affected services before, during and after an incident. */
+export interface IncidentTimeline {
+	/** The start of the window: 12 hours before the incident started. */
+	start: string;
+	/** The end of the window: 12 hours after the incident closed, or now. */
+	end: string;
+	/** `true` when the window ends now. */
+	untilNow: boolean;
+	services: ServiceTimeline[];
 }
 
 export interface HistoryMonth {
@@ -260,32 +271,37 @@ export class StatusService {
 	}
 
 	/**
-	 * The status for each minute of the last 24 hours, for each visible service
-	 * that the incident affects. The result is empty when the incident was not
-	 * in progress in these 24 hours.
+	 * The status for each minute of the incident, for each visible service that
+	 * the incident affects. The window also shows 12 hours before the incident
+	 * started and 12 hours after it closed. The window does not continue after
+	 * now. The result has no services when the maintenance did not start.
 	 */
-	async incidentTimeline(incident: Incident): Promise<ServiceTimeline[]> {
+	async incidentTimeline(incident: Incident): Promise<IncidentTimeline> {
 		const now = this.ctx.now();
-		const start = timelineStart(now).toISOString();
-		if (
-			incident.status === "scheduled" ||
-			(incident.resolvedAt !== undefined && incident.resolvedAt < start)
-		) {
-			return [];
+		const window = timelineWindow(incident, now);
+		const timeline: IncidentTimeline = {
+			start: window.start.toISOString(),
+			end: window.end.toISOString(),
+			untilNow: window.end.getTime() === now.getTime(),
+			services: [],
+		};
+		if (incident.status === "scheduled") {
+			return timeline;
 		}
 		const [services, changes] = await Promise.all([
 			this.catalog.list({ includeHidden: false }),
 			this.ctx.store.find("service_status_changes", {
-				where: [{ field: "createdAt", op: "gte", value: start }],
+				where: [{ field: "createdAt", op: "gte", value: timeline.start }],
 				sort: [{ field: "createdAt" }],
 			}),
 		]);
-		return services
+		timeline.services = services
 			.filter((service) => incident.serviceIds.includes(service.id))
 			.map((service) => ({
 				service,
-				periods: minuteTimeline(service, changes, now),
+				periods: minuteTimeline(service, changes, window),
 			}));
+		return timeline;
 	}
 
 	/**

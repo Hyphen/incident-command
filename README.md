@@ -9,7 +9,7 @@
 
 ## Features
 
-- **Status page:** overall status banner, active incidents, upcoming maintenance, grouped services with 90-day uptime bars, incident history, incident pages with the status of each affected service for each minute of the last 24 hours, an RSS feed with one item for each incident update, and a public JSON API. Light and dark mode, mobile friendly.
+- **Status page:** overall status banner, active incidents, upcoming maintenance, grouped services with 90-day uptime bars, incident history, incident pages with the status of each affected service for each minute of the incident and the 12 hours before and after it, an RSS feed with one item for each incident update, and a public JSON API. Light and dark mode, mobile friendly.
 - **Pages for agents:** `/llms.txt` gives the status page in Markdown ([llms.txt](https://llmstxt.org)). The history and each incident page also have a Markdown version at `/history.md` and `/incidents/{id}.md`. An agent can read them without credentials.
 - **MCP server:** a Streamable HTTP endpoint at `/api/mcp`. Each agent has its own permissions. A new agent can read the status page and write drafts. It cannot publish or notify subscribers until an admin grants those permissions. See [docs/mcp.md](docs/mcp.md).
 - **Human review of notifications:** an agent can save a notification as a draft. The MCP server returns a review link. A person opens the link, changes the draft if necessary, and approves it. Nothing is published or sent before approval. See [docs/mcp.md](docs/mcp.md#notification-drafts).
