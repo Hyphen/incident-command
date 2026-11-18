@@ -364,7 +364,7 @@ describe("API routes", () => {
 		).toContain("https://configured.example.com/incidents/");
 	});
 
-	it("puts the newest updates in the feed, also from an older open incident", async () => {
+	it("puts the newest updates in the feed, also from an older incident", async () => {
 		const { services, clock } = await setup();
 		const old = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "Long outage",
@@ -382,6 +382,8 @@ describe("API routes", () => {
 		await services.incidents.postUpdate(SYSTEM_ACTOR, old.id, {
 			message: "Still looking",
 		});
+		clock.advance(60_000);
+		await services.incidents.resolve(SYSTEM_ACTOR, old.id, "Fixed");
 		const xml = await (
 			await feed(
 				new Request("http://internal/feed.xml", {
@@ -391,11 +393,12 @@ describe("API routes", () => {
 		).text();
 		const items = xml.split("<item>").slice(1);
 		expect(items).toHaveLength(FEED_ITEM_LIMIT);
-		expect(items[0]).toContain("<title>Investigating: Long outage</title>");
+		expect(items[0]).toContain("<title>Resolved: Long outage</title>");
 		expect(items[0]).toContain(
 			`<link>https://status.acme.dev/incidents/${old.id}</link>`,
 		);
-		expect(xml).not.toContain("Blip 0<");
+		expect(items[1]).toContain("<title>Investigating: Long outage</title>");
+		expect(xml).not.toContain("Blip 1<");
 	});
 
 	it("routes MCP requests through the app", async () => {

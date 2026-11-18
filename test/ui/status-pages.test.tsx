@@ -2,7 +2,9 @@ import { render, screen, within } from "@testing-library/react";
 import { UnrecognizedActionError } from "next/dist/client/components/unrecognized-action-error";
 import { renderToStaticMarkup } from "react-dom/server";
 import ErrorPage from "@/app/error";
-import HistoryPage, { metadata as historyMetadata } from "@/app/history/page";
+import HistoryPage, {
+	generateMetadata as historyMetadata,
+} from "@/app/history/page";
 import IncidentPage, {
 	generateMetadata as incidentMetadata,
 } from "@/app/incidents/[id]/page";
@@ -353,7 +355,9 @@ describe("history page", () => {
 		expect(
 			screen.queryByRole("link", { name: "Newer →" }),
 		).not.toBeInTheDocument();
-		expect(historyMetadata.alternates).toEqual({
+		expect(
+			(await historyMetadata({ searchParams: params({}) })).alternates,
+		).toEqual({
 			types: {
 				"application/rss+xml": "/feed.xml",
 				"text/markdown": "/history.md",
@@ -368,6 +372,17 @@ describe("history page", () => {
 			"href",
 			"/history?month=2026-08",
 		);
+		expect(
+			await historyMetadata({ searchParams: params({ month: "2026-05" }) }),
+		).toEqual({
+			title: "Incident history",
+			alternates: {
+				types: {
+					"application/rss+xml": "/feed.xml",
+					"text/markdown": "/history.md?month=2026-05",
+				},
+			},
+		});
 	});
 });
 

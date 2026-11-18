@@ -7,21 +7,19 @@ export const dynamic = "force-dynamic";
 /** RSS feed with one item for each incident and maintenance update. */
 export async function GET(request: Request): Promise<Response> {
 	const { services } = await getApp();
-	const [settings, catalog, open, recent] = await Promise.all([
+	// The newest updates are on the incidents with the newest changes. An
+	// older incident can get a new update or a resolution.
+	const [settings, catalog, incidents] = await Promise.all([
 		services.settings.get(),
 		services.catalog.list({ includeHidden: false }),
-		services.incidents.list({ open: true }),
-		services.incidents.list({ limit: FEED_ITEM_LIMIT }),
+		services.incidents.list({ orderBy: "updatedAt", limit: FEED_ITEM_LIMIT }),
 	]);
 	const origin = originFrom(
 		request.headers,
 		settings.siteUrl,
 		new URL(request.url).origin,
 	);
-	// An open incident can be older than the newest incidents. Its new
-	// updates must also be in the feed.
-	return new Response(
-		buildRssFeed(settings, [...open, ...recent], catalog, origin),
-		{ headers: { "content-type": "application/rss+xml; charset=utf-8" } },
-	);
+	return new Response(buildRssFeed(settings, incidents, catalog, origin), {
+		headers: { "content-type": "application/rss+xml; charset=utf-8" },
+	});
 }

@@ -27,13 +27,9 @@ interface FeedItem {
 	update: IncidentUpdate;
 }
 
-/**
- * The updates of the incidents, newest first. The list can contain an
- * incident more than one time. The feed shows its updates one time.
- */
+/** The updates of the incidents, newest first. */
 function feedItems(incidents: readonly Incident[]): FeedItem[] {
-	const unique = new Map(incidents.map((incident) => [incident.id, incident]));
-	return [...unique.values()]
+	return incidents
 		.flatMap((incident) =>
 			incident.updates.map((update) => ({ incident, update })),
 		)
