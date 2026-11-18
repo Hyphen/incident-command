@@ -4,8 +4,10 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToStaticMarkup } from "react-dom/server";
 import { StatusIcon } from "@/components/icons";
 import { AddSubscriberForm } from "@/components/manage/add-subscriber-form";
 import { ConfirmButton } from "@/components/manage/confirm-button";
@@ -15,6 +17,7 @@ import { statusesFor } from "@/components/manage/incident-fields";
 import { InviteMemberForm } from "@/components/manage/invite-member-form";
 import { eventColorStatus, StatusBadge } from "@/components/status/badges";
 import { IncidentList } from "@/components/status/recent-incidents";
+import { StatusTimeline } from "@/components/status/status-timeline";
 import { UptimeBars } from "@/components/status/uptime-bars";
 import { SubmitButton } from "@/components/submit-button";
 import { LocalTime } from "@/components/time";
@@ -25,6 +28,17 @@ describe("LocalTime", () => {
 		const time = document.querySelector("time");
 		expect(time).toHaveAttribute("datetime", "2026-11-02T12:00:00.000Z");
 		await waitFor(() => expect(time?.textContent).not.toContain("UTC,"));
+	});
+
+	it("shows the time without the date", () => {
+		const iso = "2026-11-02T12:05:00.000Z";
+		expect(renderToStaticMarkup(<LocalTime iso={iso} timeOnly />)).toContain(
+			">12:05 UTC<",
+		);
+		render(<LocalTime iso={iso} timeOnly />);
+		const text = document.querySelector("time")?.textContent;
+		expect(text).toMatch(/\d{1,2}:\d{2}/);
+		expect(text).not.toContain("2026");
 	});
 });
 
@@ -394,6 +408,131 @@ describe("status components", () => {
 		).toBeInTheDocument();
 		expect(screen.getByText("Outage")).toBeInTheDocument();
 		expect(screen.getByText(/50% uptime/)).toBeInTheDocument();
+	});
+
+	it("renders the minute timeline of each service", () => {
+		const service = {
+			id: "svc_api",
+			name: "API",
+			status: "operational" as const,
+			order: 0,
+			hidden: false,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		};
+		// The server render keeps the times in UTC.
+		const page = document.createElement("div");
+		page.innerHTML = renderToStaticMarkup(
+			<StatusTimeline
+				services={[
+					{
+						service,
+						periods: [
+							{
+								status: "operational",
+								start: "2026-11-01T12:00:00.000Z",
+								end: "2026-11-02T08:00:00.000Z",
+								minutes: 1200,
+							},
+							{
+								status: "major_outage",
+								start: "2026-11-02T08:00:00.000Z",
+								end: "2026-11-02T11:00:00.000Z",
+								minutes: 180,
+							},
+							{
+								status: "operational",
+								start: "2026-11-02T11:00:00.000Z",
+								end: "2026-11-02T12:00:00.000Z",
+								minutes: 60,
+							},
+						],
+					},
+					{
+						service: { ...service, id: "svc_web", name: "Web" },
+						periods: [
+							{
+								status: "operational",
+								start: "2026-11-01T12:00:00.000Z",
+								end: "2026-11-02T12:00:00.000Z",
+								minutes: 1440,
+							},
+						],
+					},
+					{
+						service: {
+							...service,
+							id: "svc_new",
+							name: "New",
+							status: "partial_outage",
+						},
+						periods: [
+							{
+								status: null,
+								start: "2026-11-01T12:00:00.000Z",
+								end: "2026-11-02T11:30:00.000Z",
+								minutes: 1410,
+							},
+							{
+								status: "partial_outage",
+								start: "2026-11-02T11:30:00.000Z",
+								end: "2026-11-02T12:00:00.000Z",
+								minutes: 30,
+							},
+						],
+					},
+				]}
+			/>,
+		);
+		document.body.append(page);
+		onTestFinished(() => page.remove());
+		const view = within(page);
+		const bar = (name: string) =>
+			within(
+				view.getByRole("list", { name: `${name}: status for each minute` }),
+			);
+		const text = (element: HTMLElement) =>
+			element.textContent?.replace(/\s+/g, " ");
+
+		// The bar has one part for each period. Its width is the number of minutes.
+		const parts = bar("API").getAllByRole("listitem");
+		expect(parts.map((part) => part.getAttribute("aria-label"))).toEqual([
+			"Operational: 20h",
+			"Major outage: 3h",
+			"Operational: 1h",
+		]);
+		expect(parts.map((part) => part.style.flexGrow)).toEqual([
+			"1200",
+			"180",
+			"60",
+		]);
+		expect(text(parts[0] as HTMLElement)).toBe("OperationalUntil 08:00 UTC");
+
+		// The summary starts at the first disruption and shows the recovery.
+		const summary = within(
+			view.getByRole("list", { name: "API: disruptions" }),
+		).getAllByRole("listitem");
+		expect(summary.map(text)).toEqual([
+			"Major outage08:00 UTC – 11:00 UTC (3h)",
+			"OperationalSince 11:00 UTC (1h)",
+		]);
+
+		expect(text(bar("Web").getByRole("listitem"))).toBe(
+			"OperationalAll 24 hours",
+		);
+		expect(
+			view.getByText("No disruption in the last 24 hours."),
+		).toBeInTheDocument();
+		expect(view.queryByRole("list", { name: "Web: disruptions" })).toBeNull();
+
+		expect(
+			bar("New").getByRole("listitem", { name: "No data: 23h 30m" }),
+		).toBeInTheDocument();
+		expect(
+			within(view.getByRole("list", { name: "New: disruptions" }))
+				.getAllByRole("listitem")
+				.map(text),
+		).toEqual(["Partial outageSince 11:30 UTC (30m)"]);
 	});
 
 	it("renders incident lists and empty states", () => {

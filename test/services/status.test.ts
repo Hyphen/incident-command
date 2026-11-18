@@ -107,6 +107,54 @@ describe("StatusService", () => {
 		);
 	});
 
+	it("gives the minute timeline of the visible affected services", async () => {
+		t.clock.set("2026-10-01T00:00:00.000Z");
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
+		const web = await t.services.catalog.create(EDITOR, { name: "Web" });
+		const secret = await t.services.catalog.create(EDITOR, {
+			name: "Secret",
+			hidden: true,
+		});
+		t.clock.set("2026-11-02T10:00:00.000Z");
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "API down",
+			message: "Down",
+			impact: "critical",
+			serviceIds: [api.id, secret.id],
+		});
+		t.clock.set("2026-11-02T10:30:00.000Z");
+		await t.services.catalog.setStatus(EDITOR, web.id, "partial_outage");
+		t.clock.set("2026-11-02T11:00:00.000Z");
+		const resolved = await t.services.incidents.resolve(EDITOR, incident.id);
+		t.clock.set("2026-11-02T12:00:00.000Z");
+
+		const timeline = await t.services.status.incidentTimeline(resolved);
+		expect(timeline.map((entry) => entry.service.name)).toEqual(["API"]);
+		expect(
+			timeline[0]?.periods.map((period) => [period.status, period.start]),
+		).toEqual([
+			["operational", "2026-11-01T12:00:00.000Z"],
+			["major_outage", "2026-11-02T10:00:00.000Z"],
+			["operational", "2026-11-02T11:00:00.000Z"],
+		]);
+
+		t.clock.set("2026-11-03T11:01:00.000Z");
+		expect(await t.services.status.incidentTimeline(resolved)).toEqual([]);
+	});
+
+	it("gives no minute timeline for maintenance that did not start", async () => {
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
+		const scheduled = await t.services.incidents.create(EDITOR, {
+			kind: "maintenance",
+			title: "Later",
+			message: "Later",
+			serviceIds: [api.id],
+			scheduledStart: "2026-11-10T00:00:00.000Z",
+			scheduledEnd: "2026-11-10T01:00:00.000Z",
+		});
+		expect(await t.services.status.incidentTimeline(scheduled)).toEqual([]);
+	});
+
 	it("adds uptime periods and incident metrics for the overview", async () => {
 		t.clock.set("2026-08-01T00:00:00.000Z");
 		const api = await t.services.catalog.create(EDITOR, { name: "API" });

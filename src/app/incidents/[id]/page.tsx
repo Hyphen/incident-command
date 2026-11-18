@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { EventStatusBadge, ImpactBadge } from "@/components/status/badges";
 import { affectedNames } from "@/components/status/incident-card";
 import { PublicPage } from "@/components/status/page-shell";
+import { StatusTimeline } from "@/components/status/status-timeline";
 import { Timeline } from "@/components/status/timeline";
 import { LocalTime } from "@/components/time";
 import { getApp } from "@/lib/app";
@@ -29,10 +30,11 @@ export default async function IncidentPage({ params }: Props) {
 	if (!incident) {
 		notFound();
 	}
-	const [settings, catalog, canSubscribe] = await Promise.all([
+	const [settings, catalog, canSubscribe, timeline] = await Promise.all([
 		services.settings.get(),
 		services.catalog.list({ includeHidden: false }),
 		services.subscribers.canSubscribe(),
+		services.status.incidentTimeline(incident),
 	]);
 	const names = affectedNames(incident, catalog);
 	return (
@@ -102,6 +104,7 @@ export default async function IncidentPage({ params }: Props) {
 						)}
 					</dl>
 				</header>
+				{timeline.length > 0 && <StatusTimeline services={timeline} />}
 				<section className="rounded-card border border-border bg-surface p-6">
 					<h2 className="mb-6 font-semibold">Updates</h2>
 					<Timeline incident={incident} />

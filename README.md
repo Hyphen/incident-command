@@ -9,7 +9,7 @@
 
 ## Features
 
-- **Status page:** overall status banner, active incidents, upcoming maintenance, grouped services with 90-day uptime bars, incident history, RSS feed and a public JSON API. Light and dark mode, mobile friendly.
+- **Status page:** overall status banner, active incidents, upcoming maintenance, grouped services with 90-day uptime bars, incident history, incident pages with the status of each affected service for each minute of the last 24 hours, RSS feed and a public JSON API. Light and dark mode, mobile friendly.
 - **MCP server:** a Streamable HTTP endpoint at `/api/mcp`. Each agent has its own permissions. A new agent can read the status page and write drafts. It cannot publish or notify subscribers until an admin grants those permissions. See [docs/mcp.md](docs/mcp.md).
 - **Human review of notifications:** an agent can save a notification as a draft. The MCP server returns a review link. A person opens the link, changes the draft if necessary, and approves it. Nothing is published or sent before approval. See [docs/mcp.md](docs/mcp.md#notification-drafts).
 - **Manage portal** at `/manage`: declare incidents, post updates, review notification drafts, manage services, members (viewer/editor/admin, added with one-time invite links), connected agents and API tokens, subscribers, and settings in three sections: General, Branding and Notifications.

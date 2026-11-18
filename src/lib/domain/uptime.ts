@@ -8,6 +8,10 @@ import type {
 } from "./types";
 
 export const DAY_MS = 86_400_000;
+export const MINUTE_MS = 60_000;
+
+/** The number of minutes in the minute timeline (24 hours). */
+export const TIMELINE_MINUTES = 1440;
 
 /** The standard uptime periods in days. */
 export const UPTIME_PERIODS = [7, 30, 90] as const;
@@ -41,6 +45,16 @@ export interface UptimeWindow {
 	start: Date;
 	end: Date;
 	days: number;
+}
+
+/** A sequence of minutes that have the same status. */
+export interface StatusPeriod {
+	/** The worst status in each minute, or `null` when there is no data. */
+	status: ServiceStatus | null;
+	start: string;
+	/** The end of the last minute. For the last period, this is `now`. */
+	end: string;
+	minutes: number;
 }
 
 export function startOfUtcDay(date: Date): Date {
@@ -89,7 +103,7 @@ interface Segment {
 function buildSegments(
 	service: Service,
 	changes: readonly ServiceStatusChange[],
-	window: UptimeWindow,
+	window: Pick<UptimeWindow, "start" | "end">,
 ): Segment[] {
 	const sorted = [...changes]
 		.filter((change) => change.serviceId === service.id)
@@ -170,6 +184,69 @@ export function computeUptime(
 	}
 
 	return { uptime: ratio(totalTracked, totalDown), days };
+}
+
+/**
+ * The start of the minute timeline that ends at `now`. The timeline has
+ * `TIMELINE_MINUTES` whole minutes. `now` is in the last minute.
+ */
+export function timelineStart(now: Date): Date {
+	return new Date(
+		(Math.ceil(now.getTime() / MINUTE_MS) - TIMELINE_MINUTES) * MINUTE_MS,
+	);
+}
+
+/**
+ * The status of a service for each minute of the 24 hours that end at `now`.
+ * A minute has the worst status that the service had in that minute. The
+ * result merges the minutes that have the same status into periods, oldest
+ * first. `changes` must contain each status change after `timelineStart(now)`.
+ */
+export function minuteTimeline(
+	service: Service,
+	changes: readonly ServiceStatusChange[],
+	now: Date,
+): StatusPeriod[] {
+	const start = timelineStart(now);
+	const origin = start.getTime();
+	const minutes: (ServiceStatus | null)[] = new Array(TIMELINE_MINUTES).fill(
+		null,
+	);
+	for (const segment of buildSegments(service, changes, { start, end: now })) {
+		const first = Math.floor((segment.start - origin) / MINUTE_MS);
+		const last = Math.min(
+			Math.ceil((segment.end - origin) / MINUTE_MS),
+			TIMELINE_MINUTES,
+		);
+		for (let index = first; index < last; index++) {
+			const current = minutes[index] as ServiceStatus | null;
+			if (
+				current === null ||
+				statusSeverity(segment.status) > statusSeverity(current)
+			) {
+				minutes[index] = segment.status;
+			}
+		}
+	}
+	const periods: StatusPeriod[] = [];
+	minutes.forEach((status, index) => {
+		const end = new Date(
+			Math.min(origin + (index + 1) * MINUTE_MS, now.getTime()),
+		).toISOString();
+		const period = periods.at(-1);
+		if (period && period.status === status) {
+			period.end = end;
+			period.minutes += 1;
+		} else {
+			periods.push({
+				status,
+				start: new Date(origin + index * MINUTE_MS).toISOString(),
+				end,
+				minutes: 1,
+			});
+		}
+	});
+	return periods;
 }
 
 /**
