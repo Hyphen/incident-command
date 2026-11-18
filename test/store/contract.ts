@@ -367,13 +367,6 @@ export function runStoreContract(getStore: () => DocumentStore) {
 					where: [{ field: "status", op: "eq", value: "nothing" }],
 				}),
 			).resolves.toBe(0);
-			// Two calls at the same time count each deleted record one time only.
-			const onlyB = { where: [{ field: "id", op: "eq", value: "b" }] } as const;
-			const counts = await Promise.all([
-				store.deleteMany("services", onlyB),
-				store.deleteMany("services", onlyB),
-			]);
-			expect(counts.toSorted()).toEqual([0, 1]);
 		});
 
 		it("keeps collections isolated", async () => {

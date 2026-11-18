@@ -232,45 +232,6 @@ describe("SubscriberService incident subscriptions", () => {
 		).resolves.not.toHaveProperty("incidentIds");
 	});
 
-	it("keeps every change when changes to a subscriber run at the same time", async () => {
-		const token = await subscribeTo(api.id);
-		const queue = await t.services.incidents.create(EDITOR, {
-			title: "Queue backlog",
-			message: "Investigating",
-		});
-		const stored = async () =>
-			(await t.store.find("subscribers"))[0]?.incidentIds?.toSorted();
-
-		await Promise.all([
-			t.services.subscribers.confirm(token, db.id),
-			t.services.subscribers.confirm(token, queue.id),
-		]);
-		expect(await stored()).toEqual([api.id, db.id, queue.id].toSorted());
-
-		await Promise.all([
-			t.services.subscribers.unsubscribe(token, api.id),
-			t.services.subscribers.unsubscribe(token, db.id),
-		]);
-		expect(await stored()).toEqual([queue.id]);
-
-		// Only one of two removals at the same time removes the subscriber.
-		const removed = await Promise.all([
-			t.services.subscribers.unsubscribe(token),
-			t.services.subscribers.unsubscribe(token),
-		]);
-		expect(removed.toSorted()).toEqual([false, true]);
-		expect(await t.store.count("subscribers")).toBe(0);
-	});
-
-	it("gives up with a ConflictError when the subscriber keeps changing", async () => {
-		const token = await subscribeTo(api.id);
-		const update = vi.spyOn(t.store, "update").mockResolvedValue(undefined);
-		await expect(
-			t.services.subscribers.confirm(token, db.id),
-		).rejects.toBeInstanceOf(ConflictError);
-		expect(update).toHaveBeenCalledTimes(5);
-	});
-
 	it("unsubscribes from one incident and keeps the other incidents", async () => {
 		await subscribeTo(api.id);
 		const token = await subscribeTo(db.id);

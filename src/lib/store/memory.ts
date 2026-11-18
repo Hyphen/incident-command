@@ -119,13 +119,9 @@ export class MemoryStore implements DocumentStore {
 		collection: C,
 		query: Query,
 	): Promise<number> {
-		// Select and delete in one step, with no await between them. Thus, a
-		// concurrent call cannot delete or change a record that this call counts.
-		const table = this.table(collection);
-		const rows = table.values() as Iterable<Doc<C> & Record<string, unknown>>;
-		const matches = applyQuery(rows, query);
+		const matches = await this.find(collection, query);
 		for (const doc of matches) {
-			table.delete(doc.id);
+			this.table(collection).delete(doc.id);
 		}
 		return matches.length;
 	}

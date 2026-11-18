@@ -11,20 +11,12 @@ import type {
 	Subscriber,
 	SubscriberType,
 } from "../domain/types";
-import {
-	AppError,
-	ConflictError,
-	ForbiddenError,
-	NotFoundError,
-} from "../errors";
-import type { Condition } from "../store/types";
+import { AppError, ForbiddenError, NotFoundError } from "../errors";
 import { iso, parse, requirePermission, type ServiceContext } from "./context";
 import type { NotificationSettingsService } from "./notification-settings";
 import type { SettingsService } from "./settings";
 
 export type SubscribeOutcome = "confirmation_sent" | "already_subscribed";
-
-const MAX_WRITE_ATTEMPTS = 5;
 
 /**
  * Returns true when a subscriber gets the notifications of an incident.
@@ -111,37 +103,37 @@ export class SubscriberService {
 		token: string,
 		incidentId?: string,
 	): Promise<Subscriber | undefined> {
+		const subscriber = await this.findByToken(token);
 		if (
-			!token ||
+			!subscriber ||
 			(incidentId && !(await this.ctx.store.get("incidents", incidentId)))
 		) {
 			return undefined;
 		}
-		const next = await this.mutate(token, (subscriber) => {
-			let incidentIds: string[] | undefined;
-			if (incidentId) {
-				incidentIds = subscriber.confirmed
-					? subscriber.incidentIds && [
-							...new Set([...subscriber.incidentIds, incidentId]),
-						]
-					: [incidentId];
-			}
-			// The new list contains the old list, so the same length means no change.
-			if (
-				subscriber.confirmed &&
-				incidentIds?.length === subscriber.incidentIds?.length
-			) {
-				return subscriber;
-			}
-			const { incidentIds: _previous, ...rest } = subscriber;
-			return {
-				...rest,
-				confirmed: true,
-				confirmedAt: subscriber.confirmedAt ?? iso(this.ctx.now()),
-				...(incidentIds ? { incidentIds } : {}),
-			};
-		});
-		return next ?? undefined;
+		let incidentIds: string[] | undefined;
+		if (incidentId) {
+			incidentIds = subscriber.confirmed
+				? subscriber.incidentIds && [
+						...new Set([...subscriber.incidentIds, incidentId]),
+					]
+				: [incidentId];
+		}
+		// The new list contains the old list, so the same length means no change.
+		if (
+			subscriber.confirmed &&
+			incidentIds?.length === subscriber.incidentIds?.length
+		) {
+			return subscriber;
+		}
+		const { incidentIds: _previous, ...rest } = subscriber;
+		const next: Subscriber = {
+			...rest,
+			confirmed: true,
+			confirmedAt: subscriber.confirmedAt ?? iso(this.ctx.now()),
+			...(incidentIds ? { incidentIds } : {}),
+		};
+		await this.ctx.store.update("subscribers", next);
+		return next;
 	}
 
 	/**
@@ -150,16 +142,21 @@ export class SubscriberService {
 	 * removes the subscriber.
 	 */
 	async unsubscribe(token: string, incidentId?: string): Promise<boolean> {
-		if (!token) {
+		const subscriber = await this.findByToken(token);
+		if (!subscriber) {
 			return false;
 		}
-		const next = await this.mutate(token, (subscriber) => {
-			const incidentIds = incidentId
-				? subscriber.incidentIds?.filter((id) => id !== incidentId)
-				: undefined;
-			return incidentIds?.length ? { ...subscriber, incidentIds } : null;
-		});
-		return next !== undefined;
+		const incidentIds = incidentId
+			? subscriber.incidentIds?.filter((id) => id !== incidentId)
+			: undefined;
+		if (incidentIds?.length) {
+			await this.ctx.store.update("subscribers", {
+				...subscriber,
+				incidentIds,
+			});
+			return true;
+		}
+		return this.ctx.store.delete("subscribers", subscriber.id);
 	}
 
 	async list(actor: Actor): Promise<Omit<Subscriber, "token">[]> {
@@ -238,56 +235,14 @@ export class SubscriberService {
 		return subscriber;
 	}
 
-	/**
-	 * Changes the subscriber of a token. A write applies only when nobody
-	 * saved the subscriber after this method read it. If somebody did, the
-	 * change runs again on the latest version. Thus, concurrent changes do not
-	 * overwrite each other. `change` returns the next subscriber, the same
-	 * subscriber for no change, or `null` to remove the subscriber. Resolves
-	 * the result of `change`, or `undefined` for an unknown token.
-	 */
-	private async mutate(
-		token: string,
-		change: (current: Subscriber) => Subscriber | null,
-	): Promise<Subscriber | null | undefined> {
-		for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt++) {
-			const [current] = await this.ctx.store.find(
-				"subscribers",
-				{ where: [{ field: "token", op: "eq", value: token }], limit: 1 },
-				{ consistent: true },
-			);
-			if (!current) {
-				return undefined;
-			}
-			const next = change(current);
-			if (next === current) {
-				return current;
-			}
-			const unchanged: Condition = {
-				field: "revision",
-				op: "eq",
-				value: current.revision ?? null,
-			};
-			if (next === null) {
-				const removed = await this.ctx.store.deleteMany("subscribers", {
-					where: [{ field: "id", op: "eq", value: current.id }, unchanged],
-				});
-				if (removed > 0) {
-					return null;
-				}
-				continue;
-			}
-			const saved = await this.ctx.store.update(
-				"subscribers",
-				{ ...next, revision: (current.revision ?? 0) + 1 },
-				{ where: [unchanged] },
-			);
-			if (saved) {
-				return saved;
-			}
+	private async findByToken(token: string) {
+		if (!token) {
+			return undefined;
 		}
-		throw new ConflictError(
-			"Somebody changed this subscription at the same time. Please try again.",
-		);
+		const [subscriber] = await this.ctx.store.find("subscribers", {
+			where: [{ field: "token", op: "eq", value: token }],
+			limit: 1,
+		});
+		return subscriber;
 	}
 }

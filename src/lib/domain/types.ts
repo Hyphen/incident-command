@@ -417,11 +417,6 @@ export interface Subscriber {
 	 * confirmation sets the list.
 	 */
 	incidentIds?: string[];
-	/**
-	 * Increases on each change from a confirmation or an unsubscribe link. Thus,
-	 * concurrent changes do not overwrite each other. Older records do not have it.
-	 */
-	revision?: number;
 	confirmedAt?: string;
 	createdAt: string;
 }
