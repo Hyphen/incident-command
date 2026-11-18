@@ -33,6 +33,17 @@ export default async function SubscribersPage({
 	const unavailable = (Object.keys(available) as SubscriberType[]).filter(
 		(type) => !available[type],
 	);
+	const incidentIds = [
+		...new Set(
+			subscribers.flatMap((subscriber) => subscriber.incidentIds ?? []),
+		),
+	];
+	const incidents = await Promise.all(
+		incidentIds.map((id) => services.incidents.find(id)),
+	);
+	const titles = new Map(
+		incidentIds.map((id, index) => [id, incidents[index]?.title ?? id]),
+	);
 	return (
 		<ManagePage title="Subscribers" flash={flash} health={app.store.health}>
 			{unavailable.length > 0 && (
@@ -76,6 +87,22 @@ export default async function SubscribersPage({
 											: "Pending confirmation"}{" "}
 										· Added <LocalTime iso={subscriber.createdAt} />
 									</p>
+									{subscriber.incidentIds && (
+										<p className="text-xs text-muted">
+											Only:{" "}
+											{subscriber.incidentIds.map((id, index) => (
+												<span key={id}>
+													{index > 0 && ", "}
+													<Link
+														href={`/manage/incidents/${id}`}
+														className="underline hover:text-fg"
+													>
+														{titles.get(id)}
+													</Link>
+												</span>
+											))}
+										</p>
+									)}
 								</div>
 								<form action={deleteSubscriberAction}>
 									<input type="hidden" name="id" value={subscriber.id} />

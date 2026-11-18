@@ -10,20 +10,25 @@ export const metadata: Metadata = { title: "Confirm subscription" };
 export default async function ConfirmPage({
 	searchParams,
 }: {
-	searchParams: Promise<{ token?: string }>;
+	searchParams: Promise<{ token?: string; incident?: string }>;
 }) {
-	const { token } = await searchParams;
+	const { token, incident: incidentId } = await searchParams;
 	const { services } = await getApp();
-	const [settings, subscriber] = await Promise.all([
+	const [settings, subscriber, incident] = await Promise.all([
 		services.settings.get(),
-		services.subscribers.confirm(token ?? ""),
+		services.subscribers.confirm(token ?? "", incidentId),
+		incidentId ? services.incidents.find(incidentId) : undefined,
 	]);
 	return (
 		<PublicPage settings={settings} canSubscribe={false}>
 			{subscriber ? (
 				<NoticeCard title="You're subscribed">
 					<p>
-						{subscriber.target} will now receive {settings.siteName} updates.
+						{subscriber.target} will now receive{" "}
+						{incident
+							? `updates for ${incident.title}`
+							: `${settings.siteName} updates`}
+						.
 					</p>
 				</NoticeCard>
 			) : (

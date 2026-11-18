@@ -1492,6 +1492,43 @@ describe("public subscribe actions", () => {
 		);
 	});
 
+	it("subscribes to and unsubscribes from one incident", async () => {
+		const { services, notifier } = await setupApp();
+		const api = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Investigating",
+		});
+		const db = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Slow database",
+			message: "Investigating",
+		});
+		expect(
+			await redirectOf(
+				subscribeAction(
+					form({ email: "jane@example.com", incidentId: api.id }),
+				),
+			),
+		).toBe(`/subscribe?incident=${api.id}&status=confirmation_sent`);
+		const bad = await redirectOf(
+			subscribeAction(form({ email: "bad", incidentId: api.id })),
+		);
+		expect(new URL(bad, "http://localhost").searchParams.get("incident")).toBe(
+			api.id,
+		);
+		expect(flashMessage(bad, "error")).toBe("Check the form and try again.");
+
+		const token = notifier.confirmations[0]?.subscriber.token ?? "";
+		await services.subscribers.confirm(token, api.id);
+		await services.subscribers.confirm(token, db.id);
+		expect(
+			await redirectOf(unsubscribeAction(form({ token, incidentId: api.id }))),
+		).toBe(`/subscribe/unsubscribe?incident=${api.id}&done=1`);
+		await expect(services.subscribers.recipients(api.id)).resolves.toEqual([]);
+		await expect(services.subscribers.recipients(db.id)).resolves.toHaveLength(
+			1,
+		);
+	});
+
 	it("rethrows unexpected subscribe errors", async () => {
 		const { services } = await setupApp();
 		vi.spyOn(services.subscribers, "subscribe").mockRejectedValueOnce(

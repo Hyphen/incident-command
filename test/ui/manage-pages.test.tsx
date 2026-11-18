@@ -1476,6 +1476,37 @@ describe("admin pages", () => {
 		).toBeInTheDocument();
 	});
 
+	it("shows the incidents of a subscriber of some incidents", async () => {
+		const { app, services, notifier } = await setupApp();
+		const { actor } = await signIn(app, "admin");
+		const api = await services.incidents.create(actor, {
+			title: "API errors",
+			message: "Investigating",
+		});
+		const db = await services.incidents.create(actor, {
+			title: "Slow database",
+			message: "Investigating",
+		});
+		for (const incident of [api, db]) {
+			await services.subscribers.subscribe({
+				email: "jane@example.com",
+				incidentId: incident.id,
+			});
+			const token = notifier.confirmations.at(-1)?.subscriber.token ?? "";
+			await services.subscribers.confirm(token, incident.id);
+		}
+		await services.subscribers.addEmail(actor, { email: "ops@acme.dev" });
+		await services.incidents.delete(actor, db.id);
+		render(await SubscribersPage(flash()));
+		expect(screen.getAllByText(/^Only:/)).toHaveLength(1);
+		expect(screen.getByRole("link", { name: "API errors" })).toHaveAttribute(
+			"href",
+			`/manage/incidents/${api.id}`,
+		);
+		// A deleted incident shows its id.
+		expect(screen.getByRole("link", { name: db.id })).toBeInTheDocument();
+	});
+
 	it("renders the general settings section", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");

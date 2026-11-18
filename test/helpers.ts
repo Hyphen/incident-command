@@ -10,7 +10,11 @@ import type {
 	DeliveryChannel,
 	DeliveryChannels,
 } from "@/lib/notifications/delivery";
-import type { Notifier, NotifyResult } from "@/lib/notifications/notifier";
+import type {
+	ConfirmationIncident,
+	Notifier,
+	NotifyResult,
+} from "@/lib/notifications/notifier";
 import type { IncidentNotification } from "@/lib/notifications/templates";
 import { createServices, type Services } from "@/lib/services";
 import type { ServiceContext } from "@/lib/services/context";
@@ -32,7 +36,11 @@ export class FakeNotifier implements Notifier {
 		subscribers: Subscriber[];
 		channels: DeliveryChannels;
 	}[] = [];
-	confirmations: { subscriber: Subscriber; channel: DeliveryChannel }[] = [];
+	confirmations: {
+		subscriber: Subscriber;
+		channel: DeliveryChannel;
+		incident?: ConfirmationIncident;
+	}[] = [];
 	confirmationResult = true;
 	fail = false;
 
@@ -52,8 +60,9 @@ export class FakeNotifier implements Notifier {
 		subscriber: Subscriber,
 		_settings: Settings,
 		channel: DeliveryChannel,
+		incident?: ConfirmationIncident,
 	) {
-		this.confirmations.push({ subscriber, channel });
+		this.confirmations.push({ subscriber, channel, incident });
 		return this.confirmationResult;
 	}
 }

@@ -6,6 +6,7 @@ import type {
 } from "airhorn";
 import type { Config } from "../config";
 import type {
+	Incident,
 	NotificationChannel,
 	Settings,
 	Subscriber,
@@ -45,12 +46,17 @@ export interface Notifier {
 		subscribers: Subscriber[],
 		channels: DeliveryChannels,
 	): Promise<NotifyResult>;
+	/** With `incident`, the subscriber confirms the notifications of that incident only. */
 	sendConfirmation(
 		subscriber: Subscriber,
 		settings: Settings,
 		channel: DeliveryChannel,
+		incident?: ConfirmationIncident,
 	): Promise<boolean>;
 }
+
+/** The incident of a confirmation email. */
+export type ConfirmationIncident = Pick<Incident, "id" | "title">;
 
 export interface AirhornNotifierOptions {
 	siteUrl?: string;
@@ -187,13 +193,15 @@ export class AirhornNotifier implements Notifier {
 		subscriber: Subscriber,
 		settings: Settings,
 		channel: DeliveryChannel,
+		incident?: ConfirmationIncident,
 	): Promise<boolean> {
 		if (subscriber.type !== "email" || !canDeliver(channel)) {
 			return false;
 		}
 		return this.deliver(channel, subscriber.target, CONFIRM_TEMPLATE, {
 			siteName: settings.siteName,
-			confirmUrl: confirmUrl(subscriber, settings, this.siteUrl),
+			incidentTitle: incident?.title,
+			confirmUrl: confirmUrl(subscriber, settings, this.siteUrl, incident?.id),
 		});
 	}
 

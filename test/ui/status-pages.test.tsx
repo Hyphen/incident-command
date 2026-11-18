@@ -255,6 +255,42 @@ describe("incident page", () => {
 		).not.toBeInTheDocument();
 	});
 
+	it("offers a subscription to an open incident or maintenance only", async () => {
+		const { services } = await setupApp();
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Investigating",
+		});
+		const open = render(
+			await IncidentPage({ params: params({ id: incident.id }) }),
+		);
+		expect(
+			screen.getByRole("link", { name: "Subscribe to this incident" }),
+		).toHaveAttribute("href", `/subscribe?incident=${incident.id}`);
+		open.unmount();
+
+		const maintenance = await services.incidents.create(SYSTEM_ACTOR, {
+			kind: "maintenance",
+			title: "DB upgrade",
+			message: "Upgrading",
+			scheduledStart: "2026-11-05T00:00:00.000Z",
+			scheduledEnd: "2026-11-05T02:00:00.000Z",
+		});
+		const planned = render(
+			await IncidentPage({ params: params({ id: maintenance.id }) }),
+		);
+		expect(
+			screen.getByRole("link", { name: "Subscribe to this maintenance" }),
+		).toHaveAttribute("href", `/subscribe?incident=${maintenance.id}`);
+		planned.unmount();
+
+		await services.incidents.resolve(SYSTEM_ACTOR, incident.id);
+		render(await IncidentPage({ params: params({ id: incident.id }) }));
+		expect(
+			screen.queryByRole("link", { name: /Subscribe to this/ }),
+		).not.toBeInTheDocument();
+	});
+
 	it("404s for unknown incidents", async () => {
 		await setupApp();
 		await expectNotFound(IncidentPage({ params: params({ id: "nope" }) }));
@@ -309,6 +345,7 @@ describe("subscription pages", () => {
 			screen.getByRole("heading", { name: "Get Acme updates" }),
 		).toBeInTheDocument();
 		expect(screen.getByLabelText("Email address")).toBeInTheDocument();
+		expect(document.querySelector('input[name="incidentId"]')).toBeNull();
 		unmount();
 
 		const errored = render(
@@ -343,6 +380,116 @@ describe("subscription pages", () => {
 			}),
 		);
 		expect(screen.getByText("You're already subscribed")).toBeInTheDocument();
+	});
+
+	it("subscribes to one incident or maintenance", async () => {
+		const { services } = await setupApp();
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Investigating",
+		});
+		const page = (query: Record<string, string>) =>
+			SubscribePage({
+				searchParams: params({ incident: incident.id, ...query }),
+			});
+		const shown = render(await page({}));
+		expect(
+			screen.getByRole("heading", { name: "Get updates for API errors" }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"We'll email you only when we update or resolve this incident.",
+			),
+		).toBeInTheDocument();
+		expect(document.querySelector('input[name="incidentId"]')).toHaveValue(
+			incident.id,
+		);
+		expect(
+			screen.getByRole("link", { name: "← Back to incident" }),
+		).toHaveAttribute("href", `/incidents/${incident.id}`);
+		shown.unmount();
+
+		const sent = render(await page({ status: "confirmation_sent" }));
+		expect(
+			screen.getByText(
+				"We sent you a confirmation link. Click it to start receiving updates for API errors.",
+			),
+		).toBeInTheDocument();
+		sent.unmount();
+		const already = render(await page({ status: "already_subscribed" }));
+		expect(
+			screen.getByText("That address already receives updates for API errors."),
+		).toBeInTheDocument();
+		already.unmount();
+
+		const maintenance = await services.incidents.create(SYSTEM_ACTOR, {
+			kind: "maintenance",
+			title: "DB upgrade",
+			message: "Upgrading",
+			scheduledStart: "2026-11-05T00:00:00.000Z",
+			scheduledEnd: "2026-11-05T02:00:00.000Z",
+		});
+		render(
+			await SubscribePage({
+				searchParams: params({ incident: maintenance.id }),
+			}),
+		);
+		expect(
+			screen.getByText(
+				"We'll email you only when we update or complete this maintenance.",
+			),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "← Back to maintenance" }),
+		).toBeInTheDocument();
+		await expectNotFound(
+			SubscribePage({ searchParams: params({ incident: "inc_nope" }) }),
+		);
+	});
+
+	it("confirms and stops the updates of one incident", async () => {
+		const { services, notifier } = await setupApp();
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Investigating",
+		});
+		await services.subscribers.subscribe({
+			email: "jane@example.com",
+			incidentId: incident.id,
+		});
+		const token = notifier.confirmations[0]?.subscriber.token;
+		const confirmed = render(
+			await ConfirmPage({
+				searchParams: params({ token, incident: incident.id }),
+			}),
+		);
+		expect(
+			screen.getByText(
+				"jane@example.com will now receive updates for API errors.",
+			),
+		).toBeInTheDocument();
+		confirmed.unmount();
+
+		const unsubscribe = render(
+			await UnsubscribePage({
+				searchParams: params({ token: "abc", incident: incident.id }),
+			}),
+		);
+		expect(
+			screen.getByText("Stop receiving emails about API errors."),
+		).toBeInTheDocument();
+		expect(document.querySelector('input[name="incidentId"]')).toHaveValue(
+			incident.id,
+		);
+		unsubscribe.unmount();
+		render(
+			await UnsubscribePage({
+				searchParams: params({ done: "1", incident: incident.id }),
+			}),
+		);
+		expect(
+			screen.getByText("You will no longer receive updates for API errors."),
+		).toBeInTheDocument();
 	});
 
 	it("serves the cached status page while the database is offline", async () => {
@@ -396,6 +543,7 @@ describe("subscription pages", () => {
 			screen.getByRole("button", { name: "Unsubscribe" }),
 		).toBeInTheDocument();
 		expect(document.querySelector('input[name="token"]')).toHaveValue("abc");
+		expect(document.querySelector('input[name="incidentId"]')).toBeNull();
 		page.unmount();
 		const empty = render(await UnsubscribePage({ searchParams: params({}) }));
 		expect(document.querySelector('input[name="token"]')).toHaveValue("");

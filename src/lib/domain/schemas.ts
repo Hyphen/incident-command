@@ -229,7 +229,8 @@ export const updateSettingsSchema = z.object({
 });
 export type UpdateSettingsInput = z.input<typeof updateSettingsSchema>;
 
-export const subscribeSchema = z.object({ email });
+/** A public email subscription. With `incidentId`, it is for that incident only. */
+export const subscribeSchema = z.object({ email, incidentId: text(64) });
 
 const PHONE = /^\+[1-9][0-9]{6,14}$/;
 

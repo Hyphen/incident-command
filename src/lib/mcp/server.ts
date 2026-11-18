@@ -885,7 +885,8 @@ export function createMcpServer(
 		"list_subscribers",
 		{
 			title: "List subscribers",
-			description: "Webhook, email and text message subscribers.",
+			description:
+				"Webhook, email and text message subscribers. A subscriber with incidentIds gets only the notifications of those incidents.",
 			inputSchema: {},
 			readOnly: true,
 		},

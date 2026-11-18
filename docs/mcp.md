@@ -152,7 +152,7 @@ A person reviews drafts. An agent cannot approve a draft. An agent cannot change
 | `update_settings`             | `settings.write`      | Change name, URLs, theme, brand color, CSS and uptime.                              |
 | `get_notification_settings`   | `channels.read`       | The webhook, email and text messaging channels and their providers. No credentials. |
 | `update_notification_channel` | `channels.write`      | Turn a channel on or off, or set its delivery strategy or sender.                   |
-| `list_subscribers`            | `subscribers.read`    | Webhook, email and text message subscribers.                                        |
+| `list_subscribers`            | `subscribers.read`    | Subscribers. `incidentIds` limits a subscriber to those incidents.                  |
 | `add_subscriber`              | `subscribers.manage`  | Add a confirmed email subscriber, a webhook or an E.164 phone number.               |
 | `remove_subscriber`           | `subscribers.manage`  | Remove a subscriber.                                                                |
 
