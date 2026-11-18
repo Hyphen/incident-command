@@ -4,11 +4,25 @@ import { NoticeCard } from "@/components/status/notice";
 import { PublicPage } from "@/components/status/page-shell";
 import { SubmitButton } from "@/components/submit-button";
 import { getApp } from "@/lib/app";
+import { FEED_PATH } from "@/lib/feed";
 import { resolveFlash } from "@/lib/flash";
 import { subscribeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Subscribe to updates" };
+
+/** A feed reader gets the updates without an email address. */
+function FeedHint() {
+	return (
+		<p className="text-sm">
+			To use a feed reader, follow the{" "}
+			<a href={FEED_PATH} className="underline hover:text-fg">
+				RSS feed
+			</a>
+			.
+		</p>
+	);
+}
 
 interface Props {
 	searchParams: Promise<{ status?: string; error?: string }>;
@@ -56,12 +70,14 @@ export default async function SubscribePage({ searchParams }: Props) {
 					Subscribe
 				</SubmitButton>
 			</form>
+			<FeedHint />
 		</NoticeCard>
 	);
 	if (!canSubscribe) {
 		body = (
 			<NoticeCard title="Subscriptions are not available">
 				<p>This status page does not offer email updates right now.</p>
+				<FeedHint />
 			</NoticeCard>
 		);
 	} else if (status === "confirmation_sent") {

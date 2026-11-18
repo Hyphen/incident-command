@@ -23,6 +23,16 @@ const nextConfig: NextConfig = {
 			},
 		];
 	},
+	async rewrites() {
+		// An agent reads the Markdown version of an incident page at the URL
+		// of the page with ".md" added (https://llmstxt.org).
+		return [
+			{
+				source: "/incidents/:id\\.md",
+				destination: "/incidents/:id/markdown",
+			},
+		];
+	},
 	async redirects() {
 		// Older links and bookmarks point to the page under its old name.
 		return [

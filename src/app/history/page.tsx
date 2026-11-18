@@ -4,9 +4,14 @@ import { PublicPage } from "@/components/status/page-shell";
 import { IncidentList } from "@/components/status/recent-incidents";
 import { getApp } from "@/lib/app";
 import { formatMonth } from "@/lib/format";
+import { HISTORY_MARKDOWN_PATH } from "@/lib/llms";
+import { publicAlternates } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Incident history" };
+export const metadata: Metadata = {
+	title: "Incident history",
+	alternates: publicAlternates(HISTORY_MARKDOWN_PATH),
+};
 
 export default async function HistoryPage({
 	searchParams,
