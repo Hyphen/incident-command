@@ -2,13 +2,17 @@
 
 Incident Command is one Next.js server (standalone output). Run it as a container on any host, or on Cloudflare Containers behind a Worker.
 
-| Path             | What it serves                                                                                                                    |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `/`              | Public status page                                                                                                                |
-| `/manage`        | Management portal                                                                                                                 |
-| `/api/mcp`       | MCP server for AI agents (Streamable HTTP; bearer tokens `icmd_...` created in the portal)                                        |
-| `/api/v1/status` | Public status JSON                                                                                                                |
-| `/healthz`       | Health check: `200` with `"status":"ok"` (`"degraded"` while the database is down after boot), or `503` when the app cannot start |
+| Path                 | What it serves                                                                                                                    |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                  | Public status page                                                                                                                |
+| `/manage`            | Management portal                                                                                                                 |
+| `/api/mcp`           | MCP server for AI agents (Streamable HTTP; bearer tokens `icmd_...` created in the portal)                                        |
+| `/api/v1/status`     | Public status JSON                                                                                                                |
+| `/feed.xml`          | RSS feed. Each incident and maintenance update is one item.                                                                       |
+| `/llms.txt`          | The status page in Markdown, for agents ([llms.txt](https://llmstxt.org))                                                         |
+| `/history.md`        | The incident history in Markdown. `?month=YYYY-MM` selects the newest month.                                                      |
+| `/incidents/{id}.md` | An incident page in Markdown                                                                                                      |
+| `/healthz`           | Health check: `200` with `"status":"ok"` (`"degraded"` while the database is down after boot), or `503` when the app cannot start |
 
 ## Quick start
 

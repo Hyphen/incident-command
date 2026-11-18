@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { OverallBanner } from "@/components/status/banner";
 import { IncidentCard } from "@/components/status/incident-card";
@@ -5,9 +6,12 @@ import { PublicPage } from "@/components/status/page-shell";
 import { IncidentList } from "@/components/status/recent-incidents";
 import { SystemStatus } from "@/components/status/system-status";
 import { getApp } from "@/lib/app";
+import { LLMS_PATH } from "@/lib/llms";
 import { RECENT_DAYS } from "@/lib/services/status";
+import { publicAlternates } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { alternates: publicAlternates(LLMS_PATH) };
 
 export default async function StatusPage() {
 	const { services } = await getApp();

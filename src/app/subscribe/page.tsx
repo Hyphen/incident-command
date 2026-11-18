@@ -5,10 +5,24 @@ import { PublicPage } from "@/components/status/page-shell";
 import { SubscribeForm } from "@/components/status/subscribe-form";
 import { getApp } from "@/lib/app";
 import type { SubscriberType } from "@/lib/domain/types";
+import { FEED_PATH } from "@/lib/feed";
 import { resolveFlash } from "@/lib/flash";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Subscribe to updates" };
+
+/** A feed reader gets the updates without an email address. */
+function FeedHint() {
+	return (
+		<p className="text-sm">
+			To use a feed reader, follow the{" "}
+			<a href={FEED_PATH} className="underline hover:text-fg">
+				RSS feed
+			</a>
+			.
+		</p>
+	);
+}
 
 /** The text after a confirmation was sent through each channel. */
 const SENT: Record<SubscriberType, { title: string; text: string }> = {
@@ -50,6 +64,7 @@ export default async function SubscribePage({ searchParams }: Props) {
 	let body = (
 		<NoticeCard title="Subscriptions are not available">
 			<p>This status page does not offer updates right now.</p>
+			<FeedHint />
 		</NoticeCard>
 	);
 	if (channel && status === "confirmation_sent") {
@@ -80,6 +95,7 @@ export default async function SubscribePage({ searchParams }: Props) {
 					</p>
 				)}
 				<SubscribeForm channels={channels} initial={channel} />
+				<FeedHint />
 			</NoticeCard>
 		);
 	}

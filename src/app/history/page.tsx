@@ -4,15 +4,28 @@ import { PublicPage } from "@/components/status/page-shell";
 import { IncidentList } from "@/components/status/recent-incidents";
 import { getApp } from "@/lib/app";
 import { formatMonth } from "@/lib/format";
+import { HISTORY_MARKDOWN_PATH } from "@/lib/llms";
+import { publicAlternates } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Incident history" };
 
-export default async function HistoryPage({
-	searchParams,
-}: {
+interface Props {
 	searchParams: Promise<{ month?: string }>;
-}) {
+}
+
+/** The Markdown alternate shows the same months as the page. */
+export async function generateMetadata({
+	searchParams,
+}: Props): Promise<Metadata> {
+	const { month } = await searchParams;
+	const query = month ? `?month=${encodeURIComponent(month)}` : "";
+	return {
+		title: "Incident history",
+		alternates: publicAlternates(`${HISTORY_MARKDOWN_PATH}${query}`),
+	};
+}
+
+export default async function HistoryPage({ searchParams }: Props) {
 	const { month } = await searchParams;
 	const { services } = await getApp();
 	const [history, settings, canSubscribe] = await Promise.all([

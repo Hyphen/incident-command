@@ -3,7 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { UnrecognizedActionError } from "next/dist/client/components/unrecognized-action-error";
 import { renderToStaticMarkup } from "react-dom/server";
 import ErrorPage from "@/app/error";
-import HistoryPage from "@/app/history/page";
+import HistoryPage, {
+	generateMetadata as historyMetadata,
+} from "@/app/history/page";
 import IncidentPage, {
 	generateMetadata as incidentMetadata,
 } from "@/app/incidents/[id]/page";
@@ -12,7 +14,7 @@ import RootLayout, {
 	viewport,
 } from "@/app/layout";
 import NotFound from "@/app/not-found";
-import StatusPage from "@/app/page";
+import StatusPage, { metadata as statusMetadata } from "@/app/page";
 import ConfirmPage from "@/app/subscribe/confirm/page";
 import SubscribePage from "@/app/subscribe/page";
 import UnsubscribePage from "@/app/subscribe/unsubscribe/page";
@@ -50,6 +52,9 @@ describe("root layout", () => {
 		expect(metadata.description).toBe("Acme services");
 		expect(metadata.icons).toEqual({
 			icon: "/brand/favicon?v=2026-11-02T12%3A00%3A00.000Z",
+		});
+		expect(metadata.alternates).toEqual({
+			types: { "application/rss+xml": "/feed.xml" },
 		});
 		expect(viewport.width).toBe("device-width");
 	});
@@ -103,6 +108,16 @@ describe("status page", () => {
 		expect(
 			screen.getByRole("link", { name: "Incident Command" }),
 		).toHaveAttribute("href", "https://github.com/jaredwray/incident-command");
+		expect(screen.getByRole("link", { name: "RSS" })).toHaveAttribute(
+			"href",
+			"/feed.xml",
+		);
+		expect(statusMetadata.alternates).toEqual({
+			types: {
+				"application/rss+xml": "/feed.xml",
+				"text/markdown": "/llms.txt",
+			},
+		});
 	});
 
 	it("renders services, incidents and maintenance", async () => {
@@ -274,7 +289,15 @@ describe("incident page", () => {
 		expect(screen.queryByText(/System \(system\)/)).not.toBeInTheDocument();
 		expect(
 			await incidentMetadata({ params: params({ id: incident.id }) }),
-		).toEqual({ title: "API errors" });
+		).toEqual({
+			title: "API errors",
+			alternates: {
+				types: {
+					"application/rss+xml": "/feed.xml",
+					"text/markdown": `/incidents/${incident.id}.md`,
+				},
+			},
+		});
 	});
 
 	it("renders maintenance windows", async () => {
@@ -331,6 +354,14 @@ describe("history page", () => {
 		expect(
 			screen.queryByRole("link", { name: "Newer →" }),
 		).not.toBeInTheDocument();
+		expect(
+			(await historyMetadata({ searchParams: params({}) })).alternates,
+		).toEqual({
+			types: {
+				"application/rss+xml": "/feed.xml",
+				"text/markdown": "/history.md",
+			},
+		});
 	});
 
 	it("links to newer pages", async () => {
@@ -340,6 +371,17 @@ describe("history page", () => {
 			"href",
 			"/history?month=2026-08",
 		);
+		expect(
+			await historyMetadata({ searchParams: params({ month: "2026-05" }) }),
+		).toEqual({
+			title: "Incident history",
+			alternates: {
+				types: {
+					"application/rss+xml": "/feed.xml",
+					"text/markdown": "/history.md?month=2026-05",
+				},
+			},
+		});
 	});
 });
 
@@ -353,6 +395,10 @@ describe("subscription pages", () => {
 			screen.getByRole("heading", { name: "Get Acme updates" }),
 		).toBeInTheDocument();
 		expect(screen.getByLabelText("Email address")).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "RSS feed" })).toHaveAttribute(
+			"href",
+			"/feed.xml",
+		);
 		unmount();
 
 		const errored = render(
@@ -485,6 +531,10 @@ describe("subscription pages", () => {
 		expect(
 			screen.getByText("Subscriptions are not available"),
 		).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "RSS feed" })).toHaveAttribute(
+			"href",
+			"/feed.xml",
+		);
 	});
 
 	it("confirms subscriptions", async () => {

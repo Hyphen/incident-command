@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EventStatusBadge, ImpactBadge } from "@/components/status/badges";
-import { affectedNames } from "@/components/status/incident-card";
 import { PublicPage } from "@/components/status/page-shell";
 import { StatusTimeline } from "@/components/status/status-timeline";
 import { Timeline } from "@/components/status/timeline";
 import { LocalTime } from "@/components/time";
 import { getApp } from "@/lib/app";
+import { affectedNames } from "@/lib/domain/status";
 import { formatDuration } from "@/lib/format";
+import { incidentMarkdownPath } from "@/lib/llms";
+import { publicAlternates } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +22,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 	const { id } = await params;
 	const { services } = await getApp();
 	const incident = await services.incidents.find(id);
-	return { title: incident?.title ?? "Incident not found" };
+	if (!incident) {
+		return { title: "Incident not found" };
+	}
+	return {
+		title: incident.title,
+		alternates: publicAlternates(incidentMarkdownPath(incident.id)),
+	};
 }
 
 export default async function IncidentPage({ params }: Props) {

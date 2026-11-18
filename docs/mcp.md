@@ -5,6 +5,7 @@ Incident Command ships a [Model Context Protocol](https://modelcontextprotocol.i
 - **Endpoint:** `POST https://<your-host>/api/mcp`
 - **Transport:** Streamable HTTP, stateless (every request is independent, so it scales horizontally and runs on serverless hosts). `GET`/`DELETE` return `405`.
 - **Auth:** OAuth 2.1 (recommended) or an API token. See [Connect](#connect).
+- **Read without credentials:** `GET /llms.txt` gives the public status page in Markdown. Each incident page has a Markdown version at `/incidents/{id}.md`. Use these pages when an agent only reads the status.
 
 ## Connect
 
