@@ -546,7 +546,6 @@ export async function updateGeneralSettingsAction(
 			description: text(form, "description"),
 			siteUrl: optionalText(form, "siteUrl"),
 			supportUrl: optionalText(form, "supportUrl"),
-			allowSubscriptions: checkbox(form, "allowSubscriptions"),
 			uptimeDays: integer(form, "uptimeDays"),
 		}),
 	);

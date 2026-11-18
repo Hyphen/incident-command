@@ -27,11 +27,22 @@ describe("SettingsService", () => {
 			description: "",
 			siteUrl: "https://status.acme.dev",
 			theme: "default",
-			allowSubscriptions: true,
 			showPoweredBy: true,
 			uptimeDays: 90,
 			updatedAt: "1970-01-01T00:00:00.000Z",
 		});
+	});
+
+	it("drops the removed allowSubscriptions setting of an older store", async () => {
+		const t = createTestContext();
+		const legacy = {
+			...t.services.settings.defaults(),
+			allowSubscriptions: false,
+		};
+		await t.store.insert("settings", legacy);
+		await expect(t.services.settings.get()).resolves.not.toHaveProperty(
+			"allowSubscriptions",
+		);
 	});
 
 	it("creates, updates and clears settings", async () => {
@@ -43,7 +54,6 @@ describe("SettingsService", () => {
 			customCss: ".x{}",
 			theme: "midnight",
 			uptimeDays: 30,
-			allowSubscriptions: false,
 		});
 		expect(first).toMatchObject({
 			siteName: "Acme",
@@ -51,7 +61,6 @@ describe("SettingsService", () => {
 			brandColor: "#ff6600",
 			theme: "midnight",
 			uptimeDays: 30,
-			allowSubscriptions: false,
 		});
 		expect(first.updatedAt).toBe("2026-11-02T12:00:00.000Z");
 		const second = await t.services.settings.update(ADMIN, {

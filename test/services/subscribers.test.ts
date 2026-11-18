@@ -108,7 +108,9 @@ describe("SubscriberService", () => {
 		).rejects.toBeInstanceOf(ForbiddenError);
 		await expect(t.services.subscribers.canSubscribe()).resolves.toBe(true);
 
-		await t.services.settings.update(ADMIN, { allowSubscriptions: false });
+		await t.services.notificationSettings.updateChannel(ADMIN, "webhook", {
+			enabled: false,
+		});
 		await expect(t.services.subscribers.channels()).resolves.toEqual([]);
 		await expect(t.services.subscribers.canSubscribe()).resolves.toBe(false);
 		await expect(
@@ -157,6 +159,40 @@ describe("SubscriberService", () => {
 			await t.services.subscribers.confirm(subscriber.token);
 		}
 		await expect(t.services.subscribers.recipients()).resolves.toHaveLength(2);
+	});
+
+	it("removes the subscriber of an address that a visitor enters", async () => {
+		await t.services.subscribers.addEmail(ADMIN, { email: "ops@acme.dev" });
+		await t.services.subscribers.addSms(ADMIN, { phone: "+15551234567" });
+		await t.services.subscribers.addWebhook(ADMIN, {
+			url: "https://hooks.example.com/a",
+		});
+		// The address is read the same way as on the subscribe page.
+		await t.services.subscribers.unsubscribeAddress({
+			type: "email",
+			target: "OPS@acme.dev",
+		});
+		await t.services.subscribers.unsubscribeAddress({
+			type: "sms",
+			target: "+1 (555) 123-4567",
+		});
+		expect(
+			(await t.services.subscribers.list(ADMIN)).map(({ target }) => target),
+		).toEqual(["https://hooks.example.com/a"]);
+		// An address without a subscription gives the same result.
+		await expect(
+			t.services.subscribers.unsubscribeAddress({
+				type: "email",
+				target: "nobody@acme.dev",
+			}),
+		).resolves.toBeUndefined();
+		await expect(
+			t.services.subscribers.unsubscribeAddress({
+				type: "email",
+				target: "https://hooks.example.com/a",
+			}),
+		).rejects.toBeInstanceOf(ValidationError);
+		expect(await t.store.count("subscribers")).toBe(1);
 	});
 
 	it("lets admins manage webhook and email subscribers", async () => {

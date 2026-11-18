@@ -108,13 +108,17 @@ function awsCredentials(provider: ResolvedProvider) {
 }
 
 /** Builds the airhorn provider for a provider config. */
-export function createProvider(provider: ResolvedProvider): AirhornProvider {
+export function createProvider(
+	provider: ResolvedProvider,
+	allowPrivateNetworks = false,
+): AirhornProvider {
 	switch (provider.type) {
 		case "webhook": {
 			const seconds = Number(provider.options.timeoutSeconds);
 			return new WebhookProvider({
 				secret: provider.secrets.signingSecret,
 				timeoutMs: seconds > 0 ? seconds * 1000 : undefined,
+				allowPrivateNetworks,
 			});
 		}
 		case "sendgrid":
@@ -158,7 +162,7 @@ export function createChannelAirhorn(
 				new ChannelProvider(
 					provider.name,
 					type,
-					createProvider(provider),
+					createProvider(provider, channel.allowPrivateNetworks),
 					provider.from,
 				),
 			];

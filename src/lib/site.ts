@@ -10,7 +10,6 @@ export function fallbackSettings(): Settings {
 		siteName: process.env.SITE_NAME || "Status",
 		description: "",
 		theme: "default",
-		allowSubscriptions: false,
 		showPoweredBy: true,
 		uptimeDays: 90,
 		updatedAt: new Date(0).toISOString(),

@@ -878,7 +878,6 @@ export function createMcpServer(
 					.describe(
 						"A stylesheet that each page loads after the theme. It replaces the stored stylesheet.",
 					),
-				allowSubscriptions: z.boolean().optional(),
 				showPoweredBy: z
 					.boolean()
 					.optional()
