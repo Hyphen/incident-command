@@ -545,15 +545,19 @@ describe("subscription pages", () => {
 		).toBeInTheDocument();
 		already.unmount();
 
-		// A channel that cannot send stays in the toggle, but nobody can select it.
+		// The toggle does not show a channel that cannot send.
 		await services.notificationSettings.updateChannel(SYSTEM_ACTOR, "sms", {
 			enabled: false,
 		});
 		const two = render(
 			await SubscribePage({ searchParams: params({ channel: "sms" }) }),
 		);
-		expect(screen.getByRole("radio", { name: "Text message" })).toBeDisabled();
-		expect(screen.getByRole("radio", { name: "Webhook" })).toBeEnabled();
+		expect(
+			within(screen.getByRole("group", { name: "Channel" }))
+				.getAllByRole("radio")
+				.map((radio) => (radio as HTMLInputElement).value),
+		).toEqual(["email", "webhook"]);
+		expect(screen.queryByText("Text message")).toBeNull();
 		expect(screen.getByRole("radio", { name: "Email" })).toBeChecked();
 		two.unmount();
 
