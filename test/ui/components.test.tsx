@@ -518,7 +518,7 @@ describe("status components", () => {
 		);
 
 		// The labels below the bar show the window.
-		expect(view.getByText(/from 12 hours before the start until now/)).toBe(
+		expect(view.getByText(/from 2 hours before the start until now/)).toBe(
 			page.querySelector("section > p"),
 		);
 		expect(
@@ -555,9 +555,7 @@ describe("status components", () => {
 			<StatusTimeline {...timeline.props} untilNow={false} />,
 		);
 		expect(
-			view.getByText(
-				/from 12 hours before the start to 12 hours after the end/,
-			),
+			view.getByText(/from 2 hours before the start to 2 hours after the end/),
 		).toBeInTheDocument();
 		const ended = bar("API").getAllByRole("listitem");
 		expect(
