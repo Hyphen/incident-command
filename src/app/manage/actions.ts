@@ -600,12 +600,17 @@ export async function updateNotificationChannelAction(
 	form: FormData,
 ): Promise<void> {
 	const { actor, services } = await requireMemberForAction("admin");
+	const channel = channelOf(form);
 	await attempt(NOTIFICATIONS_PATH, () =>
-		services.notificationSettings.updateChannel(actor, channelOf(form), {
+		services.notificationSettings.updateChannel(actor, channel, {
 			revision: integer(form, "revision"),
 			enabled: checkbox(form, "enabled"),
 			strategy: text(form, "strategy") as DeliveryStrategy,
 			from: optionalText(form, "from"),
+			// Only the webhook card has this box.
+			...(channel === "webhook"
+				? { allowPrivateNetworks: checkbox(form, "allowPrivateNetworks") }
+				: {}),
 		}),
 	);
 	redirect(flash(NOTIFICATIONS_PATH, "notification_channel_saved"));

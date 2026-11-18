@@ -24,7 +24,7 @@ export interface DeliveryChannel {
 	providers: ResolvedProvider[];
 	/** Changes when the settings change. The notifier keeps its airhorn instance until then. */
 	version: string;
-	/** Webhooks may post to private network addresses (`WEBHOOK_ALLOW_PRIVATE_NETWORKS`). */
+	/** Webhooks may post to private network addresses. An admin sets it on the webhook channel. */
 	allowPrivateNetworks?: boolean;
 }
 

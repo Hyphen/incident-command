@@ -51,14 +51,21 @@ describe("NotificationSettingsService", () => {
 		expect(resolved.webhook.providers).toEqual([
 			expect.objectContaining({ secrets: { signingSecret: "whsec" } }),
 		]);
-		// Webhooks post only to public addresses, unless the deployment allows private networks.
+		// Webhooks post only to public addresses, unless an admin allows private networks.
 		expect(resolved.webhook).not.toHaveProperty("allowPrivateNetworks");
-		const internal = createTestContext({
-			env: { WEBHOOK_ALLOW_PRIVATE_NETWORKS: "true" },
-		});
-		const open = await internal.services.notificationSettings.resolve();
+		const webhook = await t.services.notificationSettings.updateChannel(
+			ADMIN,
+			"webhook",
+			{ allowPrivateNetworks: true },
+		);
+		expect(webhook.allowPrivateNetworks).toBe(true);
+		const open = await t.services.notificationSettings.resolve();
 		expect(open.webhook.allowPrivateNetworks).toBe(true);
-		expect(open.email).not.toHaveProperty("allowPrivateNetworks");
+		await expect(
+			t.services.notificationSettings.updateChannel(ADMIN, "email", {
+				allowPrivateNetworks: true,
+			}),
+		).rejects.toBeInstanceOf(ValidationError);
 		expect(resolved.email.providers).toEqual([
 			expect.objectContaining({
 				type: "sendgrid",

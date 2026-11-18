@@ -1273,12 +1273,28 @@ describe("notification settings actions", () => {
 		});
 		await redirectOf(
 			updateNotificationChannelAction(
+				form({
+					channel: "webhook",
+					enabled: "on",
+					strategy: "active_passive",
+					allowPrivateNetworks: "on",
+				}),
+			),
+		);
+		expect((await services.notificationSettings.list(actor))[0]).toMatchObject({
+			enabled: true,
+			allowPrivateNetworks: true,
+		});
+		// A webhook form without the box turns private network addresses off again.
+		await redirectOf(
+			updateNotificationChannelAction(
 				form({ channel: "webhook", enabled: "on", strategy: "active_passive" }),
 			),
 		);
-		expect((await services.notificationSettings.list(actor))[0]?.enabled).toBe(
-			true,
-		);
+		expect(
+			(await services.notificationSettings.list(actor))[0]
+				?.allowPrivateNetworks,
+		).toBe(false);
 		expectFlashRedirect(
 			await redirectOf(
 				updateNotificationChannelAction(

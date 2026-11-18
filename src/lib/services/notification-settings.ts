@@ -100,6 +100,11 @@ export class NotificationSettingsService {
 		requirePermission(actor, "channels.write");
 		const id = parse(notificationChannelSchema, channel);
 		const patch = parse(updateNotificationChannelSchema, input);
+		if (patch.allowPrivateNetworks !== undefined && id !== "webhook") {
+			throw new ValidationError(
+				"Only the webhook channel can allow private network addresses",
+			);
+		}
 		const from = this.sender(id, patch.from);
 		const saved = await this.mutate(
 			id,
@@ -108,6 +113,8 @@ export class NotificationSettingsService {
 				enabled: patch.enabled ?? current.enabled,
 				strategy: patch.strategy ?? current.strategy,
 				from: from === undefined ? current.from : (from ?? undefined),
+				allowPrivateNetworks:
+					patch.allowPrivateNetworks ?? current.allowPrivateNetworks,
 			}),
 			patch.revision,
 		);
@@ -543,10 +550,7 @@ export class NotificationSettingsService {
 			strategy: channel.strategy,
 			providers,
 			version: `${channel.updatedAt}#${channel.revision}`,
-			...(channel.id === "webhook" &&
-			this.ctx.config.webhookAllowPrivateNetworks
-				? { allowPrivateNetworks: true }
-				: {}),
+			...(channel.allowPrivateNetworks ? { allowPrivateNetworks: true } : {}),
 		};
 	}
 

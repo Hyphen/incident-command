@@ -1590,6 +1590,13 @@ describe("admin pages", () => {
 		expect(
 			webhooks.queryByLabelText("Default from address"),
 		).not.toBeInTheDocument();
+		// Only the webhook channel has the private network switch, and it starts off.
+		expect(
+			webhooks.getByLabelText("Allow private network addresses"),
+		).not.toBeChecked();
+		expect(
+			within(card("Email")).queryByLabelText("Allow private network addresses"),
+		).not.toBeInTheDocument();
 		const secret = webhooks.getByLabelText("Signing secret");
 		expect(secret).toBeDisabled();
 		expect(
