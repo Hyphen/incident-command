@@ -82,8 +82,6 @@ Admins set up notifications in **Manage → Settings → Notifications**. Incide
 - Email and text messages need a sender. Set a default sender on the channel, or a sender on each provider. A sender on a provider replaces the sender of the channel.
 - A signed webhook adds `x-incident-command-signature: sha256=<hex>` to each request. The value is the HMAC-SHA256 of the raw JSON body, keyed with the signing secret. A webhook provider without its own signing secret signs with `WEBHOOK_SECRET`, if it is set.
 - Amazon SNS takes a sender ID of up to 11 letters and digits. When the sender is a phone number, SNS sends it as the origination number. The number must be an origination number of your AWS account.
-- Visitors subscribe by email on the status page. Each subscription has double opt-in.
-- The page of an open incident has a **Subscribe to this incident** button. The page of open maintenance has a **Subscribe to this maintenance** button. A visitor who subscribes there gets only the emails of that event. Each of these emails has a link that stops the emails of that event only.
 - Admins add phone numbers in **Manage → Subscribers** or with the `add_subscriber` MCP tool. Visitors cannot subscribe by text message. Get consent before you add a number.
 - `SITE_URL` is used to build the links in notifications, so set it to the public URL.
 

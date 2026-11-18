@@ -1,4 +1,3 @@
-import type { Incident } from "@/lib/domain/types";
 import {
 	ConflictError,
 	ForbiddenError,
@@ -30,9 +29,7 @@ describe("SubscriberService", () => {
 			enabled: true,
 			providers: [{ type: "sendgrid", from: "status@test.dev" }],
 		});
-		await expect(t.services.subscribers.recipients("inc_1")).resolves.toEqual(
-			[],
-		);
+		await expect(t.services.subscribers.recipients()).resolves.toEqual([]);
 
 		// re-subscribing before confirming resends without duplicating
 		await t.services.subscribers.subscribe({ email: "jane@example.com" });
@@ -49,9 +46,7 @@ describe("SubscriberService", () => {
 		await expect(
 			t.services.subscribers.confirm(pending?.token ?? ""),
 		).resolves.toMatchObject({ confirmed: true });
-		await expect(
-			t.services.subscribers.recipients("inc_1"),
-		).resolves.toHaveLength(1);
+		await expect(t.services.subscribers.recipients()).resolves.toHaveLength(1);
 		await expect(
 			t.services.subscribers.subscribe({ email: "jane@example.com" }),
 		).resolves.toBe("already_subscribed");
@@ -138,130 +133,5 @@ describe("SubscriberService", () => {
 		await expect(
 			t.services.subscribers.addSms(EDITOR, { phone: "+15551234567" }),
 		).rejects.toBeInstanceOf(ForbiddenError);
-	});
-});
-
-describe("SubscriberService incident subscriptions", () => {
-	const email = "jane@example.com";
-	let t: TestContext;
-	let api: Incident;
-	let db: Incident;
-	beforeEach(async () => {
-		t = createTestContext();
-		api = await t.services.incidents.create(EDITOR, {
-			title: "API errors",
-			message: "Investigating",
-		});
-		db = await t.services.incidents.create(EDITOR, {
-			title: "Slow database",
-			message: "Investigating",
-		});
-	});
-
-	/** Subscribes to one incident and confirms the link. Returns the token. */
-	const subscribeTo = async (incidentId: string) => {
-		await t.services.subscribers.subscribe({ email, incidentId });
-		const token = t.notifier.confirmations.at(-1)?.subscriber.token ?? "";
-		await t.services.subscribers.confirm(token, incidentId);
-		return token;
-	};
-
-	it("sends the updates of the subscribed incident only", async () => {
-		await expect(
-			t.services.subscribers.subscribe({ email, incidentId: "inc_nope" }),
-		).rejects.toBeInstanceOf(NotFoundError);
-		expect(await t.store.count("subscribers")).toBe(0);
-
-		await expect(
-			t.services.subscribers.subscribe({ email, incidentId: api.id }),
-		).resolves.toBe("confirmation_sent");
-		const [sent] = t.notifier.confirmations;
-		expect(sent?.incident).toEqual({ id: api.id, title: "API errors" });
-		const token = sent?.subscriber.token ?? "";
-		await expect(
-			t.services.subscribers.confirm(token, "inc_nope"),
-		).resolves.toBeUndefined();
-		await expect(
-			t.services.subscribers.confirm(token, api.id),
-		).resolves.toMatchObject({ confirmed: true, incidentIds: [api.id] });
-		await expect(
-			t.services.subscribers.subscribe({ email, incidentId: api.id }),
-		).resolves.toBe("already_subscribed");
-
-		await t.services.incidents.postUpdate(EDITOR, db.id, { message: "Slow" });
-		await t.services.incidents.postUpdate(EDITOR, api.id, { message: "Fixed" });
-		expect(
-			t.notifier.incidents.map(({ notification, subscribers }) => [
-				notification.incident.id,
-				subscribers.map((subscriber) => subscriber.target),
-			]),
-		).toEqual([[api.id, [email]]]);
-	});
-
-	it("adds incidents or all updates only when the subscriber confirms", async () => {
-		const token = await subscribeTo(api.id);
-		t.clock.advance(60_000);
-
-		// A new request changes nothing until the subscriber confirms it.
-		await expect(
-			t.services.subscribers.subscribe({ email, incidentId: db.id }),
-		).resolves.toBe("confirmation_sent");
-		await expect(t.services.subscribers.recipients(db.id)).resolves.toEqual([]);
-		const both = await t.services.subscribers.confirm(token, db.id);
-		expect(both?.incidentIds).toEqual([api.id, db.id]);
-		expect(both?.confirmedAt).toBe("2026-11-02T12:00:00.000Z");
-		const again = await t.services.subscribers.confirm(token, api.id);
-		expect(again?.incidentIds).toEqual([api.id, db.id]);
-
-		// A link for all updates removes the limit.
-		await expect(t.services.subscribers.subscribe({ email })).resolves.toBe(
-			"confirmation_sent",
-		);
-		const all = await t.services.subscribers.confirm(token);
-		expect(all).not.toHaveProperty("incidentIds");
-		await expect(
-			t.services.subscribers.recipients("inc_other"),
-		).resolves.toHaveLength(1);
-
-		// An incident link does not limit a subscriber of all updates.
-		await expect(
-			t.services.subscribers.subscribe({ email, incidentId: api.id }),
-		).resolves.toBe("already_subscribed");
-		await expect(
-			t.services.subscribers.confirm(token, api.id),
-		).resolves.not.toHaveProperty("incidentIds");
-	});
-
-	it("unsubscribes from one incident and keeps the other incidents", async () => {
-		await subscribeTo(api.id);
-		const token = await subscribeTo(db.id);
-
-		await expect(
-			t.services.subscribers.unsubscribe(token, api.id),
-		).resolves.toBe(true);
-		await expect(t.services.subscribers.recipients(api.id)).resolves.toEqual(
-			[],
-		);
-		await expect(
-			t.services.subscribers.recipients(db.id),
-		).resolves.toHaveLength(1);
-		// The link of an incident that the subscriber no longer has changes nothing.
-		await t.services.subscribers.unsubscribe(token, api.id);
-		await expect(
-			t.services.subscribers.recipients(db.id),
-		).resolves.toHaveLength(1);
-		await expect(
-			t.services.subscribers.unsubscribe(token, db.id),
-		).resolves.toBe(true);
-		expect(await t.store.count("subscribers")).toBe(0);
-
-		// The incident link of a subscriber of all updates removes the subscriber.
-		const ops = await t.services.subscribers.addEmail(ADMIN, {
-			email: "ops@acme.dev",
-		});
-		await expect(
-			t.services.subscribers.unsubscribe(ops.token, api.id),
-		).resolves.toBe(true);
-		expect(await t.store.count("subscribers")).toBe(0);
 	});
 });

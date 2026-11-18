@@ -44,7 +44,7 @@ export const EMAIL_TEMPLATE: AirhornTemplate = {
 <p style="white-space:pre-wrap;font-size:15px;line-height:1.5;margin:0 0 16px"><%= message %></p>
 <% if (incidentUrl) { %><p><a href="<%= incidentUrl %>" style="color:#2563eb">View on the status page</a></p><% } %>
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 12px">
-<p style="font-size:12px;color:#6b7280;margin:0">You are receiving this because you subscribed to <% if (incidentOnly) { %>updates for this incident<% } else { %><%= siteName %> updates<% } %>.<% if (unsubscribeUrl) { %> <a href="<%= unsubscribeUrl %>" style="color:#6b7280">Unsubscribe</a><% } %></p>
+<p style="font-size:12px;color:#6b7280;margin:0">You are receiving this because you subscribed to <%= siteName %> updates.<% if (unsubscribeUrl) { %> <a href="<%= unsubscribeUrl %>" style="color:#6b7280">Unsubscribe</a><% } %></p>
 </div>`,
 };
 
@@ -53,7 +53,7 @@ export const CONFIRM_TEMPLATE: AirhornTemplate = {
 	subject: "Confirm your subscription to <%- siteName %>",
 	content: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;color:#111827">
 <h2 style="margin:0 0 12px;font-size:20px">Confirm your subscription</h2>
-<p style="font-size:15px;line-height:1.5">Click the link below to receive <% if (incidentTitle) { %>updates for <strong><%= incidentTitle %></strong><% } else { %>incident and maintenance updates<% } %> from <%= siteName %>.</p>
+<p style="font-size:15px;line-height:1.5">Click the link below to receive incident and maintenance updates from <%= siteName %>.</p>
 <p><a href="<%= confirmUrl %>" style="color:#2563eb">Confirm subscription</a></p>
 <p style="font-size:12px;color:#6b7280">If you did not request this, you can ignore this email.</p>
 </div>`,
@@ -93,23 +93,14 @@ export function incidentUrl(notification: IncidentNotification) {
 	);
 }
 
-/** The query of a subscriber link. With `incidentId`, the link is for that incident only. */
-function subscriberQuery(subscriber: Subscriber, incidentId?: string): string {
-	const query = `?token=${encodeURIComponent(subscriber.token)}`;
-	return incidentId
-		? `${query}&incident=${encodeURIComponent(incidentId)}`
-		: query;
-}
-
 export function unsubscribeUrl(
 	subscriber: Subscriber,
 	settings: Settings,
 	fallback?: string,
-	incidentId?: string,
 ) {
 	return joinUrl(
 		siteUrlFor(settings, fallback),
-		`/subscribe/unsubscribe${subscriberQuery(subscriber, incidentId)}`,
+		`/subscribe/unsubscribe?token=${encodeURIComponent(subscriber.token)}`,
 	);
 }
 
@@ -117,11 +108,10 @@ export function confirmUrl(
 	subscriber: Subscriber,
 	settings: Settings,
 	fallback?: string,
-	incidentId?: string,
 ) {
 	return joinUrl(
 		siteUrlFor(settings, fallback),
-		`/subscribe/confirm${subscriberQuery(subscriber, incidentId)}`,
+		`/subscribe/confirm?token=${encodeURIComponent(subscriber.token)}`,
 	);
 }
 
@@ -172,15 +162,10 @@ export function smsText(notification: IncidentNotification): string {
 	return `${head}\n${shorten(status, room - head.length)}${tail}`;
 }
 
-/**
- * The data of a notification email. A subscriber of some incidents only gets
- * an unsubscribe link for the incident of the email.
- */
 export function emailData(
 	notification: IncidentNotification,
 	subscriber: Subscriber,
 ) {
-	const incidentOnly = subscriber.incidentIds !== undefined;
 	return {
 		siteName: notification.settings.siteName,
 		prefix: EVENT_PREFIX[notification.event],
@@ -189,12 +174,10 @@ export function emailData(
 		message: notification.update.message,
 		services: notification.services.map((service) => service.name).join(", "),
 		incidentUrl: incidentUrl(notification),
-		incidentOnly,
 		unsubscribeUrl: unsubscribeUrl(
 			subscriber,
 			notification.settings,
 			notification.siteUrl,
-			incidentOnly ? notification.incident.id : undefined,
 		),
 	};
 }

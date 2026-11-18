@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { NoticeCard } from "@/components/status/notice";
 import { PublicPage } from "@/components/status/page-shell";
 import { SubmitButton } from "@/components/submit-button";
@@ -12,39 +11,23 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Subscribe to updates" };
 
 interface Props {
-	searchParams: Promise<{ status?: string; error?: string; incident?: string }>;
+	searchParams: Promise<{ status?: string; error?: string }>;
 }
 
 export default async function SubscribePage({ searchParams }: Props) {
-	const {
-		status,
-		error: errorToken,
-		incident: incidentId,
-	} = await searchParams;
+	const { status, error: errorToken } = await searchParams;
 	const { error } = resolveFlash({ error: errorToken });
 	const { services } = await getApp();
-	const [settings, canSubscribe, incident] = await Promise.all([
+	const [settings, canSubscribe] = await Promise.all([
 		services.settings.get(),
 		services.subscribers.canSubscribe(),
-		incidentId ? services.incidents.find(incidentId) : undefined,
 	]);
-	if (incidentId && !incident) {
-		notFound();
-	}
-	const maintenance = incident?.kind === "maintenance";
 
 	let body = (
-		<NoticeCard
-			title={
-				incident
-					? `Get updates for ${incident.title}`
-					: `Get ${settings.siteName} updates`
-			}
-		>
+		<NoticeCard title={`Get ${settings.siteName} updates`}>
 			<p>
-				{incident
-					? `We'll email you only when we update or ${maintenance ? "complete this maintenance" : "resolve this incident"}.`
-					: "We'll email you when we create, update or resolve an incident or schedule maintenance."}
+				We'll email you when we create, update or resolve an incident or
+				schedule maintenance.
 			</p>
 			{error && (
 				<p
@@ -58,9 +41,6 @@ export default async function SubscribePage({ searchParams }: Props) {
 				action={subscribeAction}
 				className="flex flex-col gap-3 sm:flex-row"
 			>
-				{incident && (
-					<input type="hidden" name="incidentId" value={incident.id} />
-				)}
 				<label htmlFor="email" className="sr-only">
 					Email address
 				</label>
@@ -88,18 +68,14 @@ export default async function SubscribePage({ searchParams }: Props) {
 		body = (
 			<NoticeCard title="Check your inbox">
 				<p>
-					We sent you a confirmation link. Click it to start receiving updates
-					{incident ? ` for ${incident.title}` : ""}.
+					We sent you a confirmation link. Click it to start receiving updates.
 				</p>
 			</NoticeCard>
 		);
 	} else if (status === "already_subscribed") {
 		body = (
 			<NoticeCard title="You're already subscribed">
-				<p>
-					That address already receives{" "}
-					{incident ? `updates for ${incident.title}` : "updates"}.
-				</p>
+				<p>That address already receives updates.</p>
 			</NoticeCard>
 		);
 	}
@@ -107,18 +83,9 @@ export default async function SubscribePage({ searchParams }: Props) {
 	return (
 		<PublicPage settings={settings} canSubscribe={false}>
 			{body}
-			{incident ? (
-				<Link
-					href={`/incidents/${incident.id}`}
-					className="text-sm text-muted hover:text-fg"
-				>
-					← Back to {maintenance ? "maintenance" : "incident"}
-				</Link>
-			) : (
-				<Link href="/" className="text-sm text-muted hover:text-fg">
-					← Back to status
-				</Link>
-			)}
+			<Link href="/" className="text-sm text-muted hover:text-fg">
+				← Back to status
+			</Link>
 		</PublicPage>
 	);
 }

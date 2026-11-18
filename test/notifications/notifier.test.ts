@@ -239,9 +239,6 @@ describe("templates", () => {
 			"https://f.example.com/subscribe/confirm?token=tok%201",
 		);
 		expect(confirmUrl(subscriber(), settings)).toBeUndefined();
-		expect(confirmUrl(subscriber(), withSite, undefined, "inc 1")).toBe(
-			"https://status.acme.dev/subscribe/confirm?token=tok%201&incident=inc%201",
-		);
 	});
 
 	it("summarizes for chat webhooks", () => {
@@ -309,19 +306,7 @@ describe("templates", () => {
 			statusLabel: "Investigating",
 			services: "API",
 			incidentUrl: "https://x.co/incidents/inc_1",
-			incidentOnly: false,
 			unsubscribeUrl: "https://x.co/subscribe/unsubscribe?token=tok%201",
-		});
-		// A subscriber of some incidents unsubscribes from this incident only.
-		expect(
-			emailData(
-				{ ...notification, siteUrl: "https://x.co" },
-				subscriber({ incidentIds: ["inc_9", "inc_1"] }),
-			),
-		).toMatchObject({
-			incidentOnly: true,
-			unsubscribeUrl:
-				"https://x.co/subscribe/unsubscribe?token=tok%201&incident=inc_1",
 		});
 		const payload = webhookPayload(notification);
 		expect(payload.event).toBe("incident.created");
@@ -373,7 +358,6 @@ describe("AirhornNotifier", () => {
 		expect(html.value).toContain("API errors &lt;script&gt;");
 		expect(html.value).toContain("errors &amp; timeouts");
 		expect(html.value).toContain("https://status.acme.dev/incidents/inc_1");
-		expect(html.value).toContain("you subscribed to Acme Status updates.");
 		expect(html.value).toContain("Unsubscribe");
 
 		const hook = requests.find(
@@ -403,22 +387,6 @@ describe("AirhornNotifier", () => {
 				options: undefined,
 			},
 		]);
-	});
-
-	it("tells a subscriber of one incident why the email came", async () => {
-		const { notifier: n } = notifier();
-		await n.notifyIncident(
-			notification,
-			[subscriber({ incidentIds: ["inc_1"] })],
-			channels(),
-		);
-		const [, html] = body(requests[0]).content;
-		expect(html.value).toContain(
-			"you subscribed to updates for this incident.",
-		);
-		expect(html.value).toContain(
-			"https://status.acme.dev/subscribe/unsubscribe?token=tok%201&amp;incident=inc_1",
-		);
 	});
 
 	it("renders emails without links or services when unavailable", async () => {
@@ -605,30 +573,13 @@ describe("AirhornNotifier", () => {
 		expect(mail.content[1].value).toContain(
 			"https://status.acme.dev/subscribe/confirm?token=tok%201",
 		);
-		expect(mail.content[1].value).toContain(
-			"receive incident and maintenance updates from Acme Status.",
-		);
-		// The confirmation of one incident names the incident, and its link holds the incident.
-		await expect(
-			n.sendConfirmation(subscriber({ confirmed: false }), settings, email, {
-				id: "inc_1",
-				title: "API <b>",
-			}),
-		).resolves.toBe(true);
-		const scoped = body(requests[1]).content[1].value;
-		expect(scoped).toContain(
-			"receive updates for <strong>API &lt;b&gt;</strong> from Acme Status.",
-		);
-		expect(scoped).toContain(
-			"https://status.acme.dev/subscribe/confirm?token=tok%201&amp;incident=inc_1",
-		);
 		await expect(
 			n.sendConfirmation(subscriber({ type: "webhook" }), settings, email),
 		).resolves.toBe(false);
 		await expect(
 			n.sendConfirmation(subscriber(), settings, { ...email, enabled: false }),
 		).resolves.toBe(false);
-		expect(requests).toHaveLength(2);
+		expect(requests).toHaveLength(1);
 	});
 
 	it("handles an empty recipient list", async () => {

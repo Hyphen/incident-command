@@ -411,12 +411,6 @@ export interface Subscriber {
 	target: string;
 	confirmed: boolean;
 	token: string;
-	/**
-	 * If the subscriber has this list, the subscriber gets only the notifications
-	 * of these incidents. If not, the subscriber gets all notifications. A
-	 * confirmation sets the list.
-	 */
-	incidentIds?: string[];
 	confirmedAt?: string;
 	createdAt: string;
 }

@@ -8,7 +8,6 @@ import { StatusTimeline } from "@/components/status/status-timeline";
 import { Timeline } from "@/components/status/timeline";
 import { LocalTime } from "@/components/time";
 import { getApp } from "@/lib/app";
-import { isOpen } from "@/lib/domain/status";
 import { formatDuration } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +52,7 @@ export default async function IncidentPage({ params }: Props) {
 					<h1 className="text-2xl font-semibold tracking-tight">
 						{incident.title}
 					</h1>
-					<div className="flex flex-wrap items-center gap-2">
+					<div className="flex flex-wrap gap-2">
 						<EventStatusBadge
 							kind={incident.kind}
 							impact={incident.impact}
@@ -61,15 +60,6 @@ export default async function IncidentPage({ params }: Props) {
 						/>
 						{incident.kind === "incident" && (
 							<ImpactBadge impact={incident.impact} />
-						)}
-						{canSubscribe && isOpen(incident) && (
-							<Link
-								href={`/subscribe?incident=${encodeURIComponent(incident.id)}`}
-								className="ml-auto rounded-full border border-border px-4 py-1.5 text-sm font-medium hover:bg-surface-muted"
-							>
-								Subscribe to this{" "}
-								{incident.kind === "maintenance" ? "maintenance" : "incident"}
-							</Link>
 						)}
 					</div>
 					<dl className="grid gap-x-6 gap-y-1 text-sm text-muted sm:grid-cols-[auto_1fr]">
