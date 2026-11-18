@@ -56,13 +56,12 @@ const optionClass =
 	"flex-auto truncate rounded-full px-2 py-1.5 text-center text-sm font-medium sm:px-4 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand";
 const selectedClass = "cursor-pointer bg-brand text-brand-fg";
 const idleClass = "cursor-pointer text-muted hover:text-fg";
-const disabledClass = "cursor-not-allowed text-muted opacity-50";
 
 /**
  * A public form for one address of a channel. The field follows the selected
  * channel. With more than one channel in `available`, the form shows a choice
- * of email, text message and webhook. A channel that is not in `available`
- * cannot be selected. With one channel, the form shows only its field.
+ * of these channels. The choice does not show a channel that is not in
+ * `available`. With one channel, the form shows only its field.
  */
 export function ChannelForm({
 	action,
@@ -85,34 +84,29 @@ export function ChannelForm({
 				<fieldset>
 					<legend className="sr-only">Channel</legend>
 					<div className={trackClass}>
-						{CHANNEL_ORDER.map((option) => {
-							const disabled = !available.includes(option);
-							const selected = type === option;
-							return (
-								<label
-									key={option}
-									title={disabled ? "Not available" : undefined}
-									className={`${optionClass} ${
-										disabled
-											? disabledClass
-											: selected
-												? selectedClass
-												: idleClass
-									}`}
-								>
-									<input
-										type="radio"
-										name="type"
-										value={option}
-										checked={selected}
-										disabled={disabled}
-										onChange={() => setType(option)}
-										className="sr-only"
-									/>
-									{CHANNEL_FIELDS[option].title}
-								</label>
-							);
-						})}
+						{CHANNEL_ORDER.filter((option) => available.includes(option)).map(
+							(option) => {
+								const selected = type === option;
+								return (
+									<label
+										key={option}
+										className={`${optionClass} ${
+											selected ? selectedClass : idleClass
+										}`}
+									>
+										<input
+											type="radio"
+											name="type"
+											value={option}
+											checked={selected}
+											onChange={() => setType(option)}
+											className="sr-only"
+										/>
+										{CHANNEL_FIELDS[option].title}
+									</label>
+								);
+							},
+						)}
 					</div>
 				</fieldset>
 			) : (
