@@ -1577,28 +1577,31 @@ describe("admin pages", () => {
 			screen.getByRole("heading", { name }).closest("section") as HTMLElement;
 		const webhooks = within(card("Webhooks"));
 		expect(webhooks.getByText("On")).toBeInTheDocument();
+		// The server sends webhooks, so the card has only the on/off switch.
 		expect(
-			webhooks.getByText(
-				"No providers yet. Until you add one, this channel uses Built-in webhook sender.",
-			),
-		).toBeInTheDocument();
-		expect(
-			webhooks.queryByLabelText("Default from address"),
-		).not.toBeInTheDocument();
-		// Webhooks have one provider, so they have no delivery strategy.
+			webhooks.getByRole("checkbox", { name: "Send webhook notifications" }),
+		).toBeChecked();
 		expect(webhooks.queryByRole("radio")).not.toBeInTheDocument();
+		expect(webhooks.queryByRole("textbox")).not.toBeInTheDocument();
 		expect(
-			webhooks.getByRole("button", { name: "Add Signed webhook" }),
-		).toBeInTheDocument();
-		const secret = webhooks.getByLabelText("Signing secret");
-		expect(secret).toBeDisabled();
+			webhooks.queryByRole("heading", { name: "Providers" }),
+		).not.toBeInTheDocument();
 		expect(
-			webhooks.getByText(
-				"Set ENCRYPTION_KEY on the server to save credentials.",
-			),
+			webhooks.getByRole("button", { name: "Save channel" }),
 		).toBeInTheDocument();
 
 		const email = within(card("Email"));
+		expect(
+			email.getByText(
+				"No providers yet. Until you add one, this channel uses SendGrid (environment variables).",
+			),
+		).toBeInTheDocument();
+		expect(email.getByLabelText("API key")).toBeDisabled();
+		expect(
+			email.getAllByText(
+				"Set ENCRYPTION_KEY on the server to save credentials.",
+			),
+		).toHaveLength(2);
 		expect(email.getByRole("radio", { name: /Active\/passive/ })).toBeChecked();
 		expect(email.getByLabelText("Default from address")).toHaveAttribute(
 			"placeholder",
@@ -1643,11 +1646,6 @@ describe("admin pages", () => {
 				accessKeyId: "AKIAIOSFODNN7EXAMPLE",
 				secretAccessKey: "secret",
 			},
-		});
-		await settings.addProvider(actor, "webhook", {
-			type: "webhook",
-			name: "Signed",
-			values: { signingSecret: "whsec" },
 		});
 		await settings.updateChannel(actor, "webhook", { enabled: false });
 		// A provider whose credentials an unknown key encrypted.
@@ -1743,19 +1741,7 @@ describe("admin pages", () => {
 			"Status <status@example.com>",
 		);
 
-		const webhooks = card("Webhooks");
-		// One webhook provider has no role, and the channel takes no more.
-		expect(
-			webhooks.getByText("Signed webhook · Signing secret saved"),
-		).toBeInTheDocument();
-		expect(
-			webhooks.getByText("The Webhooks channel can have only one provider."),
-		).toBeInTheDocument();
-		expect(
-			webhooks.queryByRole("button", { name: /^Add / }),
-		).not.toBeInTheDocument();
-
-		expect(webhooks.getByText("Off")).toBeInTheDocument();
+		expect(card("Webhooks").getByText("Off")).toBeInTheDocument();
 
 		const sms = card("Text messaging");
 		expect(sms.getByText("Not ready")).toBeInTheDocument();

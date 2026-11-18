@@ -14,10 +14,8 @@ import {
 import {
 	CHANNELS,
 	type ChannelDefinition,
-	hasStrategy,
 	PROVIDERS,
 	type ProviderDefinition,
-	providerLimitMessage,
 	STRATEGIES,
 } from "@/lib/notifications/catalog";
 import { ConfirmButton } from "./confirm-button";
@@ -185,7 +183,7 @@ function ProviderItem({
 	);
 	const details = [
 		definition.label,
-		...(hasStrategy(channel.id) ? [providerRole(channel, index)] : []),
+		providerRole(channel, index),
 		...(provider.from ? [`From ${provider.from}`] : []),
 		...definition.fields
 			.filter(
@@ -286,6 +284,8 @@ export function NotificationChannelCard({
 	canStoreSecrets: boolean;
 }) {
 	const definition = CHANNELS[channel.id];
+	// A channel without provider types, such as webhooks, has only an on/off switch.
+	const configurable = definition.providers.length > 0;
 	const hasProviders =
 		channel.providers.length > 0 || channel.environmentProviders.length > 0;
 	return (
@@ -302,7 +302,7 @@ export function NotificationChannelCard({
 					label={`Send ${definition.noun} notifications`}
 					defaultChecked={channel.enabled}
 				/>
-				{hasStrategy(channel.id) && (
+				{configurable && (
 					<fieldset className="space-y-1.5">
 						<legend className="text-sm font-medium">Delivery strategy</legend>
 						<div className="grid gap-3 sm:grid-cols-2">
@@ -362,23 +362,23 @@ export function NotificationChannelCard({
 					Save channel
 				</SubmitButton>
 			</form>
-			<div className="mt-6 border-t border-border pt-5">
-				<h3 className="text-sm font-semibold">Providers</h3>
-				{channel.providers.length > 0 && (
-					<ol className="divide-y divide-border">
-						{channel.providers.map((provider, index) => (
-							<ProviderItem
-								key={provider.id}
-								channel={channel}
-								provider={provider}
-								index={index}
-								canStoreSecrets={canStoreSecrets}
-							/>
-						))}
-					</ol>
-				)}
-				<EnvironmentNote channel={channel} />
-				{channel.providers.length < definition.maxProviders ? (
+			{configurable && (
+				<div className="mt-6 border-t border-border pt-5">
+					<h3 className="text-sm font-semibold">Providers</h3>
+					{channel.providers.length > 0 && (
+						<ol className="divide-y divide-border">
+							{channel.providers.map((provider, index) => (
+								<ProviderItem
+									key={provider.id}
+									channel={channel}
+									provider={provider}
+									index={index}
+									canStoreSecrets={canStoreSecrets}
+								/>
+							))}
+						</ol>
+					)}
+					<EnvironmentNote channel={channel} />
 					<div className="mt-4 space-y-2">
 						<h4 className="text-sm font-medium">Add a provider</h4>
 						{definition.providers.map((type) => {
@@ -415,12 +415,8 @@ export function NotificationChannelCard({
 							);
 						})}
 					</div>
-				) : (
-					<p className="mt-4 text-xs text-muted">
-						{providerLimitMessage(channel.id)}.
-					</p>
-				)}
-			</div>
+				</div>
+			)}
 		</Card>
 	);
 }

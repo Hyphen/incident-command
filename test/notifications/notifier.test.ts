@@ -600,21 +600,6 @@ describe("AirhornNotifier", () => {
 });
 
 describe("createProvider", () => {
-	it("passes the timeout and secret to the webhook provider", async () => {
-		const timeout = vi.spyOn(AbortSignal, "timeout");
-		const webhook = createProvider(
-			provider("webhook", { options: { timeoutSeconds: "5" }, secrets: {} }),
-		);
-		await webhook.send({
-			to: "https://h.example.com",
-			from: "",
-			content: "{}",
-			type: "webhook" as AirhornProviderMessage["type"],
-		});
-		expect(timeout).toHaveBeenCalledWith(5000);
-		expect(headers(requests[0])[SIGNATURE_HEADER]).toBeUndefined();
-	});
-
 	it("builds the AWS providers for SES and SNS", () => {
 		createProvider(
 			provider("ses", {

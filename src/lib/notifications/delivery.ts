@@ -2,13 +2,13 @@ import type { Config } from "../config";
 import type {
 	DeliveryStrategy,
 	NotificationChannel,
-	ProviderType,
+	SenderType,
 } from "../domain/types";
 
 /** A provider with decrypted credentials, ready to send. Never stored or rendered. */
 export interface ResolvedProvider {
 	id: string;
-	type: ProviderType;
+	type: SenderType;
 	name: string;
 	/** The sender: the sender of the provider, else the sender of the channel. */
 	from?: string;
@@ -34,10 +34,10 @@ export function canDeliver(channel: DeliveryChannel): boolean {
 }
 
 /**
- * The providers that environment variables configure. A channel uses them
- * only when an admin added no providers to it in the portal, so existing
- * deployments keep their configuration. Webhooks always have the built-in
- * provider, signed when `WEBHOOK_SECRET` is set.
+ * The providers that environment variables configure. The email and text
+ * messaging channels use them only when an admin added no providers to them
+ * in the portal, so existing deployments keep their configuration. Webhooks
+ * always use the built-in webhook sender, signed when `WEBHOOK_SECRET` is set.
  */
 export function environmentProviders(
 	config: Pick<

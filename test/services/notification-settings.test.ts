@@ -4,9 +4,11 @@ import {
 	NotFoundError,
 	ValidationError,
 } from "@/lib/errors";
-import { MAX_PROVIDERS } from "@/lib/notifications/catalog";
 import { EncryptionKeyMissingError } from "@/lib/secrets";
-import { NOTIFICATION_SETTINGS_CHANGED } from "@/lib/services/notification-settings";
+import {
+	MAX_PROVIDERS,
+	NOTIFICATION_SETTINGS_CHANGED,
+} from "@/lib/services/notification-settings";
 import { ADMIN, createTestContext, EDITOR, type TestContext } from "../helpers";
 
 const KEY = "k".repeat(32);
@@ -152,7 +154,7 @@ describe("NotificationSettingsService", () => {
 			[
 				"webhook",
 				{ strategy: "active_passive" },
-				/The Webhooks channel has only one provider and no delivery strategy/,
+				/Webhooks have no delivery strategy/,
 			],
 			["email", { strategy: "random" }, /strategy/],
 			["fax" as "sms", { enabled: true }, /Invalid option/],
@@ -223,23 +225,17 @@ describe("NotificationSettingsService", () => {
 			})
 			.catch((caught: unknown) => caught);
 		expect(error).toBeInstanceOf(EncryptionKeyMissingError);
-		await expect(
-			settings.addProvider(ADMIN, "webhook", {
-				type: "webhook",
-				name: "Unsigned",
-				values: { timeoutSeconds: "5", signingSecret: "" },
-			}),
-		).resolves.toMatchObject({
-			options: { timeoutSeconds: "5" },
-			savedSecrets: [],
-		});
+		// Empty credentials need no encryption key.
 		await expect(
 			settings.addProvider(ADMIN, "email", {
 				type: "ses",
 				name: "SES with a role",
-				values: { region: "us-east-1" },
+				values: { region: "us-east-1", accessKeyId: "", secretAccessKey: "" },
 			}),
-		).resolves.toMatchObject({ options: { region: "us-east-1" } });
+		).resolves.toMatchObject({
+			options: { region: "us-east-1" },
+			savedSecrets: [],
+		});
 	});
 
 	it("validates new providers", async () => {
@@ -254,12 +250,21 @@ describe("NotificationSettingsService", () => {
 		).rejects.toThrow(
 			"A SendGrid provider cannot send on the Text messaging channel",
 		);
+		// The server sends webhooks, so the webhook channel takes no providers.
+		await expect(
+			add("webhook", { type: "sendgrid", name: "x", values: { apiKey: "k" } }),
+		).rejects.toThrow(
+			"A SendGrid provider cannot send on the Webhooks channel",
+		);
+		await expect(
+			add("webhook", { type: "webhook" as "ses", name: "Hook" }),
+		).rejects.toBeInstanceOf(ValidationError);
 		await expect(
 			add("email", { type: "sendgrid", name: "x", values: { region: "x" } }),
 		).rejects.toThrow('SendGrid has no field named "region"');
-		await expect(
-			add("email", { type: "sendgrid", name: "x", values: {} }),
-		).rejects.toThrow("API key is required");
+		await expect(add("email", { type: "sendgrid", name: "x" })).rejects.toThrow(
+			"API key is required",
+		);
 		await expect(
 			add("sms", {
 				type: "twilio",
@@ -304,14 +309,7 @@ describe("NotificationSettingsService", () => {
 				name: "One too many",
 				values: { region: "us-east-1" },
 			}),
-		).rejects.toThrow(
-			`The Email channel can have at most ${MAX_PROVIDERS} providers`,
-		);
-
-		await add("webhook", { type: "webhook", name: "Hook" });
-		await expect(
-			add("webhook", { type: "webhook", name: "Second hook" }),
-		).rejects.toThrow("The Webhooks channel can have only one provider");
+		).rejects.toThrow(`A channel can have at most ${MAX_PROVIDERS} providers`);
 	});
 
 	it("edits providers and keeps secrets that are left empty", async () => {
@@ -563,25 +561,6 @@ describe("NotificationSettingsService", () => {
 		await expect(
 			settings.updateChannel(ADMIN, "sms", { revision: -1 }),
 		).rejects.toBeInstanceOf(ValidationError);
-	});
-
-	it("signs with WEBHOOK_SECRET when a webhook provider has no secret", async () => {
-		const t = withKey({ WEBHOOK_SECRET: "env-secret" });
-		const settings = t.services.notificationSettings;
-		const hook = await settings.addProvider(ADMIN, "webhook", {
-			type: "webhook",
-			name: "Timeout only",
-			values: { timeoutSeconds: "5" },
-		});
-		const secret = async () =>
-			(await settings.resolve()).webhook.providers.map(
-				(provider) => provider.secrets.signingSecret,
-			);
-		expect(await secret()).toEqual(["env-secret"]);
-		await settings.updateProvider(ADMIN, "webhook", hook.id, {
-			values: { signingSecret: "own-secret" },
-		});
-		expect(await secret()).toEqual(["own-secret"]);
 	});
 
 	it("refuses to overwrite a change that somebody else saved meanwhile", async () => {

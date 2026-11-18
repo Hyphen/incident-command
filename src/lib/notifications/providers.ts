@@ -110,13 +110,8 @@ function awsCredentials(provider: ResolvedProvider) {
 /** Builds the airhorn provider for a provider config. */
 export function createProvider(provider: ResolvedProvider): AirhornProvider {
 	switch (provider.type) {
-		case "webhook": {
-			const seconds = Number(provider.options.timeoutSeconds);
-			return new WebhookProvider({
-				secret: provider.secrets.signingSecret,
-				timeoutMs: seconds > 0 ? seconds * 1000 : undefined,
-			});
-		}
+		case "webhook":
+			return new WebhookProvider({ secret: provider.secrets.signingSecret });
 		case "sendgrid":
 			return new SendGridProvider({
 				apiKey: provider.secrets.apiKey as string,

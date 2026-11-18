@@ -951,7 +951,7 @@ export function createMcpServer(
 		{
 			title: "Update notification channel",
 			description:
-				"Turns a channel on or off, sets its delivery strategy (active_passive or load_balanced) or sets its sender. Webhooks have only one provider, no delivery strategy and no sender. Add providers and their credentials in the portal.",
+				"Turns a channel on or off, sets its delivery strategy (active_passive or load_balanced) or sets its sender. Webhooks have only the on/off switch, because the server sends them. Add providers and their credentials in the portal.",
 			inputSchema: {
 				channel: z.enum(SUBSCRIBER_TYPES),
 				enabled: z.boolean().optional(),
