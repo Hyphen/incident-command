@@ -29,9 +29,10 @@ export default async function NotificationsSettingsPage({
 				>
 					airhorn
 				</a>
-				. Each channel can have more than one provider. With active/passive, the
-				first provider sends and the next provider is a backup. With load
-				balanced, the providers send in turn.
+				. The server sends each webhook. Email and text messaging can have more
+				than one provider. With active/passive, the first provider sends and the
+				next provider is a backup. With load balanced, the providers send in
+				turn.
 			</p>
 			{!canStoreSecrets && (
 				<p
