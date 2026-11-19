@@ -1492,23 +1492,19 @@ describe("admin pages", () => {
 			within(tabs).getByRole("link", { name: "Notifications" }),
 		).toHaveAttribute("href", "/manage/settings/notifications");
 		expect(screen.getByLabelText("Uptime window (days)")).toHaveValue(30);
-		expect(screen.queryByLabelText("Brand color")).not.toBeInTheDocument();
+		expect(screen.queryByLabelText("Custom CSS")).not.toBeInTheDocument();
 	});
 
 	it("renders branding with the current theme selected", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");
-		await services.settings.update(SYSTEM_ACTOR, {
-			theme: "sunset",
-			brandColor: "#123456",
-		});
+		await services.settings.update(SYSTEM_ACTOR, { theme: "sunset" });
 		const first = render(await BrandingPage(flash()));
 		expect(screen.getByRole("link", { name: "Branding" })).toHaveAttribute(
 			"aria-current",
 			"page",
 		);
 		expect(screen.getByDisplayValue("sunset")).toBeChecked();
-		expect(screen.getByLabelText("Brand color")).toHaveValue("#123456");
 		expect(screen.getByLabelText("Logo")).toHaveAttribute("type", "file");
 		expect(screen.getByLabelText("Favicon")).toHaveAttribute("type", "file");
 		// The admin uploads each file. The form has no URL field.

@@ -28,13 +28,7 @@ import {
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import { fallbackSettings, loadSiteSettings } from "@/lib/site";
 import { CachedStore } from "@/lib/store/cached";
-import {
-	brandStyle,
-	readableForeground,
-	resolveTheme,
-	sanitizeCss,
-	THEMES,
-} from "@/lib/theme";
+import { resolveTheme, sanitizeCss, THEMES } from "@/lib/theme";
 import { ICO_FAVICON, JPEG_LOGO, PNG_LOGO } from "../brand-asset-bytes";
 import { Clock, FakeNotifier } from "../helpers";
 
@@ -521,7 +515,7 @@ describe("theme helpers", () => {
 		);
 	});
 
-	it("resolves themes and brand colors", () => {
+	it("resolves themes and escapes custom css", () => {
 		expect(THEMES.map((theme) => theme.id)).toEqual([
 			"default",
 			"carbon",
@@ -535,14 +529,6 @@ describe("theme helpers", () => {
 		expect(resolveTheme("midnight")).toBe("carbon");
 		expect(resolveTheme("nope")).toBe("default");
 		expect(resolveTheme(undefined)).toBe("default");
-		expect(readableForeground("#ffffff")).toBe("#0b0b0f");
-		expect(readableForeground("#000000")).toBe("#ffffff");
-		expect(readableForeground("#020202")).toBe("#ffffff");
-		expect(brandStyle({})).toEqual({});
-		expect(brandStyle({ brandColor: "#4f46e5" })).toEqual({
-			"--ic-brand": "#4f46e5",
-			"--ic-brand-fg": "#ffffff",
-		});
 		expect(sanitizeCss(undefined)).toBe("");
 		expect(sanitizeCss("a</style>")).toBe("a\\3c /style>");
 	});

@@ -482,13 +482,11 @@ describe("MCP handler", () => {
 			(
 				await call("update_settings", {
 					siteName: "Acme Status",
-					brandColor: "#123456",
 					showPoweredBy: false,
 				})
 			).data,
 		).toMatchObject({
 			siteName: "Acme Status",
-			brandColor: "#123456",
 			showPoweredBy: false,
 		});
 		expect((await call("get_settings")).data.siteName).toBe("Acme Status");

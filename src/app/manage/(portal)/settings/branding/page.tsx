@@ -113,7 +113,7 @@ export default async function BrandingPage({
 			<form action={updateBrandingAction} className="space-y-6">
 				<Card
 					title="Branding"
-					description="Pick a theme, upload a logo and a favicon, then set a brand color and add custom CSS."
+					description="Pick a theme, upload a logo and a favicon, then add custom CSS."
 				>
 					<fieldset>
 						<legend className="mb-2 text-sm font-medium">Theme</legend>
@@ -162,33 +162,15 @@ export default async function BrandingPage({
 						The app stores each file in the database and keeps a copy in memory.
 						The status page shows them when your website is down.
 					</p>
-					<div className="mt-4 sm:max-w-xs">
-						<Field
-							label="Brand color"
-							htmlFor="brandColor"
-							hint="Hex, e.g. #4f46e5."
-						>
-							<input
-								id="brandColor"
-								name="brandColor"
-								defaultValue={settings.brandColor}
-								pattern="#[0-9a-fA-F]{6}"
-								placeholder="#4f46e5"
-								className={inputClass}
-							/>
-						</Field>
-					</div>
 					<div className="mt-4">
 						<Field
 							label="Custom CSS"
 							htmlFor="customCss"
 							hint={
 								<>
-									Override any design token, e.g.{" "}
+									Override any design token, e.g. set the brand color with{" "}
 									<code>
-										{
-											":root { --ic-radius: 0; --ic-font: 'Inter', sans-serif; }"
-										}
+										{":root { --ic-brand: #4f46e5; --ic-brand-fg: #ffffff; }"}
 									</code>
 									. Use an <code>ic-*</code> class name to change one element,
 									e.g. <code>{".ic-banner { border-width: 2px; }"}</code>. The{" "}

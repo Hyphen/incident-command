@@ -134,9 +134,8 @@ export function designGuide() {
 	return {
 		steps: [
 			"Call update_settings with theme to select a preset.",
-			"Call update_settings with brandColor to set the color of buttons and links.",
 			"Call upload_brand_asset to set the logo and the favicon.",
-			"Call update_settings with customCss for all other changes.",
+			"Call update_settings with customCss for all other changes. Set --ic-brand to change the color of buttons and links.",
 		],
 		themes: THEMES,
 		tokens: DESIGN_TOKENS,
@@ -146,7 +145,7 @@ export function designGuide() {
 			"The custom CSS loads on each page. The portal is included, and it shows some of these elements. Start a selector with .ic-page to change only the public pages.",
 			"Use the selectors in this guide. The other class names can change between releases.",
 			"A value of customCss replaces the stored CSS. Call get_settings first, then send the full stylesheet.",
-			"The brandColor setting is stronger than --ic-brand in the custom CSS. Set brandColor to null to control --ic-brand in the CSS.",
+			"When you set --ic-brand, also set --ic-brand-fg. The text on a brand background uses --ic-brand-fg.",
 			"The default preset has a dark mode. Each other preset has one color scheme. Use @media (prefers-color-scheme: dark) for dark mode values.",
 			"Keep sufficient contrast between text and background. Keep a different color for each status.",
 			'Do not hide the line "Powered by Incident Command" with the custom CSS. To remove it from the public pages, call update_settings with showPoweredBy set to false.',

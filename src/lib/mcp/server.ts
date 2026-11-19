@@ -49,7 +49,7 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
 
 const DESIGN_INSTRUCTIONS = `
 - To change the design of the status page, call get_design_guide first. It lists the theme presets,
-  the design tokens and the CSS selectors. Then use update_settings (theme, brandColor, customCss)
+  the design tokens and the CSS selectors. Then use update_settings (theme, customCss)
   and upload_brand_asset (logo, favicon).`;
 
 function instructionsFor(actor: AgentActor): string {
@@ -872,11 +872,6 @@ export function createMcpServer(
 					.describe(
 						"Theme preset: default, carbon, terminal, ocean, sunset or mono",
 					),
-				brandColor: z
-					.string()
-					.nullable()
-					.optional()
-					.describe("Hex color such as #4f46e5"),
 				customCss: z
 					.string()
 					.nullable()

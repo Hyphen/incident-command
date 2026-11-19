@@ -1076,13 +1076,7 @@ describe("subscriber and settings actions", () => {
 		await services.settings.update(SYSTEM_ACTOR, { uptimeDays: 30 });
 		vi.mocked(revalidatePath).mockClear();
 		const url = await redirectOf(
-			updateBrandingAction(
-				form({
-					theme: "midnight",
-					brandColor: "#ff0066",
-					customCss: ":root{}",
-				}),
-			),
+			updateBrandingAction(form({ theme: "midnight", customCss: ":root{}" })),
 		);
 		expectSameFlash(url, "/manage/settings/branding?notice=Branding saved");
 		// The new theme applies without a reload.
@@ -1090,7 +1084,6 @@ describe("subscriber and settings actions", () => {
 		// The form did not send the box, thus the admin cleared it.
 		expect(await services.settings.get()).toMatchObject({
 			theme: "midnight",
-			brandColor: "#ff0066",
 			customCss: ":root{}",
 			showPoweredBy: false,
 			uptimeDays: 30,
@@ -1100,9 +1093,7 @@ describe("subscriber and settings actions", () => {
 		);
 		expect((await services.settings.get()).showPoweredBy).toBe(true);
 		expectFlashRedirect(
-			await redirectOf(
-				updateBrandingAction(form({ theme: "default", brandColor: "pink" })),
-			),
+			await redirectOf(updateBrandingAction(form({ theme: "Bad Theme" }))),
 			"/manage/settings/branding",
 			"error",
 			"Check the form and try again.",
@@ -1114,11 +1105,7 @@ describe("subscriber and settings actions", () => {
 		await signIn(app, "admin");
 		const asset = (kind: "logo" | "favicon") =>
 			services.settings.getBrandAsset(kind);
-		const uploaded = form({
-			theme: "midnight",
-			brandColor: "#112233",
-			customCss: "",
-		});
+		const uploaded = form({ theme: "midnight", customCss: "" });
 		uploaded.set(
 			"logo",
 			new File([PNG_LOGO], "logo.png", { type: "image/png" }),
@@ -1140,7 +1127,7 @@ describe("subscriber and settings actions", () => {
 		expect((await asset("favicon"))?.contentType).toBe("image/x-icon");
 
 		// A browser sends an empty file when the admin selects no file.
-		const empty = form({ theme: "ocean", brandColor: "", customCss: "" });
+		const empty = form({ theme: "ocean", customCss: "" });
 		empty.set("logo", new File([], "", { type: "application/octet-stream" }));
 		empty.set(
 			"favicon",
@@ -1154,7 +1141,6 @@ describe("subscriber and settings actions", () => {
 		// A new file wins when the form also asks to remove the stored file.
 		const replaced = form({
 			theme: "ocean",
-			brandColor: "",
 			customCss: "",
 			removeLogo: "on",
 			removeFavicon: "on",
@@ -1170,12 +1156,7 @@ describe("subscriber and settings actions", () => {
 
 		await redirectOf(
 			updateBrandingAction(
-				form({
-					theme: "default",
-					brandColor: "",
-					customCss: "",
-					removeLogo: "on",
-				}),
+				form({ theme: "default", customCss: "", removeLogo: "on" }),
 			),
 		);
 		await expect(asset("logo")).resolves.toBeUndefined();
@@ -1185,7 +1166,7 @@ describe("subscriber and settings actions", () => {
 	it("does not change the logo when branding is invalid", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");
-		const fields = { theme: "midnight", brandColor: "pink", customCss: "" };
+		const fields = { theme: "Bad Theme", customCss: "" };
 		const uploaded = form(fields);
 		uploaded.set(
 			"logo",
@@ -1228,7 +1209,7 @@ describe("subscriber and settings actions", () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");
 		for (const kind of ["logo", "favicon"] as const) {
-			const data = form({ theme: "default", brandColor: "", customCss: "" });
+			const data = form({ theme: "default", customCss: "" });
 			data.set(
 				kind,
 				new File([Uint8Array.from([1, 2, 3, 4])], "image.png", {
