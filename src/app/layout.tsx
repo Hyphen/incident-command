@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { publicFaviconSrc } from "@/lib/brand";
 import { loadSiteSettings, publicAlternates } from "@/lib/site";
-import { brandStyle, resolveTheme, sanitizeCss } from "@/lib/theme";
+import { resolveTheme, sanitizeCss } from "@/lib/theme";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
@@ -35,11 +35,7 @@ export default async function RootLayout({
 }) {
 	const settings = await loadSiteSettings();
 	return (
-		<html
-			lang="en"
-			data-theme={resolveTheme(settings.theme)}
-			style={brandStyle(settings)}
-		>
+		<html lang="en" data-theme={resolveTheme(settings.theme)}>
 			<head>
 				{settings.customCss && (
 					<style

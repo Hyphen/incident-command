@@ -574,7 +574,6 @@ export async function updateBrandingAction(form: FormData): Promise<void> {
 			actor,
 			{
 				theme: text(form, "theme"),
-				brandColor: optionalText(form, "brandColor"),
 				customCss: optionalText(form, "customCss"),
 				showPoweredBy: checkbox(form, "showPoweredBy"),
 			},

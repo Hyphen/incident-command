@@ -99,7 +99,6 @@ export interface Settings {
 	siteUrl?: string;
 	supportUrl?: string;
 	theme: string;
-	brandColor?: string;
 	customCss?: string;
 	/** When false, the public pages do not show "Powered by Incident Command". */
 	showPoweredBy: boolean;

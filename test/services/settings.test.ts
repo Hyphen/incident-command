@@ -33,16 +33,22 @@ describe("SettingsService", () => {
 		});
 	});
 
-	it("drops the removed allowSubscriptions setting of an older store", async () => {
+	it("drops the removed settings of an older store", async () => {
 		const t = createTestContext();
 		const legacy = {
 			...t.services.settings.defaults(),
 			allowSubscriptions: false,
+			brandColor: "#4f46e5",
 		};
 		await t.store.insert("settings", legacy);
-		await expect(t.services.settings.get()).resolves.not.toHaveProperty(
-			"allowSubscriptions",
-		);
+		// An update must not write a removed setting back or return it.
+		for (const settings of [
+			await t.services.settings.get(),
+			await t.services.settings.update(ADMIN, { siteName: "Acme" }),
+		]) {
+			expect(settings).not.toHaveProperty("allowSubscriptions");
+			expect(settings).not.toHaveProperty("brandColor");
+		}
 	});
 
 	it("creates, updates and clears settings", async () => {
@@ -50,7 +56,6 @@ describe("SettingsService", () => {
 		const first = await t.services.settings.update(ADMIN, {
 			siteName: "Acme",
 			supportUrl: "https://acme.dev/help",
-			brandColor: "#ff6600",
 			customCss: ".x{}",
 			theme: "midnight",
 			uptimeDays: 30,
@@ -58,19 +63,16 @@ describe("SettingsService", () => {
 		expect(first).toMatchObject({
 			siteName: "Acme",
 			supportUrl: "https://acme.dev/help",
-			brandColor: "#ff6600",
 			theme: "midnight",
 			uptimeDays: 30,
 		});
 		expect(first.updatedAt).toBe("2026-11-02T12:00:00.000Z");
 		const second = await t.services.settings.update(ADMIN, {
 			supportUrl: "",
-			brandColor: "",
 			customCss: "",
 			description: undefined,
 		});
 		expect(second.supportUrl).toBeUndefined();
-		expect(second.brandColor).toBeUndefined();
 		expect(second.customCss).toBeUndefined();
 		expect(second.siteName).toBe("Acme");
 		await expect(t.services.settings.get()).resolves.toEqual(second);
@@ -81,9 +83,6 @@ describe("SettingsService", () => {
 		await expect(
 			t.services.settings.update(EDITOR, { siteName: "x" }),
 		).rejects.toBeInstanceOf(ForbiddenError);
-		await expect(
-			t.services.settings.update(ADMIN, { brandColor: "red" }),
-		).rejects.toBeInstanceOf(ValidationError);
 		await expect(
 			t.services.settings.update(ADMIN, { supportUrl: "javascript:alert(1)" }),
 		).rejects.toBeInstanceOf(ValidationError);

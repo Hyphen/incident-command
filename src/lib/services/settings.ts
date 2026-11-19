@@ -27,6 +27,18 @@ const VERSION_FIELD = {
 	favicon: "faviconUpdatedAt",
 } as const satisfies Record<BrandAssetKind, keyof Settings>;
 
+/** Settings that older versions stored. These settings are gone. */
+const REMOVED_SETTINGS = ["allowSubscriptions", "brandColor"];
+
+/** The stored settings without the removed settings. */
+function withoutRemovedSettings(stored: object | undefined): Partial<Settings> {
+	const current: Record<string, unknown> = { ...stored };
+	for (const key of REMOVED_SETTINGS) {
+		delete current[key];
+	}
+	return current;
+}
+
 export class SettingsService {
 	private readonly ctx: ServiceContext;
 
@@ -49,14 +61,7 @@ export class SettingsService {
 
 	async get(): Promise<Settings> {
 		const stored = await this.ctx.store.get("settings", SETTINGS_ID);
-		// Older versions stored `allowSubscriptions`. That setting is gone, so drop it.
-		const {
-			allowSubscriptions: _removed,
-			...current
-		}: Partial<Settings> & {
-			allowSubscriptions?: boolean;
-		} = stored ?? {};
-		return { ...this.defaults(), ...current };
+		return { ...this.defaults(), ...withoutRemovedSettings(stored) };
 	}
 
 	/** The uploaded logo or favicon, or undefined when the admin did not upload one. */
@@ -138,7 +143,7 @@ export class SettingsService {
 		});
 		const next: Record<string, unknown> = {
 			...this.defaults(),
-			...current,
+			...withoutRemovedSettings(current),
 			updatedAt: iso(this.ctx.now()),
 		};
 		for (const [key, value] of Object.entries(patch)) {

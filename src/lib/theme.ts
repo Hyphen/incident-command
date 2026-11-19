@@ -1,6 +1,3 @@
-import type { CSSProperties } from "react";
-import type { Settings } from "./domain/types";
-
 export interface ThemePreset {
 	id: string;
 	name: string;
@@ -53,33 +50,6 @@ export function resolveTheme(id: string | undefined): string {
 	return THEMES.some((theme) => theme.id === current)
 		? (current as string)
 		: "default";
-}
-
-function channel(hex: string, offset: number): number {
-	const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
-	return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-}
-
-/** Picks a readable foreground (black or white) for a `#rrggbb` background. */
-export function readableForeground(hex: string): string {
-	const luminance =
-		0.2126 * channel(hex, 1) +
-		0.7152 * channel(hex, 3) +
-		0.0722 * channel(hex, 5);
-	return luminance > 0.4 ? "#0b0b0f" : "#ffffff";
-}
-
-/** CSS custom properties applied to `<html>` for the configured brand color. */
-export function brandStyle(
-	settings: Pick<Settings, "brandColor">,
-): CSSProperties {
-	if (!settings.brandColor) {
-		return {};
-	}
-	return {
-		"--ic-brand": settings.brandColor,
-		"--ic-brand-fg": readableForeground(settings.brandColor),
-	} as CSSProperties;
 }
 
 /**

@@ -222,11 +222,6 @@ export const updateSettingsSchema = z.object({
 		.regex(/^[a-z0-9-]+$/)
 		.max(40)
 		.optional(),
-	brandColor: z
-		.union([z.literal(""), z.string().regex(/^#[0-9a-fA-F]{6}$/)])
-		.nullable()
-		.optional()
-		.transform((value) => (value === "" ? null : value)),
 	customCss: patchText(CUSTOM_CSS_MAX_LENGTH),
 	showPoweredBy: z.boolean().optional(),
 	uptimeDays: z.number().int().min(7).max(365).optional(),

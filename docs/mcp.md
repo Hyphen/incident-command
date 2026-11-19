@@ -151,7 +151,7 @@ A person reviews drafts. An agent cannot approve a draft. An agent cannot change
 | `list_agent_activity`         | `agents.read`         | Recent activity for one agent.                                                      |
 | `get_settings`                | `settings.read`       | Status page settings and branding, with `logoUrl` and `faviconUrl`.                 |
 | `get_design_guide`            | `settings.write`      | The theme presets, design tokens, CSS selectors, rules and limits for a design.     |
-| `update_settings`             | `settings.write`      | Change name, URLs, theme, brand color, CSS, uptime and the "Powered by" line.       |
+| `update_settings`             | `settings.write`      | Change name, URLs, theme, CSS, uptime and the "Powered by" line.                    |
 | `upload_brand_asset`          | `settings.write`      | Store the logo or the favicon. It replaces the stored file.                         |
 | `remove_brand_asset`          | `settings.write`      | Remove the stored logo or favicon.                                                  |
 | `get_notification_settings`   | `channels.read`       | The webhook, email and text messaging channels and their providers. No credentials. |
@@ -212,12 +212,12 @@ An agent publishes only when it has `incidents.publish`. It notifies subscribers
 
 ## Design the status page
 
-An agent that has `settings.read` and `settings.write` can do the full design of the status page. It selects a theme, sets the brand color, uploads the logo and the favicon, and writes custom CSS.
+An agent that has `settings.read` and `settings.write` can do the full design of the status page. It selects a theme, uploads the logo and the favicon, and writes custom CSS.
 
 1. The agent calls `get_design_guide`. The result lists the theme presets, the design tokens, the CSS selectors, the rules, the limits and an example stylesheet.
-2. The agent calls `update_settings` with `theme` and `brandColor`.
+2. The agent calls `update_settings` with `theme`.
 3. The agent calls `upload_brand_asset` for the logo and for the favicon.
-4. The agent calls `update_settings` with `customCss` for all other changes.
+4. The agent calls `update_settings` with `customCss` for all other changes, such as the brand color in `--ic-brand`.
 
 `upload_brand_asset` takes a `kind` (`logo` or `favicon`) and the file in `data`. The `data` value is one of these:
 
@@ -243,7 +243,6 @@ A value of `customCss` replaces the stored stylesheet. Thus the agent must call 
 ```json
 {
 	"theme": "carbon",
-	"brandColor": null,
 	"customCss": ":root:has(.ic-page) { --ic-brand: #7c5cff; --ic-radius: 1rem; }\n.ic-uptime-bar { border-radius: 9999px; }"
 }
 ```

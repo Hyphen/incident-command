@@ -20,7 +20,6 @@ There are three levels of customization, from no code to full control. An agent 
   | `mono`     | Black and white with sharp corners and no accent color.                     |
 
   The `default` preset follows the dark mode of the operating system. Each of the other presets has one color scheme. The `carbon` preset replaced the `midnight` preset. A site that has `midnight` in its settings shows `carbon`.
-- **Brand color:** any hex color. The readable foreground (black or white) is computed automatically.
 - **Logo:** upload a PNG, JPEG, WebP, GIF or SVG file. The maximum size of a file is 512 KB.
 - **Favicon:** upload an ICO, PNG, JPEG, WebP, GIF or SVG file. The maximum size of a file is 512 KB.
 - **Custom CSS:** inlined on every page after the theme, so it can override any token or style. `<` is escaped so the stylesheet can never break out of its `<style>` tag.
@@ -132,7 +131,16 @@ A `data-status` value is `operational`, `under_maintenance`, `degraded_performan
   }
   ```
 
-- The **Brand color** setting is stronger than `--ic-brand` in the custom CSS. Remove the brand color to control `--ic-brand` in the CSS.
+- To change the brand color, set `--ic-brand`. Also set `--ic-brand-fg`, because the text on a brand background uses it:
+
+  ```css
+  :root,
+  [data-theme] {
+  	--ic-brand: #4f46e5;
+  	--ic-brand-fg: #ffffff;
+  }
+  ```
+
 - The `default` preset has a dark mode. Use `@media (prefers-color-scheme: dark)` to set dark mode values.
 - Keep sufficient contrast between text and background. Keep a different color for each status.
 - A class name without the `ic-` prefix can change between releases. Do not use it in a selector.

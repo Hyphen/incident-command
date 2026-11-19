@@ -25,11 +25,10 @@ import { ICO_FAVICON, PNG_LOGO } from "../brand-asset-bytes";
 import { expectNotFound, flashQueryParams, params, setupApp } from "./app";
 
 describe("root layout", () => {
-	it("applies the theme, brand color and escaped custom css", async () => {
+	it("applies the theme and escaped custom css", async () => {
 		const { services } = await setupApp({ SITE_NAME: "Acme" });
 		await services.settings.update(SYSTEM_ACTOR, {
 			theme: "ocean",
-			brandColor: "#ffcc00",
 			customCss: "body{color:red}</style><script>alert(1)</script>",
 			description: "Acme services",
 		});
@@ -42,8 +41,6 @@ describe("root layout", () => {
 			await RootLayout({ children: <p>child</p> }),
 		);
 		expect(html).toContain('data-theme="ocean"');
-		expect(html).toContain("--ic-brand:#ffcc00");
-		expect(html).toContain("--ic-brand-fg:#0b0b0f");
 		expect(html).toContain("body{color:red}\\3c /style>\\3c script>");
 		expect(html).not.toContain("<script>alert");
 		expect(html).toContain("<p>child</p>");
