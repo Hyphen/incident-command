@@ -99,6 +99,31 @@ function assertStatusForKind(kind: IncidentKind, status: EventStatus): void {
 	}
 }
 
+/** The most services that one incident can affect. */
+const MAX_AFFECTED_SERVICES = 100;
+
+/**
+ * Adds services to the current list. A service that is already affected stays.
+ * The result keeps the current order, then the new services.
+ */
+function mergeServiceIds(
+	current: readonly string[],
+	add: readonly string[],
+): string[] {
+	const merged = [...current];
+	for (const id of add) {
+		if (!merged.includes(id)) {
+			merged.push(id);
+		}
+	}
+	if (merged.length > MAX_AFFECTED_SERVICES) {
+		throw new ValidationError(
+			`An incident can affect at most ${MAX_AFFECTED_SERVICES} services.`,
+		);
+	}
+	return merged;
+}
+
 /** Checks that each service with its own status is an affected service. */
 function assertAffected(
 	serviceIds: readonly string[],
@@ -218,8 +243,16 @@ export class IncidentService {
 		if (data.status) {
 			assertStatusForKind(incident.kind, data.status);
 		}
-		assertAffected(incident.serviceIds, data.serviceStatuses);
-		return { incident, data };
+		const addIds = await this.validateServices(data.serviceIds ?? []);
+		const serviceIds = mergeServiceIds(incident.serviceIds, addIds);
+		assertAffected(serviceIds, data.serviceStatuses);
+		return {
+			incident,
+			data: {
+				...data,
+				serviceIds: addIds.length > 0 ? addIds : undefined,
+			},
+		};
 	}
 
 	async create(
@@ -278,7 +311,7 @@ export class IncidentService {
 		return incident;
 	}
 
-	/** Posts a timeline update (and optionally a status change) to an incident. */
+	/** Posts a timeline update. It can change the status and add services. */
 	async postUpdate(
 		actor: Actor,
 		id: string,
@@ -288,16 +321,19 @@ export class IncidentService {
 		requirePermission(actor, "incidents.publish");
 		const data = parse(incidentUpdateSchema, input);
 		this.assertCanNotify(actor, data.notify);
+		const addIds = await this.validateServices(data.serviceIds ?? []);
 		const author = authorRef(actor);
 		const updateId = options.id ?? createId("upd");
 		const { current, next } = await this.mutate(id, (current) => {
 			const status = data.status ?? current.status;
 			assertStatusForKind(current.kind, status);
-			assertAffected(current.serviceIds, data.serviceStatuses);
+			const serviceIds = mergeServiceIds(current.serviceIds, addIds);
+			assertAffected(serviceIds, data.serviceStatuses);
 			const now = iso(this.ctx.now());
 			const next: Incident = {
 				...current,
 				status,
+				serviceIds,
 				updates: [
 					...current.updates,
 					{
@@ -324,7 +360,12 @@ export class IncidentService {
 			closing && wasClosed && !data.serviceStatus
 				? undefined
 				: this.plan(next, data.serviceStatus, false);
-		await this.syncServices(next, plan, data.serviceStatuses);
+		const added = new Set(
+			next.serviceIds.filter(
+				(serviceId) => !current.serviceIds.includes(serviceId),
+			),
+		);
+		await this.syncServices(next, plan, data.serviceStatuses, added);
 		const event: NotificationEvent =
 			next.kind === "incident"
 				? closing && !wasClosed
@@ -468,19 +509,39 @@ export class IncidentService {
 			: undefined;
 	}
 
+	/** The status a new service gets when the update sets no status. */
+	private addedStatus(incident: Incident): ServiceStatus | undefined {
+		if (isClosedStatus(incident.status)) {
+			return undefined;
+		}
+		if (incident.kind === "maintenance") {
+			return incident.status === "verifying" ? "under_maintenance" : undefined;
+		}
+		return incident.impact === "none"
+			? undefined
+			: impactToStatus(incident.impact);
+	}
+
 	/**
 	 * Moves the affected services to their new status. A service with its own
 	 * status gets that status. The plan sets the status of the other services.
+	 * A service that this update added gets a status when the plan sets none.
 	 */
 	private async syncServices(
 		incident: Incident,
 		plan: ServicePlan | undefined,
 		overrides: readonly ServiceStatusOverride[] = [],
+		added: ReadonlySet<string> = new Set(),
 	): Promise<void> {
 		const own = new Map(
 			overrides.map((override) => [override.serviceId, override.status]),
 		);
-		if ((!plan && own.size === 0) || incident.serviceIds.length === 0) {
+		const catchUp = this.addedStatus(incident);
+		const addedCatchUp = catchUp !== undefined && added.size > 0;
+		if (
+			(!plan && own.size === 0 && !addedCatchUp) ||
+			incident.serviceIds.length === 0
+		) {
 			return;
 		}
 		const others = plan?.restore
@@ -490,7 +551,10 @@ export class IncidentService {
 				)
 			: [];
 		for (const serviceId of incident.serviceIds) {
-			const status = own.get(serviceId) ?? plan?.status;
+			const status =
+				own.get(serviceId) ??
+				plan?.status ??
+				(added.has(serviceId) ? catchUp : undefined);
 			if (!status) {
 				continue;
 			}

@@ -243,6 +243,21 @@ describe("MCP handler", () => {
 		expect((await t.services.catalog.get(web.id)).status).toBe(
 			"partial_outage",
 		);
+		const db = await t.services.catalog.create(ADMIN, { name: "DB" });
+		await call("post_incident_update", {
+			id: incident.id,
+			message: "The database is affected too",
+			serviceIds: [db.id],
+		});
+		expect((await t.services.incidents.get(incident.id)).serviceIds).toEqual([
+			api.id,
+			web.id,
+			db.id,
+		]);
+		expect((await t.services.catalog.get(db.id)).status).toBe("major_outage");
+		expect((await t.services.catalog.get(api.id)).status).toBe(
+			"degraded_performance",
+		);
 		await call("edit_incident", {
 			id: incident.id,
 			title: "API errors after deploy",
@@ -257,10 +272,10 @@ describe("MCP handler", () => {
 			status: "resolved",
 			title: "API errors after deploy",
 		});
-		expect(resolved.updates).toHaveLength(3);
+		expect(resolved.updates).toHaveLength(4);
 		expect(
 			(await call("get_incident", { id: incident.id })).data.updates,
-		).toHaveLength(3);
+		).toHaveLength(4);
 
 		const maintenance = (
 			await call("schedule_maintenance", {
@@ -358,13 +373,16 @@ describe("MCP handler", () => {
 			state: "approved",
 			incidentId: incident.id,
 		});
+		const web = await t.services.catalog.create(ADMIN, { name: "Web" });
 		const update = (
 			await call("draft_notification", {
 				incidentId: incident.id,
 				message: "A fix is ready.",
 				status: "monitoring",
+				serviceIds: [web.id],
 				serviceStatuses: [
 					{ serviceId: api.id, status: "degraded_performance" },
+					{ serviceId: web.id, status: "partial_outage" },
 				],
 			})
 		).data;
@@ -373,8 +391,10 @@ describe("MCP handler", () => {
 			kind: "incident",
 			incidentId: incident.id,
 			content: {
+				serviceIds: [web.id],
 				serviceStatuses: [
 					{ serviceId: api.id, status: "degraded_performance" },
+					{ serviceId: web.id, status: "partial_outage" },
 				],
 			},
 		});

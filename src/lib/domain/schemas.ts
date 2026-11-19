@@ -106,6 +106,8 @@ export type CreateIncidentInput = z.input<typeof createIncidentSchema>;
 export const incidentUpdateSchema = z.object({
 	status: eventStatusSchema.optional(),
 	message: z.string().trim().min(1).max(10_000),
+	/** Services to add. This does not remove a service. */
+	serviceIds: z.array(z.string().min(1)).max(100).optional(),
 	serviceStatus: serviceStatusSchema.optional(),
 	serviceStatuses: serviceStatusesSchema,
 	notify: z.boolean().optional(),

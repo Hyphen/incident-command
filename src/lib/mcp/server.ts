@@ -42,6 +42,9 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
   serviceStatus and the automatic status for that service only. An entry applies even when a different
   open incident affects the service. When you resolve, do not list a service that must go back to
   operational: resolution restores it, but keeps it as it is while a different open incident affects it.
+- To add a service on an update, pass serviceIds to post_incident_update or draft_notification.
+  The update adds those services. A service that is already affected stays. The new service gets
+  the status of that update. edit_incident replaces the service list and does not set a status.
 - Schedule planned work with schedule_maintenance (statuses: scheduled -> in_progress -> verifying -> completed).
 - When a person must review a notification first, use draft_notification and give that person the reviewUrl.
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
@@ -464,11 +467,17 @@ export function createMcpServer(
 		{
 			title: "Post incident update",
 			description:
-				"Adds a timeline update to an incident or maintenance. It can also change the status and the status of each affected service.",
+				"Adds a timeline update to an incident or maintenance. It can change the status, add services, and set the status of each service.",
 			inputSchema: {
 				id,
 				message: z.string(),
 				status: eventStatusSchema.optional(),
+				serviceIds: z
+					.array(z.string())
+					.optional()
+					.describe(
+						"Services to add. This does not remove a service. A new service gets the status of this update.",
+					),
 				serviceStatus,
 				serviceStatuses,
 				notify,
@@ -591,7 +600,9 @@ export function createMcpServer(
 				serviceIds: z
 					.array(z.string())
 					.optional()
-					.describe("New events only: affected services"),
+					.describe(
+						"Affected services of a new incident or maintenance. On an update, the services to add. An update keeps the other services.",
+					),
 				serviceStatus,
 				serviceStatuses,
 				scheduledStart: isoDate
