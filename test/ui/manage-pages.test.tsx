@@ -682,7 +682,7 @@ describe("incident pages", () => {
 		).not.toBeInTheDocument();
 		expect(screen.getByText("Looking")).toBeInTheDocument();
 		expect(
-			screen.getByText("System posted this and sent it."),
+			screen.getByText("System posted this and chose to notify subscribers."),
 		).toBeInTheDocument();
 		expect(
 			screen.queryByRole("heading", { name: "Drafts" }),
@@ -806,22 +806,28 @@ describe("incident pages", () => {
 		);
 		expect(screen.getByText("Looking")).toBeInTheDocument();
 		expect(
-			screen.getByText("System posted this and sent it."),
+			screen.getByText("System posted this and chose to notify subscribers."),
 		).toBeInTheDocument();
 		expect(
-			screen.getByText("Editor User posted this and did not send it."),
+			screen.getByText(
+				"Editor User posted this and chose not to notify subscribers.",
+			),
 		).toBeInTheDocument();
 		expect(screen.getByText("Editor User posted this.")).toBeInTheDocument();
 		expect(
 			screen.getByText(
-				"Test agent wrote this post. Editor User approved this post and sent it.",
+				"Test agent wrote this post. Editor User approved this post and chose to notify subscribers.",
 			),
 		).toBeInTheDocument();
 		expect(
-			screen.getByText("Editor User approved this post and sent it."),
+			screen.getByText(
+				"Editor User approved this post and chose to notify subscribers.",
+			),
 		).toBeInTheDocument();
 		expect(
-			screen.getByText("Editor User posted this and sent it."),
+			screen.getByText(
+				"Editor User posted this and chose to notify subscribers.",
+			),
 		).toBeInTheDocument();
 		expect(
 			screen.queryByText("These are the latest 5 of 6 posts."),
@@ -898,7 +904,7 @@ describe("incident pages", () => {
 			screen.queryByRole("button", { name: "Delete incident" }),
 		).not.toBeInTheDocument();
 		expect(
-			screen.getByText("System posted this and sent it."),
+			screen.getByText("System posted this and chose to notify subscribers."),
 		).toBeInTheDocument();
 	});
 

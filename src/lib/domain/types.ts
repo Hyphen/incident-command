@@ -219,7 +219,7 @@ export interface IncidentUpdate {
 	status: EventStatus;
 	message: string;
 	author: AuthorRef;
-	/** The post went to subscribers. Old posts omit this field. */
+	/** The author asked to notify subscribers. Old posts omit this field. */
 	notified?: boolean;
 	createdAt: string;
 }

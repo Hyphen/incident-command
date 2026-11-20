@@ -30,16 +30,16 @@ function sourceOf(draft: NotificationDraft): PostSource | undefined {
 
 function credit(post: IncidentUpdate, source: PostSource | undefined): string {
 	if (source) {
-		const approval = `${source.approver} approved this post and sent it.`;
+		const approval = `${source.approver} approved this post and chose to notify subscribers.`;
 		return source.writer === undefined
 			? approval
 			: `${source.writer} wrote this post. ${approval}`;
 	}
 	if (post.notified === false) {
-		return `${post.author.name} posted this and did not send it.`;
+		return `${post.author.name} posted this and chose not to notify subscribers.`;
 	}
 	if (post.notified === true) {
-		return `${post.author.name} posted this and sent it.`;
+		return `${post.author.name} posted this and chose to notify subscribers.`;
 	}
 	return `${post.author.name} posted this.`;
 }
