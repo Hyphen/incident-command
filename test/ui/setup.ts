@@ -1,6 +1,22 @@
 import { setApp } from "@/lib/app";
 import { resetNextState } from "./next-state";
 
+// jsdom does not implement these methods. The browser uses them to open and
+// close a dialog, so the tests use the same methods.
+if (typeof HTMLDialogElement.prototype.showModal !== "function") {
+	HTMLDialogElement.prototype.showModal = function showModal(
+		this: HTMLDialogElement,
+	) {
+		this.open = true;
+	};
+}
+if (typeof HTMLDialogElement.prototype.close !== "function") {
+	HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+		this.open = false;
+		this.dispatchEvent(new Event("close"));
+	};
+}
+
 vi.mock("next/headers", async () => {
 	const state = await import("./next-state");
 	return {

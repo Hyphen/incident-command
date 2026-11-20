@@ -1,5 +1,4 @@
 import {
-	addNotificationProviderAction,
 	moveNotificationProviderAction,
 	removeNotificationProviderAction,
 	updateNotificationChannelAction,
@@ -11,14 +10,10 @@ import {
 	type PublicNotificationChannel,
 	type PublicNotificationProvider,
 } from "@/lib/domain/types";
-import {
-	CHANNELS,
-	type ChannelDefinition,
-	PROVIDERS,
-	type ProviderDefinition,
-	STRATEGIES,
-} from "@/lib/notifications/catalog";
+import { CHANNELS, PROVIDERS, STRATEGIES } from "@/lib/notifications/catalog";
+import { AddProviderDialog } from "./add-provider-dialog";
 import { ConfirmButton } from "./confirm-button";
+import { ProviderFields } from "./provider-fields";
 import {
 	buttonClass,
 	Card,
@@ -43,112 +38,6 @@ function ChannelStatus({ channel }: { channel: PublicNotificationChannel }) {
 		<span className={`${pill} border-degraded/40 bg-degraded/10`}>
 			Not ready
 		</span>
-	);
-}
-
-/** The settings fields of a provider, for the add form and the edit form. */
-function ProviderFields({
-	idPrefix,
-	channel,
-	definition,
-	provider,
-	canStoreSecrets,
-}: {
-	idPrefix: string;
-	channel: ChannelDefinition;
-	definition: ProviderDefinition;
-	provider?: PublicNotificationProvider;
-	canStoreSecrets: boolean;
-}) {
-	return (
-		<div className="grid gap-4 sm:grid-cols-2">
-			<Field label="Name" htmlFor={`${idPrefix}-name`}>
-				<input
-					id={`${idPrefix}-name`}
-					name="name"
-					required
-					maxLength={80}
-					defaultValue={provider?.name ?? definition.label}
-					className={inputClass}
-				/>
-			</Field>
-			{channel.sender && (
-				<Field
-					label={channel.sender.label}
-					htmlFor={`${idPrefix}-from`}
-					hint="Optional. Leave empty to use the sender of the channel."
-				>
-					<input
-						id={`${idPrefix}-from`}
-						name="from"
-						maxLength={200}
-						defaultValue={provider?.from}
-						placeholder={channel.sender.placeholder}
-						className={inputClass}
-					/>
-				</Field>
-			)}
-			{definition.fields.map((field) => {
-				const id = `${idPrefix}-${field.key}`;
-				const saved = provider?.savedSecrets.includes(field.key) ?? false;
-				if (!field.secret) {
-					return (
-						<Field
-							key={field.key}
-							label={field.label}
-							htmlFor={id}
-							hint={field.hint}
-						>
-							<input
-								id={id}
-								name={`field_${field.key}`}
-								required={field.required}
-								pattern={field.pattern}
-								defaultValue={provider?.options[field.key]}
-								placeholder={field.placeholder}
-								className={inputClass}
-							/>
-						</Field>
-					);
-				}
-				return (
-					<Field
-						key={field.key}
-						label={field.label}
-						htmlFor={id}
-						hint={
-							canStoreSecrets
-								? field.hint
-								: "Set ENCRYPTION_KEY on the server to save credentials."
-						}
-					>
-						<input
-							id={id}
-							name={`field_${field.key}`}
-							type="password"
-							autoComplete="new-password"
-							required={field.required && !saved && canStoreSecrets}
-							disabled={!canStoreSecrets}
-							placeholder={
-								saved ? "Saved. Leave empty to keep it." : field.placeholder
-							}
-							className={inputClass}
-						/>
-						{saved && !field.required && (
-							<label className="flex items-center gap-2 text-xs text-muted">
-								<input
-									type="checkbox"
-									name="clear"
-									value={field.key}
-									className="size-3.5 accent-brand"
-								/>
-								Remove the saved {field.label.toLowerCase()}
-							</label>
-						)}
-					</Field>
-				);
-			})}
-		</div>
 	);
 }
 
@@ -264,12 +153,12 @@ function EnvironmentNote({ channel }: { channel: PublicNotificationChannel }) {
 			<EmptyState>
 				{names.length > 0
 					? `No providers yet. Until you add one, this channel uses ${names.join(", ")}.`
-					: "No providers yet. Add one below."}
+					: "No providers yet."}
 			</EmptyState>
 		);
 	}
 	return names.length > 0 ? (
-		<p className="mt-2 text-xs text-muted">
+		<p className="text-xs text-muted">
 			This channel does not use {names.join(", ")} while it has providers.
 		</p>
 	) : null;
@@ -378,8 +267,15 @@ export function NotificationChannelCard({
 				</SubmitButton>
 			</form>
 			{configurable && (
-				<div className="mt-6 border-t border-border pt-5">
-					<h3 className="text-sm font-semibold">Providers</h3>
+				<div className="mt-6 space-y-4 border-t border-border pt-5">
+					<div className="flex flex-wrap items-center gap-3">
+						<AddProviderDialog
+							channelId={channel.id}
+							definition={definition}
+							canStoreSecrets={canStoreSecrets}
+						/>
+						<h3 className="text-sm font-semibold">Providers</h3>
+					</div>
 					{channel.providers.length > 0 && (
 						<ol className="divide-y divide-border">
 							{channel.providers.map((provider, index) => (
@@ -394,42 +290,6 @@ export function NotificationChannelCard({
 						</ol>
 					)}
 					<EnvironmentNote channel={channel} />
-					<div className="mt-4 space-y-2">
-						<h4 className="text-sm font-medium">Add a provider</h4>
-						{definition.providers.map((type) => {
-							const provider = PROVIDERS[type];
-							return (
-								<details
-									key={type}
-									className="rounded-lg border border-border bg-bg"
-								>
-									<summary className="cursor-pointer px-4 py-3 text-sm">
-										<span className="font-medium">{provider.label}</span>
-										<span className="text-muted">
-											{" "}
-											· {provider.description}
-										</span>
-									</summary>
-									<form
-										action={addNotificationProviderAction}
-										className="space-y-4 border-t border-border p-4"
-									>
-										<input type="hidden" name="channel" value={channel.id} />
-										<input type="hidden" name="type" value={type} />
-										<ProviderFields
-											idPrefix={`${channel.id}-new-${type}`}
-											channel={definition}
-											definition={provider}
-											canStoreSecrets={canStoreSecrets}
-										/>
-										<SubmitButton className={buttonClass.primary}>
-											Add {provider.label}
-										</SubmitButton>
-									</form>
-								</details>
-							);
-						})}
-					</div>
 				</div>
 			)}
 		</Card>
