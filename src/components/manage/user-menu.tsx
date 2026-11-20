@@ -81,26 +81,26 @@ export function UserMenu({ member }: { member: PublicMember }) {
 						id={menuId}
 						role="menu"
 						aria-label="User"
-						className="absolute top-full right-0 z-20 mt-1 w-56 rounded-xl border border-border bg-surface p-1 shadow-lg lg:top-auto lg:bottom-full lg:left-0 lg:mt-0 lg:mb-1 lg:w-auto"
+						className="absolute top-full right-0 z-20 mt-1 w-56 border border-border bg-surface-muted shadow-lg lg:top-auto lg:bottom-full lg:left-0 lg:mt-0 lg:mb-1 lg:w-auto"
 					>
 						<Link
 							role="menuitem"
 							href="/manage/account"
 							aria-current={onProfile ? "page" : undefined}
 							onClick={close}
-							className={`block rounded-lg px-3 py-2 text-sm focus-visible:-outline-offset-2 ${
+							className={`block px-3 py-2 text-sm focus-visible:-outline-offset-2 ${
 								onProfile
 									? "bg-surface-muted font-medium text-fg"
-									: "text-fg hover:bg-surface-muted"
+									: "text-fg hover:bg-surface"
 							}`}
 						>
 							My Profile
 						</Link>
-						<hr className="-mx-1 my-1 border-border" />
+						<hr className="my-0 border-border" />
 						<form action={logoutAction}>
 							<SubmitButton
 								role="menuitem"
-								className="group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-fg hover:bg-surface-muted focus-visible:-outline-offset-2 disabled:opacity-50"
+								className="group flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-fg hover:bg-surface focus-visible:-outline-offset-2 disabled:opacity-50"
 							>
 								<span className="order-first flex-1">Sign out</span>
 								{/* The spinner replaces the icon when the form is busy. */}
