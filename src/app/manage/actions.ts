@@ -558,18 +558,28 @@ export async function disconnectAgentAction(form: FormData): Promise<void> {
 
 export async function addSubscriberAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("admin");
-	const target = text(form, "target");
-	await attempt("/manage/subscribers", () => {
-		switch (text(form, "type")) {
-			case "email":
-				return services.subscribers.addEmail(actor, { email: target });
-			case "sms":
-				return services.subscribers.addSms(actor, { phone: target });
-			default:
-				return services.subscribers.addWebhook(actor, { url: target });
-		}
-	});
+	await attempt("/manage/subscribers", () =>
+		services.subscribers.add(actor, {
+			type: text(form, "type"),
+			target: text(form, "target"),
+			...(form.has("serviceIds")
+				? { serviceIds: list(form, "serviceIds") }
+				: {}),
+		}),
+	);
 	redirect(flash("/manage/subscribers", "subscriber_added"));
+}
+
+export async function updateSubscriberServicesAction(
+	form: FormData,
+): Promise<void> {
+	const { actor, services } = await requireMemberForAction("admin");
+	await attempt("/manage/subscribers", () =>
+		services.subscribers.setServices(actor, text(form, "id"), {
+			serviceIds: list(form, "serviceIds"),
+		}),
+	);
+	redirect(flash("/manage/subscribers", "services_saved"));
 }
 
 export async function deleteSubscriberAction(form: FormData): Promise<void> {

@@ -20,6 +20,7 @@ import {
 	incidentUrl,
 	SMS_MAX_LENGTH,
 	smsText,
+	subscriptionServicesUrl,
 	summaryText,
 	unsubscribeUrl,
 	webhookPayload,
@@ -236,6 +237,10 @@ describe("templates", () => {
 		expect(unsubscribeUrl(subscriber(), withSite)).toBe(
 			"https://status.acme.dev/subscribe/unsubscribe?token=tok%201",
 		);
+		expect(subscriptionServicesUrl(subscriber(), withSite)).toBe(
+			"https://status.acme.dev/subscribe/services?token=tok%201",
+		);
+		expect(subscriptionServicesUrl(subscriber(), settings)).toBeUndefined();
 		expect(confirmUrl(subscriber(), settings, "https://f.example.com")).toBe(
 			"https://f.example.com/subscribe/confirm?token=tok%201",
 		);
@@ -312,6 +317,7 @@ describe("templates", () => {
 			services: "API",
 			incidentUrl: "https://x.co/incidents/inc_1",
 			unsubscribeUrl: "https://x.co/subscribe/unsubscribe?token=tok%201",
+			servicesUrl: "https://x.co/subscribe/services?token=tok%201",
 		});
 		const payload = webhookPayload(notification);
 		expect(payload.event).toBe("incident.created");
@@ -371,6 +377,10 @@ describe("AirhornNotifier", () => {
 		expect(html.value).toContain("errors &amp; timeouts");
 		expect(html.value).toContain("https://status.acme.dev/incidents/inc_1");
 		expect(html.value).toContain("Unsubscribe");
+		expect(html.value).toContain(
+			"https://status.acme.dev/subscribe/services?token=tok%201",
+		);
+		expect(html.value).toContain("Choose services");
 
 		const hook = requests.find(
 			(request) => request.url === "https://hooks.example.com/a",

@@ -319,11 +319,17 @@ describe("portal layout", () => {
 		expect(
 			screen.getByRole("link", { name: "Incident Command" }),
 		).toHaveAttribute("href", "https://github.com/jaredwray/incident-command");
+		expect(
+			nav.queryByRole("link", { name: "Account" }),
+		).not.toBeInTheDocument();
+		expect(
+			nav.queryByRole("link", { name: "My Profile" }),
+		).not.toBeInTheDocument();
 		expect(screen.getByText(member.name)).toBeInTheDocument();
 		expect(screen.getByText(`${member.email} · Editor`)).toBeInTheDocument();
 		expect(
-			screen.getByRole("button", { name: "Sign out" }),
-		).toBeInTheDocument();
+			screen.queryByRole("menuitem", { name: "My Profile" }),
+		).not.toBeInTheDocument();
 		expect(screen.getByRole("main")).toHaveTextContent("Page content");
 	});
 
@@ -358,6 +364,79 @@ describe("portal layout", () => {
 			"aria-current",
 		);
 		expect(nav.getByRole("link", { name: "Members" })).toBeInTheDocument();
+	});
+
+	it("opens My Profile from the user", async () => {
+		const { app } = await setupApp();
+		const { member } = await signIn(app, "editor");
+		render(await PortalLayout({ children: page }));
+		const user = screen.getByRole("button", { name: new RegExp(member.name) });
+		expect(user).toHaveAttribute("aria-expanded", "false");
+
+		fireEvent.click(user);
+		expect(user).toHaveAttribute("aria-expanded", "true");
+		const menu = screen.getByRole("menu", { name: "User" });
+		const profile = within(menu).getByRole("menuitem", { name: "My Profile" });
+		expect(profile).toHaveAttribute("href", "/manage/account");
+		expect(profile).not.toHaveAttribute("aria-current");
+		expect(
+			within(menu).getByRole("menuitem", { name: "View status page" }),
+		).toHaveAttribute("href", "/");
+		expect(
+			within(menu).getByRole("menuitem", { name: "Sign out" }),
+		).toBeInTheDocument();
+
+		fireEvent.pointerDown(user);
+		expect(screen.getByRole("menu", { name: "User" })).toBeInTheDocument();
+		fireEvent.keyDown(document, { key: "Tab" });
+		expect(screen.getByRole("menu", { name: "User" })).toBeInTheDocument();
+
+		fireEvent.pointerDown(document.body);
+		expect(
+			screen.queryByRole("menu", { name: "User" }),
+		).not.toBeInTheDocument();
+
+		fireEvent.click(user);
+		fireEvent.pointerDown(document);
+		expect(
+			screen.queryByRole("menu", { name: "User" }),
+		).not.toBeInTheDocument();
+
+		fireEvent.click(user);
+		screen.getByRole("menuitem", { name: "My Profile" }).focus();
+		fireEvent.keyDown(document, { key: "Escape" });
+		expect(
+			screen.queryByRole("menu", { name: "User" }),
+		).not.toBeInTheDocument();
+		expect(user).toHaveFocus();
+
+		fireEvent.click(user);
+		fireEvent.click(screen.getByRole("menuitem", { name: "My Profile" }));
+		expect(
+			screen.queryByRole("menu", { name: "User" }),
+		).not.toBeInTheDocument();
+		fireEvent.click(user);
+		fireEvent.click(screen.getByRole("menuitem", { name: "View status page" }));
+		expect(
+			screen.queryByRole("menu", { name: "User" }),
+		).not.toBeInTheDocument();
+		fireEvent.click(user);
+		expect(user).toHaveAttribute("aria-expanded", "true");
+		fireEvent.click(user);
+		expect(user).toHaveAttribute("aria-expanded", "false");
+	});
+
+	it("marks My Profile when that page is open", async () => {
+		const { app } = await setupApp();
+		const { member } = await signIn(app, "viewer");
+		setPathname("/manage/account");
+		render(await PortalLayout({ children: page }));
+		const user = screen.getByRole("button", { name: new RegExp(member.name) });
+		expect(user.className).toContain("bg-surface-muted");
+		fireEvent.click(user);
+		const profile = screen.getByRole("menuitem", { name: "My Profile" });
+		expect(profile).toHaveAttribute("aria-current", "page");
+		expect(profile.className).toContain("bg-surface-muted");
 	});
 
 	it("shows only the page to a visitor who is not signed in", async () => {
@@ -843,22 +922,25 @@ describe("notification draft pages", () => {
 
 		render(await DraftsPage(flash({ notice: "draft_discarded" })));
 		expect(screen.getByRole("status")).toHaveTextContent("Draft discarded");
-		expect(screen.getByRole("link", { name: "API errors" })).toHaveAttribute(
+		expect(screen.getByRole("link", { name: /^API errors/ })).toHaveAttribute(
 			"href",
 			`/manage/drafts/${created.id}`,
 		);
-		expect(screen.getByRole("link", { name: "Database slow" })).toHaveAttribute(
-			"href",
-			`/manage/drafts/${update.id}`,
-		);
 		expect(
-			screen.getByRole("link", { name: "Deleted incident" }),
+			screen.getByRole("link", { name: /^Database slow/ }),
+		).toHaveAttribute("href", `/manage/drafts/${update.id}`);
+		expect(
+			screen.getByRole("link", { name: /^Deleted incident/ }),
 		).toBeInTheDocument();
 		expect(
 			screen.getAllByText(/New incident · Drafted by Test agent/),
 		).toHaveLength(1);
 		expect(screen.getAllByText(/Incident update · Drafted by/)).toHaveLength(2);
-		expect(screen.getAllByText("Waiting for review")).toHaveLength(4);
+		expect(
+			screen.getByRole("heading", { name: "Waiting for review" }),
+		).toBeInTheDocument();
+		expect(screen.getAllByText("Waiting for review")).toHaveLength(1);
+		expect(screen.getAllByText("Review")).toHaveLength(3);
 		expect(screen.getByText("Discarded by Editor User")).toBeInTheDocument();
 		expect(screen.getByText(/New maintenance/)).toBeInTheDocument();
 	});
@@ -1629,6 +1711,26 @@ describe("admin pages", () => {
 		).toBeInTheDocument();
 	});
 
+	it("lets an admin set the services for a subscriber", async () => {
+		const { app, services } = await setupApp();
+		const { actor } = await signIn(app, "admin");
+		const api = await services.catalog.create(actor, { name: "API" });
+		await services.subscribers.addEmail(actor, {
+			email: "api@acme.dev",
+			serviceIds: [api.id],
+		});
+		render(await SubscribersPage(flash({ notice: "services_saved" })));
+		expect(
+			screen
+				.getAllByRole("checkbox", { name: "API" })
+				.map((box) => (box as HTMLInputElement).checked),
+		).toEqual([false, true]);
+		expect(
+			screen.getByRole("button", { name: "Save services" }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("status")).toHaveTextContent("Services saved");
+	});
+
 	it("renders the general settings section", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");
@@ -1926,6 +2028,9 @@ describe("admin pages", () => {
 		const { app } = await setupApp();
 		const { member } = await signIn(app, "viewer");
 		render(await AccountPage(flash()));
+		expect(
+			screen.getByRole("heading", { name: "My Profile" }),
+		).toBeInTheDocument();
 		expect(
 			screen.getByText(member.email, { selector: "dd" }),
 		).toBeInTheDocument();

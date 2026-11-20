@@ -431,6 +431,11 @@ export interface Subscriber {
 	token: string;
 	confirmedAt?: string;
 	createdAt: string;
+	/**
+	 * Services that send a notification to this subscriber.
+	 * Omit the list to send a notification for every service.
+	 */
+	serviceIds?: string[];
 }
 
 /** The public text and fields of a notification draft. */

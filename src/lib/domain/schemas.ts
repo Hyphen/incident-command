@@ -262,19 +262,42 @@ const phone = z
 	.transform((value) => value.replace(/[\s().-]/g, ""))
 	.pipe(z.string().regex(PHONE, PHONE_MESSAGE));
 
-export const smsSubscriberSchema = z.object({ phone });
-
 const webhookUrl = z.url({ protocol: /^https?$/ }).max(2000);
 
-export const webhookSubscriberSchema = z.object({ url: webhookUrl });
+/**
+ * Services that send a notification to one subscriber.
+ * An empty list means every service. Give each service only once.
+ */
+export const subscriberServiceIdsSchema = z
+	.array(z.string().trim().min(1))
+	.max(100)
+	.refine(
+		(ids) => new Set(ids).size === ids.length,
+		"Give each service only once",
+	);
 
-export const emailSubscriberSchema = z.object({ email });
+/** Replaces the service choice of one subscriber. */
+export const subscriberServicesSchema = z.object({
+	serviceIds: subscriberServiceIdsSchema,
+});
 
 /** A public subscription. The format of `target` follows `type`. */
 export const subscribeSchema = z.discriminatedUnion("type", [
-	z.object({ type: z.literal("email"), target: email }),
-	z.object({ type: z.literal("sms"), target: phone }),
-	z.object({ type: z.literal("webhook"), target: webhookUrl }),
+	z.object({
+		type: z.literal("email"),
+		target: email,
+		serviceIds: subscriberServiceIdsSchema.optional(),
+	}),
+	z.object({
+		type: z.literal("sms"),
+		target: phone,
+		serviceIds: subscriberServiceIdsSchema.optional(),
+	}),
+	z.object({
+		type: z.literal("webhook"),
+		target: webhookUrl,
+		serviceIds: subscriberServiceIdsSchema.optional(),
+	}),
 ]);
 
 export const notificationChannelSchema = z.enum(SUBSCRIBER_TYPES);

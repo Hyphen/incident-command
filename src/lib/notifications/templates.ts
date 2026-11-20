@@ -44,7 +44,7 @@ export const EMAIL_TEMPLATE: AirhornTemplate = {
 <p style="white-space:pre-wrap;font-size:15px;line-height:1.5;margin:0 0 16px"><%= message %></p>
 <% if (incidentUrl) { %><p><a href="<%= incidentUrl %>" style="color:#2563eb">View on the status page</a></p><% } %>
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 12px">
-<p style="font-size:12px;color:#6b7280;margin:0">You are receiving this because you subscribed to <%= siteName %> updates.<% if (unsubscribeUrl) { %> <a href="<%= unsubscribeUrl %>" style="color:#6b7280">Unsubscribe</a><% } %></p>
+<p style="font-size:12px;color:#6b7280;margin:0">You are receiving this because you subscribed to <%= siteName %> updates.<% if (servicesUrl) { %> <a href="<%= servicesUrl %>" style="color:#6b7280">Choose services</a><% } %><% if (unsubscribeUrl) { %> <a href="<%= unsubscribeUrl %>" style="color:#6b7280">Unsubscribe</a><% } %></p>
 </div>`,
 };
 
@@ -101,6 +101,18 @@ export function unsubscribeUrl(
 	return joinUrl(
 		siteUrlFor(settings, fallback),
 		`/subscribe/unsubscribe?token=${encodeURIComponent(subscriber.token)}`,
+	);
+}
+
+/** The page where the subscriber chooses services. */
+export function subscriptionServicesUrl(
+	subscriber: Subscriber,
+	settings: Settings,
+	fallback?: string,
+) {
+	return joinUrl(
+		siteUrlFor(settings, fallback),
+		`/subscribe/services?token=${encodeURIComponent(subscriber.token)}`,
 	);
 }
 
@@ -203,6 +215,11 @@ export function emailData(
 		services: notification.services.map((service) => service.name).join(", "),
 		incidentUrl: incidentUrl(notification),
 		unsubscribeUrl: unsubscribeUrl(
+			subscriber,
+			notification.settings,
+			notification.siteUrl,
+		),
+		servicesUrl: subscriptionServicesUrl(
 			subscriber,
 			notification.settings,
 			notification.siteUrl,

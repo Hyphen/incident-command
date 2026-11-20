@@ -146,11 +146,12 @@ describe("MCP handler", () => {
 		expect(editor).toContain("create_incident");
 		expect(editor).toContain("draft_notification");
 		expect(editor).not.toContain("create_agent_token");
+		expect(editor).not.toContain("set_subscriber_services");
 		const admin = await names("admin");
 		expect(admin).toContain("create_agent_token");
 		expect(admin).toContain("get_notification_settings");
 		expect(admin).toContain("update_notification_channel");
-		expect(admin).toHaveLength(44);
+		expect(admin).toHaveLength(45);
 		expect(admin).toContain("create_region");
 		expect(admin).toEqual(
 			expect.arrayContaining([
@@ -158,6 +159,7 @@ describe("MCP handler", () => {
 				"update_agent",
 				"delete_agent",
 				"list_agent_activity",
+				"set_subscriber_services",
 			]),
 		);
 	});
@@ -573,6 +575,34 @@ describe("MCP handler", () => {
 			"sms",
 		]);
 		expect((await call("list_subscribers")).data).toHaveLength(3);
+		const api = (await call("create_service", { name: "API" })).data;
+		const tagged = (
+			await call("add_subscriber", {
+				type: "email",
+				target: "api@acme.dev",
+				serviceIds: [api.id],
+			})
+		).data;
+		expect(tagged.serviceIds).toEqual([api.id]);
+		expect(
+			(await call("list_subscribers")).data.find(
+				(subscriber: { id: string }) => subscriber.id === tagged.id,
+			).serviceIds,
+		).toEqual([api.id]);
+		const cleared = (
+			await call("set_subscriber_services", {
+				id: tagged.id,
+				serviceIds: [],
+			})
+		).data;
+		expect(cleared.serviceIds).toBeUndefined();
+		expect(cleared).not.toHaveProperty("token");
+		const unknown = await call("set_subscriber_services", {
+			id: tagged.id,
+			serviceIds: ["svc_missing"],
+		});
+		expect(unknown.isError).toBe(true);
+		expect(unknown.text).toMatch(/svc_missing/);
 
 		const channel = (
 			await call("update_notification_channel", {

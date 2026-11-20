@@ -63,9 +63,10 @@ export default async function SubscribePage({ searchParams }: Props) {
 	const { status, error: errorToken, channel: requested } = await searchParams;
 	const { error } = resolveFlash({ error: errorToken });
 	const { services } = await getApp();
-	const [settings, channels] = await Promise.all([
+	const [settings, channels, catalog] = await Promise.all([
 		services.settings.get(),
 		services.subscribers.channels(),
+		services.catalog.list({ includeHidden: false }),
 	]);
 	const channel =
 		channels.find((option) => option === requested) ?? channels[0];
@@ -109,6 +110,7 @@ export default async function SubscribePage({ searchParams }: Props) {
 					initial={channel}
 					submitLabel="Subscribe"
 					hints={HINTS}
+					services={catalog}
 				/>
 				<div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-4">
 					<FeedHint />

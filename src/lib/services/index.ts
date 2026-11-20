@@ -35,13 +35,13 @@ export interface Services {
 export function createServices(ctx: ServiceContext): Services {
 	const settings = new SettingsService(ctx);
 	const notificationSettings = new NotificationSettingsService(ctx);
-	const catalog = new ServiceCatalog(ctx);
 	const regions = new RegionService(ctx);
 	const subscribers = new SubscriberService(
 		ctx,
 		settings,
 		notificationSettings,
 	);
+	const catalog = new ServiceCatalog(ctx, subscribers);
 	const incidents = new IncidentService(
 		ctx,
 		catalog,

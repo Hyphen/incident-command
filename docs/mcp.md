@@ -105,7 +105,7 @@ Each agent has its own permissions. A tool is listed only when the agent has the
 | `members.read`        | Read members and invites.                                                                  |
 | `members.manage`      | Invite, change and remove members.                                                         |
 | `subscribers.read`    | Read subscribers.                                                                          |
-| `subscribers.manage`  | Add and remove subscribers.                                                                |
+| `subscribers.manage`  | Add, change and remove subscribers.                                                        |
 | `settings.read`       | Read settings.                                                                             |
 | `settings.write`      | Change settings.                                                                           |
 | `channels.read`       | Read notification channels.                                                                |
@@ -178,9 +178,12 @@ Delete a region and its incidents move to Global.
 | `remove_brand_asset`          | `settings.write`      | Remove the stored logo or favicon.                                                              |
 | `get_notification_settings`   | `channels.read`       | The webhook, email and text messaging channels and their providers. No credentials.             |
 | `update_notification_channel` | `channels.write`      | Turn a channel on or off, or set its strategy or sender. Webhooks have neither.                 |
-| `list_subscribers`            | `subscribers.read`    | Webhook, email and text message subscribers.                                                    |
-| `add_subscriber`              | `subscribers.manage`  | Add a confirmed email subscriber, a webhook or an E.164 phone number.                           |
+| `list_subscribers`            | `subscribers.read`    | Webhook, email and text message subscribers, with the service choice.                           |
+| `add_subscriber`              | `subscribers.manage`  | Add a confirmed subscriber. `serviceIds` limits the notices.                                    |
+| `set_subscriber_services`     | `subscribers.manage`  | Set the services that notify one subscriber. An empty list means every service.                 |
 | `remove_subscriber`           | `subscribers.manage`  | Remove a subscriber.                                                                            |
+
+A subscriber can choose the services that send a notification. Pass `serviceIds` to `add_subscriber`, or call `set_subscriber_services`. An empty list sends a notification for every service. Delete a service. The choice then loses that service. A choice with no services left sends a notification for every service.
 
 Agents cannot add notification providers or read their credentials. An admin adds providers and credentials in the portal.
 

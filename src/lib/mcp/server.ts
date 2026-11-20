@@ -1097,12 +1097,19 @@ export function createMcpServer(
 			services.notificationSettings.updateChannel(actor, channel, input),
 	);
 
+	const subscriberServices = z
+		.array(z.string())
+		.describe(
+			"Services that send a notification to this subscriber. An empty list means every service.",
+		);
+
 	tool(
 		"subscribers.read",
 		"list_subscribers",
 		{
 			title: "List subscribers",
-			description: "Webhook, email and text message subscribers.",
+			description:
+				"Webhook, email and text message subscribers. serviceIds is the service choice. No serviceIds means every service.",
 			inputSchema: {},
 			readOnly: true,
 		},
@@ -1115,24 +1122,31 @@ export function createMcpServer(
 		{
 			title: "Add subscriber",
 			description:
-				"Adds a confirmed email subscriber, a webhook (Slack, Discord or any JSON endpoint) or a phone number for text messages.",
+				"Adds a confirmed email subscriber, a webhook (Slack, Discord or any JSON endpoint) or a phone number for text messages. Pass serviceIds to limit notifications.",
 			inputSchema: {
 				type: z.enum(SUBSCRIBER_TYPES),
 				target: z
 					.string()
 					.describe("Email address, https URL or E.164 phone number"),
+				serviceIds: subscriberServices.optional(),
 			},
 		},
-		async (args) => {
-			switch (args.type) {
-				case "email":
-					return services.subscribers.addEmail(actor, { email: args.target });
-				case "sms":
-					return services.subscribers.addSms(actor, { phone: args.target });
-				default:
-					return services.subscribers.addWebhook(actor, { url: args.target });
-			}
+		async (args) => services.subscribers.add(actor, args),
+	);
+
+	tool(
+		"subscribers.manage",
+		"set_subscriber_services",
+		{
+			title: "Set subscriber services",
+			description:
+				"Sets the services that notify one subscriber. An empty list sends a notification for every service.",
+			inputSchema: {
+				id,
+				serviceIds: subscriberServices,
+			},
 		},
+		async (args) => services.subscribers.setServices(actor, args.id, args),
 	);
 
 	tool(
