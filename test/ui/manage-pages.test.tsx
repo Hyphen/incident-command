@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import AccountPage from "@/app/manage/(portal)/account/page";
 import AgentPage from "@/app/manage/(portal)/agents/[id]/page";
 import AgentsLoading from "@/app/manage/(portal)/agents/loading";
@@ -1642,6 +1643,9 @@ describe("admin pages", () => {
 		expect(
 			webhooks.queryByRole("heading", { name: "Providers" }),
 		).not.toBeInTheDocument();
+		expect(
+			webhooks.queryByRole("button", { name: /Add provider/ }),
+		).not.toBeInTheDocument();
 		// Only the webhook channel has the private network switch, and it starts off.
 		expect(
 			webhooks.getByLabelText("Allow private network addresses"),
@@ -1659,12 +1663,19 @@ describe("admin pages", () => {
 				"No providers yet. Until you add one, this channel uses SendGrid (environment variables).",
 			),
 		).toBeInTheDocument();
-		expect(email.getByLabelText("API key")).toBeDisabled();
+		// The add form stays in a dialog until the admin opens it.
+		expect(email.queryByRole("dialog")).not.toBeInTheDocument();
 		expect(
-			email.getAllByText(
-				"Set ENCRYPTION_KEY on the server to save credentials.",
-			),
-		).toHaveLength(2);
+			email.queryByRole("heading", { name: "Add a provider" }),
+		).not.toBeInTheDocument();
+		const addEmail = email.getByRole("button", {
+			name: "Add provider for Email",
+		});
+		expect(
+			addEmail.compareDocumentPosition(
+				email.getByRole("heading", { name: "Providers" }),
+			) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
 		expect(email.getByRole("radio", { name: /Active\/passive/ })).toBeChecked();
 		expect(email.getByLabelText("Default from address")).toHaveAttribute(
 			"placeholder",
@@ -1674,18 +1685,96 @@ describe("admin pages", () => {
 			email.getByText(/Leave empty to use status@test.dev \(EMAIL_FROM\)\./),
 		).toBeInTheDocument();
 
+		const user = userEvent.setup();
+		await user.click(addEmail);
+		const emailDialog = email.getByRole("dialog", { name: "Add a provider" });
+		expect(
+			within(emailDialog).getByRole("radio", { name: /SendGrid/ }),
+		).toBeChecked();
+		expect(within(emailDialog).getByLabelText("API key")).toBeDisabled();
+		expect(
+			within(emailDialog).getByText(
+				"Set ENCRYPTION_KEY on the server to save credentials.",
+			),
+		).toBeInTheDocument();
+		expect(
+			within(emailDialog).queryByLabelText("Secret access key"),
+		).not.toBeInTheDocument();
+		// A click inside the dialog keeps it open. The choice changes the fields.
+		await user.click(
+			within(emailDialog).getByRole("radio", { name: /Amazon SES/ }),
+		);
+		expect(email.getByRole("dialog")).toBeInTheDocument();
+		expect(within(emailDialog).getByLabelText("Region")).toBeRequired();
+		expect(
+			within(emailDialog).getByLabelText("Secret access key"),
+		).toBeDisabled();
+		expect(
+			within(emailDialog).queryByLabelText("API key"),
+		).not.toBeInTheDocument();
+		expect(emailDialog.querySelector('input[name="type"]')).toHaveValue("ses");
+		await user.click(
+			within(emailDialog).getByRole("button", { name: "Cancel" }),
+		);
+		expect(email.queryByRole("dialog")).not.toBeInTheDocument();
+
+		await user.click(addEmail);
+		const reopened = email.getByRole("dialog", { name: "Add a provider" });
+		expect(
+			within(reopened).getByRole("radio", { name: /SendGrid/ }),
+		).toBeChecked();
+		const name = within(reopened).getByLabelText("Name");
+		expect(name).toHaveValue("SendGrid");
+		await user.clear(name);
+		await user.type(name, "Primary");
+		await user.click(within(reopened).getByRole("button", { name: "Cancel" }));
+		expect(email.queryByRole("dialog")).not.toBeInTheDocument();
+		await user.click(addEmail);
+		expect(
+			within(
+				email.getByRole("dialog", { name: "Add a provider" }),
+			).getByLabelText("Name"),
+		).toHaveValue("SendGrid");
+		await user.click(
+			within(email.getByRole("dialog")).getByRole("button", { name: "Close" }),
+		);
+		expect(email.queryByRole("dialog")).not.toBeInTheDocument();
+
 		const sms = within(card("Text messaging"));
 		expect(sms.getByText("Not ready")).toBeInTheDocument();
 		expect(
 			sms.getByText("Add a provider so this channel can send."),
 		).toBeInTheDocument();
+		expect(sms.getByText("No providers yet.")).toBeInTheDocument();
 		expect(
-			sms.getByText("No providers yet. Add one below."),
-		).toBeInTheDocument();
-		expect(sms.getByRole("button", { name: "Add Twilio" })).toBeInTheDocument();
+			sms.queryByRole("button", { name: "Add Twilio" }),
+		).not.toBeInTheDocument();
+		const addSms = sms.getByRole("button", {
+			name: "Add provider for Text messaging",
+		});
 		expect(
-			sms.getByRole("button", { name: "Add Amazon SNS" }),
+			addSms.compareDocumentPosition(
+				sms.getByRole("heading", { name: "Providers" }),
+			) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+		await user.click(addSms);
+		const smsDialog = sms.getByRole("dialog", { name: "Add a provider" });
+		expect(
+			within(smsDialog).getByRole("button", { name: "Add Twilio" }),
 		).toBeInTheDocument();
+		expect(within(smsDialog).getByLabelText("Account SID")).toBeRequired();
+		await user.click(
+			within(smsDialog).getByRole("radio", { name: /Amazon SNS/ }),
+		);
+		expect(
+			within(smsDialog).getByRole("button", { name: "Add Amazon SNS" }),
+		).toBeInTheDocument();
+		expect(
+			within(smsDialog).queryByLabelText("Account SID"),
+		).not.toBeInTheDocument();
+		expect(smsDialog.querySelector('input[name="type"]')).toHaveValue("sns");
+		await user.click(within(smsDialog).getByRole("button", { name: "Close" }));
+		expect(sms.queryByRole("dialog")).not.toBeInTheDocument();
 	});
 
 	it("renders providers in order with their roles and saved credentials", async () => {
