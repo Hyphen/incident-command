@@ -255,7 +255,17 @@ export interface IncidentUpdate extends StoredIncidentUpdate {
 	impact: IncidentImpact;
 }
 
-export interface Incident {
+/** The record of a deletion from the public view. */
+export interface IncidentDeletion {
+	/** The time when the incident left the public view. */
+	deletedAt: string;
+	/** The member or agent that deleted the incident. */
+	deletedBy: AuthorRef;
+	/** The reason that the member or agent gave. */
+	deletedReason: string;
+}
+
+export interface Incident extends Partial<IncidentDeletion> {
 	id: string;
 	kind: IncidentKind;
 	/** The title of the latest post. */

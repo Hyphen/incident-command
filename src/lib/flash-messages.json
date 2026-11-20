@@ -57,7 +57,12 @@
 	"incident_deleted": {
 		"id": "fls_c8xsjc9f6rf91l2l",
 		"kind": "notice",
-		"text": "Incident deleted"
+		"text": "Incident deleted from the public view"
+	},
+	"delete_reason_required": {
+		"id": "fls_w4reasonreq0001",
+		"kind": "error",
+		"text": "Write a reason before you delete the incident."
 	},
 	"service_created": {
 		"id": "fls_eca36jy813tf1jk7",

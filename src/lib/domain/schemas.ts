@@ -140,6 +140,12 @@ export const editIncidentSchema = z.object({
 });
 export type EditIncidentInput = z.input<typeof editIncidentSchema>;
 
+/** The reason for a deletion from the public view. */
+export const deleteIncidentSchema = z.object({
+	reason: z.string().trim().max(1000),
+});
+export type DeleteIncidentInput = z.input<typeof deleteIncidentSchema>;
+
 /**
  * The content of a notification draft. The incident schemas check it each
  * time the draft is saved, so a saved draft can always be published.

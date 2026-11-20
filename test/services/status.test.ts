@@ -300,6 +300,19 @@ describe("StatusService", () => {
 		);
 	});
 
+	it("does not start the history at a deleted incident", async () => {
+		t.clock.set("2026-05-05T00:00:00.000Z");
+		const may = await t.services.incidents.create(EDITOR, {
+			title: "May",
+			message: "m",
+			status: "resolved",
+		});
+		t.clock.set("2026-11-02T12:00:00.000Z");
+		await t.services.incidents.delete(EDITOR, may.id, { reason: "Wrong" });
+		const latest = await t.services.status.history();
+		expect(latest.older).toBeNull();
+	});
+
 	it("has one history page when no incident started", async () => {
 		t.clock.set("2026-05-05T00:00:00.000Z");
 		await t.services.incidents.create(EDITOR, {
