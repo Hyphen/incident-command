@@ -65,7 +65,10 @@ export default async function DashboardPage({
 							? "1 notification draft waits for review."
 							: `${drafts.length} notification drafts wait for review.`}
 					</span>
-					<Link href="/manage/drafts" className="font-medium hover:underline">
+					<Link
+						href="/manage/incidents"
+						className="font-medium hover:underline"
+					>
 						Review drafts →
 					</Link>
 				</p>

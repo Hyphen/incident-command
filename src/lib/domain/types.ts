@@ -219,6 +219,8 @@ export interface IncidentUpdate {
 	status: EventStatus;
 	message: string;
 	author: AuthorRef;
+	/** The author asked to notify subscribers. Old posts omit this field. */
+	notified?: boolean;
 	createdAt: string;
 }
 
@@ -465,6 +467,8 @@ export interface NotificationDraft {
 	reviewedBy?: AuthorRef;
 	reviewedAt?: string;
 	publishedAt?: string;
+	/** The id of the post that this draft published. */
+	updateId?: string;
 	createdAt: string;
 	updatedAt: string;
 }
