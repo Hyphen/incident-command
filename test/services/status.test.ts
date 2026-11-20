@@ -330,7 +330,7 @@ describe("StatusService", () => {
 			message: "Down",
 			impact: "critical",
 			serviceIds: [api.id],
-			regionId: united.id,
+			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
 		});
 		t.clock.set("2026-11-01T11:00:00.000Z");
 		await t.services.incidents.resolve(EDITOR, regional.id);
@@ -352,7 +352,7 @@ describe("StatusService", () => {
 			message: "Still down",
 			impact: "critical",
 			serviceIds: [api.id],
-			regionId: united.id,
+			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
 		});
 		const during = await t.services.status.summary();
 		expect(during.services[0]?.status).toBe("major_outage");
@@ -388,24 +388,62 @@ describe("StatusService", () => {
 		).rejects.toBeInstanceOf(NotFoundError);
 	});
 
+	it("limits each service to its own regions", async () => {
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
+		const web = await t.services.catalog.create(EDITOR, { name: "Web" });
+		const united = await t.services.regions.create(EDITOR, {
+			name: "United States",
+		});
+		const europe = await t.services.regions.create(EDITOR, { name: "Europe" });
+		await t.services.incidents.create(EDITOR, {
+			title: "Split",
+			message: "Two regions",
+			impact: "critical",
+			serviceIds: [api.id, web.id],
+			serviceRegions: [
+				{ serviceId: api.id, regionIds: [united.id] },
+				{ serviceId: web.id, regionIds: [europe.id] },
+			],
+		});
+		const us = await t.services.status.summary({ regionId: united.id });
+		const eu = await t.services.status.summary({ regionId: europe.id });
+		expect(us.activeIncidents.map((item) => item.title)).toEqual(["Split"]);
+		expect(eu.activeIncidents.map((item) => item.title)).toEqual(["Split"]);
+		expect(
+			us.services.map((service) => [service.name, service.status]),
+		).toEqual([
+			["API", "major_outage"],
+			["Web", "operational"],
+		]);
+		expect(
+			eu.services.map((service) => [service.name, service.status]),
+		).toEqual([
+			["API", "operational"],
+			["Web", "major_outage"],
+		]);
+	});
+
 	it("filters history by region and keeps the month range", async () => {
 		const united = await t.services.regions.create(EDITOR, {
 			name: "United States",
 		});
 		const europe = await t.services.regions.create(EDITOR, { name: "Europe" });
 		t.clock.set("2026-10-10T00:00:00.000Z");
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
 		const euOnly = await t.services.incidents.create(EDITOR, {
 			title: "EU only",
 			message: "x",
 			status: "resolved",
-			regionId: europe.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [europe.id] }],
 		});
 		t.clock.set("2026-11-02T12:00:00.000Z");
 		const usOnly = await t.services.incidents.create(EDITOR, {
 			title: "US only",
 			message: "x",
 			status: "resolved",
-			regionId: united.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
 		});
 		t.clock.advance(1000);
 		const global = await t.services.incidents.create(EDITOR, {
@@ -449,7 +487,7 @@ describe("StatusService", () => {
 			message: "Down",
 			impact: "critical",
 			serviceIds: [api.id],
-			regionId: united.id,
+			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
 		});
 		t.clock.set("2026-11-02T10:30:00.000Z");
 		const eu = await t.services.incidents.create(EDITOR, {
@@ -457,7 +495,7 @@ describe("StatusService", () => {
 			message: "Down",
 			impact: "critical",
 			serviceIds: [api.id],
-			regionId: europe.id,
+			serviceRegions: [{ serviceId: api.id, regionIds: [europe.id] }],
 		});
 		t.clock.set("2026-11-02T11:00:00.000Z");
 		await t.services.incidents.resolve(EDITOR, us.id);
@@ -515,7 +553,7 @@ describe("StatusService", () => {
 			message: "Down",
 			impact: "critical",
 			serviceIds: [api.id],
-			regionId: united.id,
+			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
 		});
 		t.clock.set("2026-11-02T10:30:00.000Z");
 		const wide = await t.services.incidents.create(EDITOR, {

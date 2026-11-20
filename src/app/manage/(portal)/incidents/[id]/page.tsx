@@ -11,7 +11,7 @@ import { DraftList } from "@/components/manage/draft-list";
 import {
 	AddServices,
 	ImpactSelect,
-	RegionSelect,
+	ServiceRegionEditor,
 	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
@@ -38,9 +38,14 @@ import { StatusTimeline } from "@/components/status/status-timeline";
 import { Timeline } from "@/components/status/timeline";
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
-import { regionNameFor } from "@/lib/domain/regions";
+import { boundServiceRegions, regionNameFor } from "@/lib/domain/regions";
 import { hasRole } from "@/lib/domain/status";
-import type { Incident, NotificationDraft, Service } from "@/lib/domain/types";
+import type {
+	Incident,
+	NotificationDraft,
+	Region,
+	Service,
+} from "@/lib/domain/types";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Incident" };
@@ -71,11 +76,13 @@ function PostForm({
 	incident,
 	affected,
 	catalog,
+	regions,
 	tab,
 }: {
 	incident: Incident;
 	affected: Service[];
 	catalog: Service[];
+	regions: readonly Region[];
 	tab: IncidentTab;
 }) {
 	return (
@@ -109,7 +116,11 @@ function PostForm({
 			</Field>
 			<ServiceStatusSelect hint="Automatic restores services when resolving and starts maintenance mode when in progress." />
 			<ServiceStatusList services={affected} />
-			<AddServices catalog={catalog} affectedIds={incident.serviceIds} />
+			<AddServices
+				catalog={catalog}
+				affectedIds={incident.serviceIds}
+				regions={regions}
+			/>
 			<Checkbox name="notify" label="Notify subscribers" defaultChecked />
 			<div className="flex flex-wrap gap-2">
 				<SubmitButton className={buttonClass.primary}>Post update</SubmitButton>
@@ -128,6 +139,7 @@ function PostsCard({
 	incident,
 	affected,
 	catalog,
+	regions,
 	canEdit,
 	showForm,
 	reviewed,
@@ -137,6 +149,7 @@ function PostsCard({
 	incident: Incident;
 	affected: Service[];
 	catalog: Service[];
+	regions: readonly Region[];
 	canEdit: boolean;
 	showForm: boolean;
 	reviewed: NotificationDraft[];
@@ -160,6 +173,7 @@ function PostsCard({
 					incident={incident}
 					affected={affected}
 					catalog={catalog}
+					regions={regions}
 					tab={tab}
 				/>
 			)}
@@ -173,6 +187,7 @@ function IncidentBody({
 	incident,
 	affected,
 	catalog,
+	regions,
 	canEdit,
 	showForm,
 	pending,
@@ -182,6 +197,7 @@ function IncidentBody({
 	incident: Incident;
 	affected: Service[];
 	catalog: Service[];
+	regions: readonly Region[];
 	canEdit: boolean;
 	showForm: boolean;
 	pending: NotificationDraft[];
@@ -194,6 +210,7 @@ function IncidentBody({
 					incident={incident}
 					affected={affected}
 					catalog={catalog}
+					regions={regions}
 					canEdit={canEdit}
 					showForm={showForm}
 					reviewed={reviewed}
@@ -221,6 +238,7 @@ function IncidentBody({
 					incident={incident}
 					affected={affected}
 					catalog={catalog}
+					regions={regions}
 					canEdit={canEdit}
 					showForm={showForm}
 					reviewed={reviewed}
@@ -292,6 +310,7 @@ export default async function ManageIncidentPage({
 					incident={incident}
 					affected={affected}
 					catalog={catalog}
+					regions={regions}
 					canEdit={canEdit}
 					showForm={showForm}
 					pending={pending}
@@ -299,8 +318,8 @@ export default async function ManageIncidentPage({
 				/>
 				{canEdit && (
 					<div className="space-y-6">
-						{(!isIncident || regions.length > 0) && (
-							<Card title={isIncident ? "Region" : "Maintenance window"}>
+						{(!isIncident || (regions.length > 0 && affected.length > 0)) && (
+							<Card title={isIncident ? "Regions" : "Maintenance window"}>
 								<form action={editIncidentAction} className="space-y-4">
 									<input type="hidden" name="id" value={incident.id} />
 									{!isIncident && (
@@ -309,9 +328,13 @@ export default async function ManageIncidentPage({
 											end={incident.scheduledEnd}
 										/>
 									)}
-									<RegionSelect regions={regions} value={incident.regionId} />
+									<ServiceRegionEditor
+										services={affected}
+										regions={regions}
+										values={boundServiceRegions(incident)}
+									/>
 									<SubmitButton className={buttonClass.secondary}>
-										{isIncident ? "Save region" : "Save window"}
+										{isIncident ? "Save regions" : "Save window"}
 									</SubmitButton>
 								</form>
 							</Card>

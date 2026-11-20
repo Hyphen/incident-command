@@ -748,31 +748,54 @@ describe("DraftService", () => {
 		expect(kept.updates.at(-1)?.title).toBe("API restored");
 	});
 
-	it("keeps a region on a new draft and rejects it on an update", async () => {
+	it("keeps regions on a draft and can set them for an added service", async () => {
 		const region = await t.services.regions.create(ADMIN, {
 			name: "United States",
 		});
+		const api = await t.services.catalog.create(ADMIN, { name: "API" });
+		const web = await t.services.catalog.create(ADMIN, { name: "Web" });
 		const draft = await t.services.drafts.create(AGENT, {
 			title: "API errors",
 			message: "Looking",
-			regionId: region.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
-		expect(draft.content.regionId).toBe(region.id);
+		expect(draft.content.serviceRegions).toEqual([
+			{ serviceId: api.id, regionIds: [region.id] },
+		]);
 		const approved = await t.services.drafts.approve(
 			EDITOR,
 			draft.id,
 			draft.content,
 		);
-		expect(approved.incident.regionId).toBe(region.id);
+		expect(approved.incident.serviceRegions).toEqual([
+			{ serviceId: api.id, regionIds: [region.id] },
+		]);
 		const update = await t.services.drafts.create(AGENT, {
 			incidentId: approved.incident.id,
 			message: "Next",
+			serviceIds: [web.id],
+			serviceRegions: [{ serviceId: web.id, regionIds: [region.id] }],
 		});
+		expect(update.content.serviceRegions).toEqual([
+			{ serviceId: web.id, regionIds: [region.id] },
+		]);
+		const published = await t.services.drafts.approve(EDITOR, update.id, {
+			message: "Next",
+			serviceIds: [web.id],
+			serviceRegions: [{ serviceId: web.id, regionIds: [region.id] }],
+		});
+		expect(published.incident.serviceRegions).toEqual([
+			{ serviceId: api.id, regionIds: [region.id] },
+			{ serviceId: web.id, regionIds: [region.id] },
+		]);
 		await expect(
-			t.services.drafts.update(EDITOR, update.id, {
-				message: "Next",
-				regionId: region.id,
+			t.services.drafts.create(AGENT, {
+				title: "Extra",
+				message: "x",
+				serviceIds: [api.id],
+				serviceRegions: [{ serviceId: web.id, regionIds: [region.id] }],
 			}),
-		).rejects.toThrow(/regionId/);
+		).rejects.toThrow(/serviceRegions/);
 	});
 });

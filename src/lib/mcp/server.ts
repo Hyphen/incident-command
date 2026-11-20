@@ -5,6 +5,7 @@ import { publicFaviconSrc, publicLogoSrc } from "../brand";
 import { designGuide } from "../design";
 import { decodeBrandAsset } from "../domain/brand-asset";
 import { can, PERMISSIONS, type Permission } from "../domain/permissions";
+import { boundServiceRegions } from "../domain/regions";
 import {
 	eventStatusSchema,
 	impactSchema,
@@ -53,9 +54,13 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
   Use serviceStatus or serviceStatuses for that. A service that the update adds gets the status
   for the new impact.
 - Schedule planned work with schedule_maintenance (statuses: scheduled -> in_progress -> verifying -> completed).
-- By default an incident uses Global. Call list_regions before you set a region.
-  Pass regionId to create_incident, schedule_maintenance, draft_notification, or edit_incident.
-  Pass null to edit_incident to move an incident to Global.
+- Regions belong to each affected service. Call list_regions before you set a region.
+  Pass serviceRegions, for example [{"serviceId": "svc_api", "regionIds": ["reg_us", "reg_eu"]}].
+  Omit a service, or pass an empty regionIds list, for Global.
+  serviceRegions works with create_incident, schedule_maintenance, post_incident_update,
+  draft_notification and edit_incident.
+  On an update, serviceRegions sets regions for the services in that list. Other services keep their regions.
+  Pass an empty list or null to edit_incident to make every service Global. Omit it to keep the current regions.
   Pass regionId to get_status to read one region. With no regions, the status page is one page.
 - When a person must review a notification first, use draft_notification and give that person the reviewUrl.
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
@@ -107,6 +112,21 @@ const serviceStatuses = z
 	.describe(
 		"Statuses for single affected services. Each entry replaces serviceStatus and the automatic status for its service. Other affected services keep the automatic status or serviceStatus.",
 	);
+const serviceRegions = z
+	.array(
+		z.object({
+			serviceId: z.string().describe("An affected service"),
+			regionIds: z
+				.array(z.string())
+				.describe(
+					"Region ids from list_regions. An empty list means Global for this service.",
+				),
+		}),
+	)
+	.optional()
+	.describe(
+		"Regions for each affected service. Omit a service, or pass an empty regionIds list, for Global.",
+	);
 
 type ToolHandler<A> = (args: A) => Promise<unknown>;
 
@@ -147,12 +167,12 @@ function incidentSummary(incident: Incident) {
 		status: incident.status,
 		impact: incident.impact,
 		serviceIds: incident.serviceIds,
+		serviceRegions: boundServiceRegions(incident),
 		startedAt: incident.startedAt,
 		resolvedAt: incident.resolvedAt,
 		scheduledStart: incident.scheduledStart,
 		scheduledEnd: incident.scheduledEnd,
 		latestUpdate: latest?.message,
-		regionId: incident.regionId ?? null,
 		updatedAt: incident.updatedAt,
 	};
 }
@@ -512,7 +532,8 @@ export function createMcpServer(
 		"delete_region",
 		{
 			title: "Delete region",
-			description: "Deletes a region. Incidents in that region move to Global.",
+			description:
+				"Deletes a region. A service that used only that region becomes Global. A service that also uses other regions keeps those regions.",
 			inputSchema: { id },
 		},
 		async (args) => {
@@ -539,17 +560,11 @@ export function createMcpServer(
 				serviceIds: z.array(z.string()).optional(),
 				serviceStatus,
 				serviceStatuses,
+				serviceRegions,
 				status: eventStatusSchema
 					.optional()
 					.describe(
 						"investigating (default) | identified | monitoring | resolved",
-					),
-				regionId: z
-					.string()
-					.min(1)
-					.optional()
-					.describe(
-						"A region id from list_regions. Omit this field for Global.",
 					),
 				notify,
 			},
@@ -588,6 +603,9 @@ export function createMcpServer(
 					),
 				serviceStatus,
 				serviceStatuses,
+				serviceRegions: serviceRegions.describe(
+					"Regions for services in this update. A service that is not in this list keeps its regions. An empty regionIds list makes that service Global.",
+				),
 				notify,
 			},
 		},
@@ -614,19 +632,16 @@ export function createMcpServer(
 		{
 			title: "Edit incident",
 			description:
-				"Replaces the service list or changes the maintenance window or the region. It does not post an update. It does not change the title or the impact. Use post_incident_update for those.",
+				"Replaces the service list or the regions of each service, or changes the maintenance window. It does not post an update. It does not change the title or the impact. Use post_incident_update for those.",
 			inputSchema: {
 				id,
 				serviceIds: z.array(z.string()).optional(),
 				scheduledStart: isoDate.optional(),
 				scheduledEnd: isoDate.optional(),
-				regionId: z
-					.string()
-					.min(1)
+				serviceRegions: serviceRegions
 					.nullable()
-					.optional()
 					.describe(
-						"A region id. Pass null to move the incident to Global. Omit this field to keep the region.",
+						"Replaces the regions of every affected service. Pass an empty list or null to make every service Global. Omit this field to keep the current regions.",
 					),
 			},
 		},
@@ -661,13 +676,7 @@ export function createMcpServer(
 				scheduledStart: isoDate,
 				scheduledEnd: isoDate,
 				serviceIds: z.array(z.string()).optional(),
-				regionId: z
-					.string()
-					.min(1)
-					.optional()
-					.describe(
-						"A region id from list_regions. Omit this field for Global.",
-					),
+				serviceRegions,
 				notify,
 			},
 		},
@@ -728,19 +737,15 @@ export function createMcpServer(
 					),
 				serviceStatus,
 				serviceStatuses,
+				serviceRegions: serviceRegions.describe(
+					"Regions for each service in serviceIds. On an update, a service that is not in this list keeps its regions.",
+				),
 				scheduledStart: isoDate
 					.optional()
 					.describe("New maintenance only: start of the window (ISO 8601)"),
 				scheduledEnd: isoDate
 					.optional()
 					.describe("New maintenance only: end of the window (ISO 8601)"),
-				regionId: z
-					.string()
-					.min(1)
-					.optional()
-					.describe(
-						"New events only: a region id from list_regions. Omit this field for Global.",
-					),
 			},
 		},
 		async (args) => {

@@ -173,18 +173,24 @@ describe("MCP handler", () => {
 			.data;
 		expect(region.name).toBe("United States");
 		expect((await call("list_regions")).data).toEqual([region]);
+		const api = (await call("create_service", { name: "API" })).data;
 		const incident = (
 			await call("create_incident", {
 				title: "API errors",
 				message: "Investigating",
-				regionId: region.id,
+				serviceIds: [api.id],
+				serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 				impact: "major",
 			})
 		).data;
-		expect(incident.regionId).toBe(region.id);
+		expect(incident.serviceRegions).toEqual([
+			{ serviceId: api.id, regionIds: [region.id] },
+		]);
 		const status = (await call("get_status", { regionId: region.id })).data;
 		expect(status.region).toBe("United States");
-		expect(status.activeIncidents[0].regionId).toBe(region.id);
+		expect(status.activeIncidents[0].serviceRegions).toEqual([
+			{ serviceId: api.id, regionIds: [region.id] },
+		]);
 		const missing = await call("get_status", { regionId: "reg_missing" });
 		expect(missing.isError).toBe(true);
 		expect(missing.text).toMatch(/not_found/);
@@ -197,7 +203,7 @@ describe("MCP handler", () => {
 		});
 		expect((await call("list_regions")).data).toEqual([]);
 		expect(
-			(await call("get_incident", { id: incident.id })).data.regionId,
+			(await call("get_incident", { id: incident.id })).data.serviceRegions,
 		).toBe(undefined);
 		await client.close();
 	});

@@ -1811,6 +1811,11 @@ describe("region actions", () => {
 			"/manage/regions?notice=Region created",
 		);
 		const [region] = await services.regions.list();
+		const europe = await services.regions.create(SYSTEM_ACTOR, {
+			name: "Europe",
+		});
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		expectSameFlash(
 			await redirectOf(
 				updateRegionAction(
@@ -1824,12 +1829,18 @@ describe("region actions", () => {
 				form({
 					title: "API down",
 					message: "Investigating",
-					regionId: region?.id ?? "",
+					serviceIds: [api.id, web.id],
+					serviceRegions: "",
+					[`regionIds:${api.id}`]: [region?.id ?? "", europe.id],
+					[`regionIds:${web.id}`]: "",
+					"regionIds:svc_other": region?.id ?? "",
 				}),
 			),
 		);
 		const [incident] = await services.incidents.list();
-		expect(incident?.regionId).toBe(region?.id);
+		expect(incident?.serviceRegions).toEqual([
+			{ serviceId: api.id, regionIds: [region?.id, europe.id] },
+		]);
 		expectSameFlash(
 			created,
 			`/manage/incidents/${incident?.id}?notice=Incident declared`,
@@ -1842,23 +1853,28 @@ describe("region actions", () => {
 			),
 			`/manage/incidents/${incident?.id}?notice=Incident saved`,
 		);
-		expect((await services.incidents.get(incident?.id ?? "")).regionId).toBe(
-			region?.id,
-		);
+		expect(
+			(await services.incidents.get(incident?.id ?? "")).serviceRegions,
+		).toEqual([{ serviceId: api.id, regionIds: [region?.id, europe.id] }]);
 		expectSameFlash(
 			await redirectOf(
 				editIncidentAction(
-					form({ id: incident?.id ?? "", title: "API outage", regionId: "" }),
+					form({
+						id: incident?.id ?? "",
+						title: "API outage",
+						serviceRegions: "",
+					}),
 				),
 			),
 			`/manage/incidents/${incident?.id}?notice=Incident saved`,
 		);
 		expect(
-			(await services.incidents.get(incident?.id ?? "")).regionId,
+			(await services.incidents.get(incident?.id ?? "")).serviceRegions,
 		).toBeUndefined();
 		const draft = await services.drafts.create(agentActor(), {
 			title: "Next",
 			message: "x",
+			serviceIds: [api.id],
 		});
 		expectSameFlash(
 			await redirectOf(
@@ -1867,17 +1883,23 @@ describe("region actions", () => {
 						id: draft.id,
 						title: "Next",
 						message: "Edited",
-						regionId: region?.id ?? "",
+						serviceIds: api.id,
+						serviceRegions: "",
+						[`regionIds:${api.id}`]: region?.id ?? "",
 					}),
 				),
 			),
 			`/manage/drafts/${draft.id}?notice=Draft saved`,
 		);
-		expect((await services.drafts.get(draft.id)).content.regionId).toBe(
-			region?.id,
-		);
+		expect(
+			(await services.drafts.get(draft.id)).content.serviceRegions,
+		).toEqual([{ serviceId: api.id, regionIds: [region?.id] }]);
 		expectSameFlash(
 			await redirectOf(deleteRegionAction(form({ id: region?.id ?? "" }))),
+			"/manage/regions?notice=Region deleted",
+		);
+		expectSameFlash(
+			await redirectOf(deleteRegionAction(form({ id: europe.id }))),
 			"/manage/regions?notice=Region deleted",
 		);
 		expect(await services.regions.list()).toEqual([]);

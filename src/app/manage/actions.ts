@@ -315,9 +315,41 @@ function serviceStatuses(form: FormData) {
 		}));
 }
 
+/**
+ * Regions for the selected services.
+ * Returns nothing when the form has no region choices.
+ * An empty list means every selected service is Global.
+ */
+function regionsByService(form: FormData, serviceIds?: readonly string[]) {
+	if (!form.has("serviceRegions")) {
+		return undefined;
+	}
+	const entries: { serviceId: string; regionIds: string[] }[] = [];
+	const seen = new Set<string>();
+	for (const key of form.keys()) {
+		if (!key.startsWith("regionIds:")) {
+			continue;
+		}
+		const serviceId = key.slice("regionIds:".length);
+		if (seen.has(serviceId)) {
+			continue;
+		}
+		if (serviceIds && !serviceIds.includes(serviceId)) {
+			continue;
+		}
+		seen.add(serviceId);
+		const regionIds = list(form, key);
+		if (regionIds.length > 0) {
+			entries.push({ serviceId, regionIds });
+		}
+	}
+	return entries;
+}
+
 export async function createIncidentAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("editor");
 	const kind = (text(form, "kind") || "incident") as IncidentKind;
+	const serviceIds = list(form, "serviceIds");
 	const incident = await attempt(`/manage/incidents/new?kind=${kind}`, () =>
 		services.incidents.create(actor, {
 			kind,
@@ -325,14 +357,14 @@ export async function createIncidentAction(form: FormData): Promise<void> {
 			message: text(form, "message"),
 			impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
 			status: nonEmpty(form, "status") as EventStatus | undefined,
-			serviceIds: list(form, "serviceIds"),
+			serviceIds,
 			serviceStatus: nonEmpty(form, "serviceStatus") as
 				| ServiceStatus
 				| undefined,
 			serviceStatuses: serviceStatuses(form),
+			serviceRegions: regionsByService(form, serviceIds),
 			scheduledStart: dateTime(form, "scheduledStart"),
 			scheduledEnd: dateTime(form, "scheduledEnd"),
-			regionId: nonEmpty(form, "regionId"),
 			notify: checkbox(form, "notify"),
 		}),
 	);
@@ -357,17 +389,19 @@ export async function postIncidentUpdateAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
 	const tab = text(form, "tab");
+	const addServiceIds = list(form, "addServiceIds");
 	await attempt(postedPath(id, tab, true), () =>
 		services.incidents.postUpdate(actor, id, {
 			title: nonEmpty(form, "title"),
 			impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
 			status: nonEmpty(form, "status") as EventStatus | undefined,
 			message: text(form, "message"),
-			serviceIds: list(form, "addServiceIds"),
+			serviceIds: addServiceIds,
 			serviceStatus: nonEmpty(form, "serviceStatus") as
 				| ServiceStatus
 				| undefined,
 			serviceStatuses: serviceStatuses(form),
+			serviceRegions: regionsByService(form, addServiceIds),
 			notify: checkbox(form, "notify"),
 		}),
 	);
@@ -381,8 +415,8 @@ export async function editIncidentAction(form: FormData): Promise<void> {
 		services.incidents.edit(actor, id, {
 			scheduledStart: dateTime(form, "scheduledStart"),
 			scheduledEnd: dateTime(form, "scheduledEnd"),
-			regionId: form.has("regionId")
-				? (nonEmpty(form, "regionId") ?? null)
+			serviceRegions: form.has("serviceRegions")
+				? regionsByService(form)
 				: undefined,
 		}),
 	);
@@ -403,17 +437,18 @@ export async function deleteIncidentAction(form: FormData): Promise<void> {
 function draftContent(form: FormData) {
 	const serviceIds = list(form, "serviceIds");
 	const addServiceIds = list(form, "addServiceIds");
+	const ids = serviceIds.length > 0 ? serviceIds : addServiceIds;
 	return {
 		title: nonEmpty(form, "title"),
 		impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
-		serviceIds: serviceIds.length > 0 ? serviceIds : addServiceIds,
+		serviceIds: ids,
 		scheduledStart: dateTime(form, "scheduledStart"),
 		scheduledEnd: dateTime(form, "scheduledEnd"),
 		status: nonEmpty(form, "status") as EventStatus | undefined,
 		message: text(form, "message"),
 		serviceStatus: nonEmpty(form, "serviceStatus") as ServiceStatus | undefined,
 		serviceStatuses: serviceStatuses(form),
-		regionId: form.has("regionId") ? nonEmpty(form, "regionId") : undefined,
+		serviceRegions: regionsByService(form, ids),
 	};
 }
 

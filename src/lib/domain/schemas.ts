@@ -9,6 +9,7 @@ import {
 	PROVIDER_TYPES,
 	ROLES,
 	SERVICE_STATUSES,
+	type ServiceRegions,
 	SUBSCRIBER_TYPES,
 } from "./types";
 
@@ -80,8 +81,36 @@ export const updateRegionSchema = z.object({
 });
 export type UpdateRegionInput = z.input<typeof updateRegionSchema>;
 
-/** A region id. Null clears the region and the incident becomes global. */
-const regionIdSchema = z.union([z.string().trim().min(1), z.null()]).optional();
+const serviceRegionEntry = z.object({
+	serviceId: z.string().min(1),
+	regionIds: z.array(z.string().trim().min(1)).max(100),
+});
+
+/**
+ * Regions for each affected service.
+ * An empty `regionIds` list means Global for that service.
+ * An empty list of services means every service is Global.
+ */
+const serviceRegionsSchema = z
+	.array(serviceRegionEntry)
+	.max(100)
+	.refine(
+		(entries) =>
+			new Set(entries.map((entry) => entry.serviceId)).size === entries.length,
+		"Give each service only one region list",
+	);
+
+function cleanServiceRegions(
+	entries: { serviceId: string; regionIds: string[] }[] | null | undefined,
+): ServiceRegions[] | null | undefined {
+	if (entries == null) {
+		return entries;
+	}
+	return entries.map((entry) => ({
+		serviceId: entry.serviceId,
+		regionIds: [...new Set(entry.regionIds)],
+	}));
+}
 
 export const createServiceSchema = z.object({
 	name: z.string().trim().min(1).max(120),
@@ -112,9 +141,11 @@ export const createIncidentSchema = z.object({
 	serviceIds: z.array(z.string().min(1)).max(100).optional(),
 	serviceStatus: serviceStatusSchema.optional(),
 	serviceStatuses: serviceStatusesSchema,
+	serviceRegions: serviceRegionsSchema
+		.optional()
+		.transform((entries) => cleanServiceRegions(entries)),
 	scheduledStart: isoDate.optional(),
 	scheduledEnd: isoDate.optional(),
-	regionId: z.string().trim().min(1).optional(),
 	notify: z.boolean().optional(),
 });
 export type CreateIncidentInput = z.input<typeof createIncidentSchema>;
@@ -128,6 +159,14 @@ export const incidentUpdateSchema = z.object({
 	serviceIds: z.array(z.string().min(1)).max(100).optional(),
 	serviceStatus: serviceStatusSchema.optional(),
 	serviceStatuses: serviceStatusesSchema,
+	/**
+	 * Regions for services in this update.
+	 * A service that is not in this list keeps its regions.
+	 * An empty `regionIds` list makes that service Global.
+	 */
+	serviceRegions: serviceRegionsSchema
+		.optional()
+		.transform((entries) => cleanServiceRegions(entries)),
 	notify: z.boolean().optional(),
 });
 export type IncidentUpdateInput = z.input<typeof incidentUpdateSchema>;
@@ -136,7 +175,15 @@ export const editIncidentSchema = z.object({
 	serviceIds: z.array(z.string().min(1)).max(100).optional(),
 	scheduledStart: isoDate.optional(),
 	scheduledEnd: isoDate.optional(),
-	regionId: regionIdSchema,
+	/**
+	 * Replaces the regions of every affected service.
+	 * `null` or `[]` makes every service Global.
+	 * Omit the field to keep the current regions.
+	 */
+	serviceRegions: serviceRegionsSchema
+		.nullable()
+		.optional()
+		.transform((entries) => cleanServiceRegions(entries)),
 });
 export type EditIncidentInput = z.input<typeof editIncidentSchema>;
 

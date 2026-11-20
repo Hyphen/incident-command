@@ -2,6 +2,7 @@ import { type ResolutionStats, resolutionStats } from "../domain/metrics";
 import {
 	changesOnRegion,
 	incidentOnRegion,
+	serviceOnRegion,
 	serviceStatusOnRegion,
 } from "../domain/regions";
 import { impactToStatus, worstStatus } from "../domain/status";
@@ -214,7 +215,16 @@ export class StatusService {
 				: changes;
 		const views: ServiceView[] = services.map((service) => ({
 			...service,
-			...computeUptime(service, viewChanges, relevant, window),
+			...computeUptime(
+				service,
+				viewChanges,
+				region
+					? relevant.filter((incident) =>
+							serviceOnRegion(incident, service.id, region.id),
+						)
+					: relevant,
+				window,
+			),
 			...(region && regionIncidents
 				? {
 						status: serviceStatusOnRegion(

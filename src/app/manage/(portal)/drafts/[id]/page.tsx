@@ -11,7 +11,6 @@ import { ConfirmButton } from "@/components/manage/confirm-button";
 import {
 	AddServices,
 	ImpactSelect,
-	RegionSelect,
 	ServicePicker,
 	ServiceStatusList,
 	ServiceStatusSelect,
@@ -124,9 +123,6 @@ function ReviewForm({
 						/>
 					)}
 				</div>
-				{isCreate && (
-					<RegionSelect regions={regions} value={content.regionId} />
-				)}
 				{isCreate && !isIncident && (
 					<WindowFields
 						start={content.scheduledStart}
@@ -153,6 +149,8 @@ function ReviewForm({
 						selected={content.serviceIds}
 						withStatus
 						statuses={content.serviceStatuses}
+						regions={regions}
+						serviceRegions={content.serviceRegions}
 					/>
 				)}
 				<ServiceStatusSelect
@@ -172,6 +170,8 @@ function ReviewForm({
 							affectedIds={(incident as Incident).serviceIds}
 							selected={content.serviceIds}
 							statuses={content.serviceStatuses}
+							regions={regions}
+							serviceRegions={content.serviceRegions}
 						/>
 					</>
 				)}
@@ -222,6 +222,16 @@ function DraftSummary({
 		);
 		return entry ? [{ service, status: entry.status }] : [];
 	});
+	const regionLabel =
+		content.serviceRegions && content.serviceRegions.length > 0
+			? regionNameFor(
+					{
+						serviceIds: content.serviceRegions.map((entry) => entry.serviceId),
+						serviceRegions: content.serviceRegions,
+					},
+					regions,
+				)
+			: undefined;
 	return (
 		<Card title="Notification">
 			<dl className="space-y-4 text-sm">
@@ -232,12 +242,7 @@ function DraftSummary({
 				{content.impact && (
 					<Item label="Impact">{IMPACT_LABELS[content.impact]}</Item>
 				)}
-				{regionNameFor({ regionId: content.regionId }, regions) &&
-					content.regionId && (
-						<Item label="Region">
-							{regionNameFor({ regionId: content.regionId }, regions)}
-						</Item>
-					)}
+				{regionLabel && <Item label="Regions">{regionLabel}</Item>}
 				{content.scheduledStart && content.scheduledEnd && (
 					<Item label="Window">
 						<LocalTime iso={content.scheduledStart} /> to{" "}

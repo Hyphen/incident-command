@@ -3,6 +3,7 @@ import type {
 	Incident,
 	Region,
 	Service,
+	ServiceRegions,
 	ServiceStatus,
 	ServiceStatusChange,
 } from "./types";
@@ -10,32 +11,180 @@ import type {
 /** The name of the default region. It is not a stored region. */
 export const GLOBAL_REGION_NAME = "Global";
 
-/** An incident with no region, or an incident in this region. */
-export function incidentOnRegion(
-	incident: Pick<Incident, "regionId">,
+type RegionalIncident = Pick<
+	Incident,
+	"serviceIds" | "serviceRegions" | "regionId"
+>;
+
+/** Regions stored for one service. An empty list means Global. */
+export function serviceRegionIds(
+	incident: RegionalIncident,
+	serviceId: string,
+): readonly string[] {
+	if (incident.serviceRegions) {
+		return (
+			incident.serviceRegions.find((entry) => entry.serviceId === serviceId)
+				?.regionIds ?? []
+		);
+	}
+	return incident.regionId ? [incident.regionId] : [];
+}
+
+/**
+ * The regions to store for the affected services.
+ * An old incident with only `regionId` uses that region for every service.
+ */
+export function boundServiceRegions(
+	incident: RegionalIncident,
+): ServiceRegions[] {
+	if (incident.serviceRegions) {
+		return incident.serviceRegions.flatMap((entry) => {
+			if (
+				!incident.serviceIds.includes(entry.serviceId) ||
+				entry.regionIds.length === 0
+			) {
+				return [];
+			}
+			return [
+				{
+					serviceId: entry.serviceId,
+					regionIds: [...new Set(entry.regionIds)],
+				},
+			];
+		});
+	}
+	if (!incident.regionId) {
+		return [];
+	}
+	return incident.serviceIds.map((serviceId) => ({
+		serviceId,
+		regionIds: [incident.regionId as string],
+	}));
+}
+
+/** Named regions that this incident affects, in first-seen order. */
+export function incidentRegionIds(incident: RegionalIncident): string[] {
+	const ids: string[] = [];
+	const add = (id: string) => {
+		if (!ids.includes(id)) {
+			ids.push(id);
+		}
+	};
+	if (incident.serviceRegions) {
+		for (const serviceId of incident.serviceIds) {
+			for (const id of serviceRegionIds(incident, serviceId)) {
+				add(id);
+			}
+		}
+		return ids;
+	}
+	if (incident.regionId) {
+		add(incident.regionId);
+	}
+	return ids;
+}
+
+/**
+ * True when at least one affected service is Global.
+ * An incident with no services is Global when it has no region.
+ */
+function affectsEveryRegion(incident: RegionalIncident): boolean {
+	if (incident.serviceRegions) {
+		return incident.serviceIds.some(
+			(serviceId) => serviceRegionIds(incident, serviceId).length === 0,
+		);
+	}
+	return incident.regionId === undefined;
+}
+
+/** True when this service is down on the region tab. */
+export function serviceOnRegion(
+	incident: RegionalIncident,
+	serviceId: string,
 	regionId: string,
 ): boolean {
+	if (!incident.serviceIds.includes(serviceId)) {
+		return false;
+	}
+	const ids = serviceRegionIds(incident, serviceId);
+	return ids.length === 0 || ids.includes(regionId);
+}
+
+/**
+ * True when the incident belongs on this region tab.
+ * A Global service puts the incident on every tab.
+ * An old incident with no `serviceRegions` uses its single region.
+ */
+export function incidentOnRegion(
+	incident: RegionalIncident,
+	regionId: string,
+): boolean {
+	if (incident.serviceRegions) {
+		return incident.serviceIds.some((serviceId) =>
+			serviceOnRegion(incident, serviceId, regionId),
+		);
+	}
 	return incident.regionId === undefined || incident.regionId === regionId;
 }
 
 /**
- * The label of the incident region. Returns nothing when no region exists,
+ * True when a status change from this incident counts on the region tab.
+ * An old incident counts for every service. A new incident counts only
+ * for a service that lists the region, or for a Global service.
+ */
+function countsOnRegion(
+	incident: RegionalIncident,
+	serviceId: string,
+	regionId: string,
+): boolean {
+	if (incident.serviceRegions) {
+		return serviceOnRegion(incident, serviceId, regionId);
+	}
+	return incident.regionId === undefined || incident.regionId === regionId;
+}
+
+/**
+ * The label of the incident regions. Returns nothing when no region exists,
  * so a page with no regions stays unchanged.
+ * Several regions use the order of `regions`.
  */
 export function regionNameFor(
-	incident: Pick<Incident, "regionId">,
+	incident: RegionalIncident,
 	regions: readonly Pick<Region, "id" | "name">[],
 ): string | undefined {
 	if (regions.length === 0) {
 		return undefined;
 	}
-	if (!incident.regionId) {
+	const names = regions
+		.filter((region) => incidentRegionIds(incident).includes(region.id))
+		.map((region) => region.name);
+	if (names.length === 0) {
 		return GLOBAL_REGION_NAME;
 	}
-	return (
-		regions.find((region) => region.id === incident.regionId)?.name ??
-		GLOBAL_REGION_NAME
+	if (affectsEveryRegion(incident)) {
+		return [GLOBAL_REGION_NAME, ...names].join(", ");
+	}
+	return names.join(", ");
+}
+
+/**
+ * The status page to open from an incident.
+ * One region opens that tab. Global, or more than one region, opens Global.
+ */
+export function regionTabPath(
+	incident: RegionalIncident,
+	regions: readonly Pick<Region, "id">[],
+): string {
+	if (affectsEveryRegion(incident)) {
+		return "/";
+	}
+	const known = regions.filter((region) =>
+		incidentRegionIds(incident).includes(region.id),
 	);
+	if (known.length === 1) {
+		return `/?region=${known[0]?.id}`;
+	}
+	return "/";
 }
 
 function byTime(a: ServiceStatusChange, b: ServiceStatusChange): number {
@@ -86,8 +235,7 @@ function heldByOther(
 	return incidents.some(
 		(incident) =>
 			incident.id !== exceptId &&
-			incidentOnRegion(incident, regionId) &&
-			incident.serviceIds.includes(serviceId) &&
+			serviceOnRegion(incident, serviceId, regionId) &&
 			at(incident.startedAt) <= resolvedAt &&
 			openAt(incident, when),
 	);
@@ -120,7 +268,7 @@ function replay(
 			continue;
 		}
 		const incident = byId.get(change.incidentId);
-		if (!incident || !incidentOnRegion(incident, regionId)) {
+		if (!incident || !countsOnRegion(incident, serviceId, regionId)) {
 			continue;
 		}
 		const resolved = incident.resolvedAt ? at(incident.resolvedAt) : undefined;
@@ -138,9 +286,8 @@ function replay(
 	for (const incident of incidents) {
 		if (
 			!openAt(incident, when) ||
-			!incidentOnRegion(incident, regionId) ||
-			seen.has(incident.id) ||
-			!incident.serviceIds.includes(serviceId)
+			!serviceOnRegion(incident, serviceId, regionId) ||
+			seen.has(incident.id)
 		) {
 			continue;
 		}
@@ -209,7 +356,7 @@ export function changesOnRegion(
 			times.add(at(change.createdAt));
 		}
 		for (const incident of incidents) {
-			if (!incidentOnRegion(incident, regionId)) {
+			if (!countsOnRegion(incident, serviceId, regionId)) {
 				continue;
 			}
 			const affects =

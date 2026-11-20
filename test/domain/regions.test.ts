@@ -1,7 +1,10 @@
 import {
+	boundServiceRegions,
 	changesOnRegion,
 	incidentOnRegion,
 	regionNameFor,
+	regionTabPath,
+	serviceOnRegion,
 	serviceStatusOnRegion,
 } from "@/lib/domain/regions";
 import type {
@@ -68,10 +71,55 @@ describe("incident regions", () => {
 		expect(incidentOnRegion(incident({ regionId: "reg_eu" }), "reg_us")).toBe(
 			false,
 		);
+		const split = incident({
+			serviceIds: ["svc_api", "svc_web"],
+			serviceRegions: [
+				{ serviceId: "svc_api", regionIds: ["reg_us", "reg_eu"] },
+				{ serviceId: "svc_web", regionIds: ["reg_us"] },
+			],
+		});
+		expect(incidentOnRegion(split, "reg_us")).toBe(true);
+		expect(incidentOnRegion(split, "reg_eu")).toBe(true);
+		expect(incidentOnRegion(split, "reg_apac")).toBe(false);
+		expect(serviceOnRegion(split, "svc_api", "reg_eu")).toBe(true);
+		expect(serviceOnRegion(split, "svc_web", "reg_eu")).toBe(false);
+		const mixed = incident({
+			serviceIds: ["svc_api", "svc_web"],
+			serviceRegions: [{ serviceId: "svc_api", regionIds: ["reg_us"] }],
+		});
+		expect(incidentOnRegion(mixed, "reg_apac")).toBe(true);
+		expect(serviceOnRegion(mixed, "svc_web", "reg_apac")).toBe(true);
+		expect(serviceOnRegion(mixed, "svc_api", "reg_apac")).toBe(false);
+		expect(
+			boundServiceRegions(
+				incident({
+					serviceIds: ["svc_api", "svc_web"],
+					regionId: "reg_us",
+				}),
+			),
+		).toEqual([
+			{ serviceId: "svc_api", regionIds: ["reg_us"] },
+			{ serviceId: "svc_web", regionIds: ["reg_us"] },
+		]);
+		expect(
+			boundServiceRegions(
+				incident({
+					serviceIds: ["svc_api"],
+					serviceRegions: [
+						{ serviceId: "svc_web", regionIds: ["reg_eu"] },
+						{ serviceId: "svc_api", regionIds: [] },
+						{ serviceId: "svc_api", regionIds: ["reg_us", "reg_us"] },
+					],
+				}),
+			),
+		).toEqual([{ serviceId: "svc_api", regionIds: ["reg_us"] }]);
 	});
 
 	it("names a region only when a region exists", () => {
-		const regions = [{ id: "reg_us", name: "United States" }];
+		const regions = [
+			{ id: "reg_us", name: "United States" },
+			{ id: "reg_eu", name: "Europe" },
+		];
 		expect(regionNameFor(incident({ regionId: "reg_us" }), [])).toBeUndefined();
 		expect(regionNameFor(incident(), regions)).toBe("Global");
 		expect(regionNameFor(incident({ regionId: "reg_us" }), regions)).toBe(
@@ -80,6 +128,51 @@ describe("incident regions", () => {
 		expect(regionNameFor(incident({ regionId: "reg_gone" }), regions)).toBe(
 			"Global",
 		);
+		expect(
+			regionNameFor(
+				incident({
+					serviceRegions: [
+						{ serviceId: "svc_api", regionIds: ["reg_eu", "reg_us"] },
+					],
+				}),
+				regions,
+			),
+		).toBe("United States, Europe");
+		expect(
+			regionNameFor(
+				incident({
+					serviceIds: ["svc_api", "svc_web"],
+					serviceRegions: [{ serviceId: "svc_api", regionIds: ["reg_us"] }],
+				}),
+				regions,
+			),
+		).toBe("Global, United States");
+		expect(
+			regionNameFor(
+				incident({
+					serviceIds: ["svc_api", "svc_web"],
+					serviceRegions: [
+						{ serviceId: "svc_api", regionIds: ["reg_us"] },
+						{ serviceId: "svc_web", regionIds: ["reg_us", "reg_eu"] },
+					],
+				}),
+				regions,
+			),
+		).toBe("United States, Europe");
+		expect(regionTabPath(incident({ regionId: "reg_us" }), regions)).toBe(
+			"/?region=reg_us",
+		);
+		expect(regionTabPath(incident(), regions)).toBe("/");
+		expect(
+			regionTabPath(
+				incident({
+					serviceRegions: [
+						{ serviceId: "svc_api", regionIds: ["reg_us", "reg_eu"] },
+					],
+				}),
+				regions,
+			),
+		).toBe("/");
 	});
 
 	it("replays the status of one region", () => {
@@ -204,6 +297,34 @@ describe("incident regions", () => {
 			),
 		).toBe("operational");
 		expect(status([], [incident({ impact: "none" })])).toBe("operational");
+		expect(
+			status(
+				[change("ch_split", AT, "major_outage", "operational", "inc_split")],
+				[
+					incident({
+						id: "inc_split",
+						serviceIds: ["svc_api", "svc_web"],
+						serviceRegions: [
+							{ serviceId: "svc_api", regionIds: ["reg_eu"] },
+							{ serviceId: "svc_web", regionIds: [here] },
+						],
+						impact: "critical",
+					}),
+				],
+			),
+		).toBe("operational");
+		expect(
+			status(
+				[change("ch_here", AT, "major_outage", "operational", "inc_here")],
+				[
+					incident({
+						id: "inc_here",
+						serviceRegions: [{ serviceId: "svc_api", regionIds: [here] }],
+						impact: "critical",
+					}),
+				],
+			),
+		).toBe("major_outage");
 		expect(
 			status([], [incident({ serviceIds: ["svc_web"], impact: "critical" })]),
 		).toBe("operational");

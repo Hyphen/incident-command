@@ -13,6 +13,7 @@ import {
 	type Region,
 	SERVICE_STATUSES,
 	type Service,
+	type ServiceRegions,
 	type ServiceStatus,
 	type ServiceStatusOverride,
 } from "@/lib/domain/types";
@@ -53,32 +54,94 @@ export function StatusSelect({
 	);
 }
 
-/** The region of an incident. Renders nothing when no region exists. */
-export function RegionSelect({
+function regionIdsFor(
+	serviceId: string,
+	values: readonly ServiceRegions[],
+): string[] {
+	return values.find((entry) => entry.serviceId === serviceId)?.regionIds ?? [];
+}
+
+/**
+ * Region choices for one service. No choice means Global.
+ * The form sends each choice as `regionIds:<service id>`.
+ */
+function ServiceRegionChoices({
+	service,
 	regions,
-	value,
+	selected,
+	hiddenUntilChecked = false,
 }: {
+	service: Service;
 	regions: readonly Region[];
-	value?: string;
+	selected: readonly string[];
+	/** Hides the choices until the service checkbox is checked. */
+	hiddenUntilChecked?: boolean;
 }) {
-	if (regions.length === 0) {
+	return (
+		<div
+			className={
+				hiddenUntilChecked
+					? "hidden w-full basis-full peer-checked:block"
+					: "w-full basis-full"
+			}
+		>
+			<p className="text-xs text-muted">
+				Regions for {service.name}. Select none for Global.
+			</p>
+			<div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+				{regions.map((region) => (
+					<label key={region.id} className="flex items-center gap-1.5 text-xs">
+						<input
+							type="checkbox"
+							name={`regionIds:${service.id}`}
+							value={region.id}
+							defaultChecked={selected.includes(region.id)}
+							className="size-3.5 accent-brand"
+						/>
+						{region.name}
+					</label>
+				))}
+			</div>
+		</div>
+	);
+}
+
+/**
+ * Regions for services that are already on the incident.
+ * The form sends `serviceRegions` so an empty choice can clear a region.
+ */
+export function ServiceRegionEditor({
+	services,
+	regions,
+	values = [],
+}: {
+	services: readonly Service[];
+	regions: readonly Region[];
+	values?: readonly ServiceRegions[];
+}) {
+	if (regions.length === 0 || services.length === 0) {
 		return null;
 	}
 	return (
-		<Field
-			label="Region"
-			htmlFor="regionId"
-			hint="Global is the default. It shows on every region tab."
-		>
-			<Select id="regionId" name="regionId" defaultValue={value ?? ""}>
-				<option value="">Global</option>
-				{regions.map((region) => (
-					<option key={region.id} value={region.id}>
-						{region.name}
-					</option>
+		<fieldset className="space-y-2">
+			<legend className="text-sm font-medium">Regions of each service</legend>
+			<input type="hidden" name="serviceRegions" value="" />
+			<div className="space-y-2">
+				{services.map((service) => (
+					<div
+						key={service.id}
+						className="rounded-lg border border-border px-3 py-2 text-sm"
+					>
+						<p className="mb-1 truncate">{service.name}</p>
+						<ServiceRegionChoices
+							service={service}
+							regions={regions}
+							selected={regionIdsFor(service.id, values)}
+						/>
+					</div>
 				))}
-			</Select>
-		</Field>
+			</div>
+		</fieldset>
 	);
 }
 
@@ -247,6 +310,8 @@ export function ServicePicker({
 	selected = [],
 	withStatus = false,
 	statuses = [],
+	regions = [],
+	serviceRegions = [],
 	legend = "Affected services",
 	emptyLabel = "No services yet.",
 	name = "serviceIds",
@@ -260,6 +325,10 @@ export function ServicePicker({
 	withStatus?: boolean;
 	/** The saved status of each service, for `withStatus`. */
 	statuses?: readonly ServiceStatusOverride[];
+	/** Named regions. Each selected service can use one, more than one, or none. */
+	regions?: readonly Region[];
+	/** The saved regions of each service. */
+	serviceRegions?: readonly ServiceRegions[];
 	legend?: string;
 	emptyLabel?: string;
 	/** The checkbox field name. */
@@ -270,34 +339,44 @@ export function ServicePicker({
 	showCurrent?: boolean;
 	hint?: string;
 }) {
+	const showRegions = regions.length > 0;
 	return (
 		<fieldset className="space-y-2">
 			<legend className="text-sm font-medium">{legend}</legend>
 			{/* The form sends the field also when no service is selected. A
 			    server action then knows that the form has this picker. */}
 			<input type="hidden" name={name} value="" />
+			{showRegions && <input type="hidden" name="serviceRegions" value="" />}
 			{services.length === 0 ? (
 				<p className="text-sm text-muted">{emptyLabel}</p>
 			) : (
 				<div
-					className={withStatus ? "grid gap-2" : "grid gap-2 sm:grid-cols-2"}
+					className={
+						withStatus || showRegions
+							? "grid gap-2"
+							: "grid gap-2 sm:grid-cols-2"
+					}
 				>
 					{services.map((service) => (
 						<div
 							key={service.id}
-							className="group flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm sm:flex-nowrap"
+							className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
 						>
 							{candidateName && (
 								<input type="hidden" name={candidateName} value={service.id} />
 							)}
-							<label className="flex min-w-0 flex-1 items-center gap-2">
-								<input
-									type="checkbox"
-									name={name}
-									value={service.id}
-									defaultChecked={selected.includes(service.id)}
-									className="size-4 accent-brand"
-								/>
+							<input
+								id={`${name}-${service.id}`}
+								type="checkbox"
+								name={name}
+								value={service.id}
+								defaultChecked={selected.includes(service.id)}
+								className="peer size-4 accent-brand"
+							/>
+							<label
+								htmlFor={`${name}-${service.id}`}
+								className="flex min-w-0 flex-1 items-center gap-2"
+							>
 								<span className="min-w-0 flex-1">
 									<span className="block truncate">{service.name}</span>
 									{showCurrent && (
@@ -318,7 +397,15 @@ export function ServicePicker({
 								<OwnStatusSelect
 									service={service}
 									value={statusOf(statuses, service.id)}
-									className="hidden group-has-[input:checked]:block"
+									className="hidden peer-checked:block"
+								/>
+							)}
+							{showRegions && (
+								<ServiceRegionChoices
+									service={service}
+									regions={regions}
+									selected={regionIdsFor(service.id, serviceRegions)}
+									hiddenUntilChecked
 								/>
 							)}
 						</div>
@@ -341,11 +428,15 @@ export function AddServices({
 	affectedIds,
 	selected = [],
 	statuses = [],
+	regions = [],
+	serviceRegions = [],
 }: {
 	catalog: Service[];
 	affectedIds: readonly string[];
 	selected?: readonly string[];
 	statuses?: readonly ServiceStatusOverride[];
+	regions?: readonly Region[];
+	serviceRegions?: readonly ServiceRegions[];
 }) {
 	const available = catalog.filter(
 		(service) => !affectedIds.includes(service.id),
@@ -357,6 +448,8 @@ export function AddServices({
 			selected={[...selected]}
 			withStatus
 			statuses={statuses}
+			regions={regions}
+			serviceRegions={serviceRegions}
 			name="addServiceIds"
 			candidateName="addServiceCandidate"
 			showCurrent

@@ -1,4 +1,5 @@
 import { createId } from "../crypto";
+import { boundServiceRegions } from "../domain/regions";
 import {
 	type CreateIncidentInput,
 	createIncidentSchema,
@@ -21,6 +22,7 @@ import {
 	type IncidentUpdate,
 	MAINTENANCE_STATUSES,
 	type Service,
+	type ServiceRegions,
 	type ServiceStatus,
 	type ServiceStatusOverride,
 	type StoredIncident,
@@ -141,6 +143,64 @@ function assertAffected(
 	}
 }
 
+/** Checks that each region list belongs to an affected service. */
+function assertRegionServices(
+	serviceIds: readonly string[],
+	regions: readonly ServiceRegions[] = [],
+): void {
+	const extra = regions
+		.map((entry) => entry.serviceId)
+		.filter((id) => !serviceIds.includes(id));
+	if (extra.length > 0) {
+		throw new ValidationError(
+			`serviceRegions: only an affected service can have regions. Add ${extra.join(", ")} to the affected services, or remove the regions.`,
+		);
+	}
+}
+
+/**
+ * Writes `serviceRegions` and drops the old `regionId`.
+ * `replace` uses `patch` as the full list. `null` or `[]` makes every service Global.
+ * Omit `patch` to keep the current regions of the services that remain.
+ * `merge` sets only the services in `patch`. Other services keep their regions.
+ * An empty `regionIds` list makes that service Global.
+ */
+function assignRegions(
+	incident: Incident,
+	serviceIds: readonly string[],
+	patch: readonly ServiceRegions[] | null | undefined,
+	mode: "replace" | "merge",
+): void {
+	const map = new Map<string, string[]>();
+	if (patch === undefined || mode === "merge") {
+		for (const entry of boundServiceRegions(incident)) {
+			map.set(entry.serviceId, entry.regionIds);
+		}
+	}
+	if (patch) {
+		for (const entry of patch) {
+			if (
+				!serviceIds.includes(entry.serviceId) ||
+				entry.regionIds.length === 0
+			) {
+				map.delete(entry.serviceId);
+				continue;
+			}
+			map.set(entry.serviceId, entry.regionIds);
+		}
+	}
+	delete incident.regionId;
+	const serviceRegions = [...map.entries()].map(([serviceId, regionIds]) => ({
+		serviceId,
+		regionIds,
+	}));
+	if (serviceRegions.length > 0) {
+		incident.serviceRegions = serviceRegions;
+	} else {
+		delete incident.serviceRegions;
+	}
+}
+
 function assertWindow(start?: string, end?: string): void {
 	if (start && end && new Date(end).getTime() <= new Date(start).getTime()) {
 		throw new ValidationError("scheduledEnd must be after scheduledStart");
@@ -252,10 +312,11 @@ export class IncidentService {
 		assertWindow(data.scheduledStart, data.scheduledEnd);
 		const serviceIds = await this.validateServices(data.serviceIds ?? []);
 		assertAffected(serviceIds, data.serviceStatuses);
-		if (data.regionId) {
-			await this.regions.get(data.regionId);
-		}
-		return { ...data, serviceIds };
+		const serviceRegions = await this.validateRegions(
+			serviceIds,
+			data.serviceRegions,
+		);
+		return { ...data, serviceIds, serviceRegions };
 	}
 
 	/**
@@ -271,11 +332,16 @@ export class IncidentService {
 		const addIds = await this.validateServices(data.serviceIds ?? []);
 		const serviceIds = mergeServiceIds(incident.serviceIds, addIds);
 		assertAffected(serviceIds, data.serviceStatuses);
+		const serviceRegions = await this.validateRegions(
+			serviceIds,
+			data.serviceRegions,
+		);
 		return {
 			incident,
 			data: {
 				...data,
 				serviceIds: addIds.length > 0 ? addIds : undefined,
+				serviceRegions,
 			},
 		};
 	}
@@ -325,9 +391,7 @@ export class IncidentService {
 		if (isClosedStatus(status)) {
 			incident.resolvedAt = now;
 		}
-		if (data.regionId) {
-			incident.regionId = data.regionId;
-		}
+		assignRegions(incident, serviceIds, data.serviceRegions ?? [], "replace");
 		await this.ctx.store.insert("incidents", incident);
 		await this.syncServices(
 			incident,
@@ -390,6 +454,7 @@ export class IncidentService {
 			} else {
 				delete next.resolvedAt;
 			}
+			assignRegions(next, serviceIds, data.serviceRegions, "merge");
 			return next;
 		});
 		const update = next.updates.at(-1) as IncidentUpdate;
@@ -444,26 +509,21 @@ export class IncidentService {
 	): Promise<Incident> {
 		requirePermission(actor, "incidents.edit");
 		const patch = parse(editIncidentSchema, input);
+		const current = await this.get(id);
 		const serviceIds = patch.serviceIds
 			? await this.validateServices(patch.serviceIds)
-			: undefined;
-		const regionId =
-			patch.regionId === undefined
-				? undefined
-				: patch.regionId === null
-					? null
-					: (await this.regions.get(patch.regionId)).id;
+			: current.serviceIds;
+		const serviceRegions = await this.validateRegions(
+			serviceIds,
+			patch.serviceRegions,
+		);
 		const { next } = await this.mutate(id, (current) => {
 			const next: Incident = {
 				...current,
-				serviceIds: serviceIds ?? current.serviceIds,
+				serviceIds: patch.serviceIds ? serviceIds : current.serviceIds,
 				updatedAt: iso(this.ctx.now()),
 			};
-			if (regionId === null) {
-				delete next.regionId;
-			} else if (regionId) {
-				next.regionId = regionId;
-			}
+			assignRegions(next, next.serviceIds, serviceRegions, "replace");
 			if (current.kind === "maintenance") {
 				const scheduledStart =
 					patch.scheduledStart ?? (current.scheduledStart as string);
@@ -531,6 +591,28 @@ export class IncidentService {
 			await this.catalog.get(id);
 		}
 		return unique;
+	}
+
+	/** Checks each region id. `null` and `undefined` pass through. */
+	private async validateRegions(
+		serviceIds: readonly string[],
+		regions: ServiceRegions[] | null | undefined,
+	): Promise<ServiceRegions[] | null | undefined> {
+		if (regions == null) {
+			return regions;
+		}
+		assertRegionServices(serviceIds, regions);
+		const cleaned: ServiceRegions[] = [];
+		for (const entry of regions) {
+			for (const regionId of entry.regionIds) {
+				await this.regions.get(regionId);
+			}
+			cleaned.push({
+				serviceId: entry.serviceId,
+				regionIds: entry.regionIds,
+			});
+		}
+		return cleaned;
 	}
 
 	/** Decides which status (if any) the affected services should move to. */

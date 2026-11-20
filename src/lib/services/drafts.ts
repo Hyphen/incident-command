@@ -54,12 +54,7 @@ type Target =
 	| { action: "update"; incidentId: string };
 
 /** Fields that only a new incident or maintenance uses. */
-const CREATE_ONLY_FIELDS = [
-	"kind",
-	"scheduledStart",
-	"scheduledEnd",
-	"regionId",
-] as const;
+const CREATE_ONLY_FIELDS = ["kind", "scheduledStart", "scheduledEnd"] as const;
 
 function targetOf(draft: NotificationDraft): Target {
 	return draft.action === "update"
@@ -301,6 +296,7 @@ export class DraftService {
 					serviceStatus: input.serviceStatus,
 					serviceStatuses: input.serviceStatuses,
 					serviceIds: input.serviceIds,
+					serviceRegions: input.serviceRegions,
 				},
 			);
 			const content: DraftContent = {
@@ -310,6 +306,9 @@ export class DraftService {
 				serviceStatuses: data.serviceStatuses,
 				serviceIds: data.serviceIds,
 			};
+			if (data.serviceRegions && data.serviceRegions.length > 0) {
+				content.serviceRegions = data.serviceRegions;
+			}
 			if (data.title !== undefined && data.title !== incident.title) {
 				content.title = data.title;
 			}
@@ -332,8 +331,8 @@ export class DraftService {
 			serviceStatus: data.serviceStatus,
 			serviceStatuses: data.serviceStatuses,
 		};
-		if (data.regionId) {
-			content.regionId = data.regionId;
+		if (data.serviceRegions && data.serviceRegions.length > 0) {
+			content.serviceRegions = data.serviceRegions;
 		}
 		if (target.kind === "maintenance") {
 			content.scheduledStart = data.scheduledStart;
@@ -360,6 +359,7 @@ export class DraftService {
 					serviceStatus: content.serviceStatus,
 					serviceStatuses: content.serviceStatuses,
 					serviceIds: content.serviceIds,
+					serviceRegions: content.serviceRegions,
 				},
 				{ id },
 			);

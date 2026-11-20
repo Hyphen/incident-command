@@ -1119,24 +1119,23 @@ describe("incident pages", () => {
 	it("shows a region on the incident forms", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "editor");
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
 		const region = await services.regions.create(SYSTEM_ACTOR, {
 			name: "United States",
 		});
 		const incident = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "US down",
 			message: "Down",
-			regionId: region.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
 		const list = render(await IncidentsPage(flash()));
 		expect(screen.getByText(/United States/)).toBeInTheDocument();
 		list.unmount();
 		const created = render(await NewIncidentPage(flash()));
-		expect(screen.getByLabelText("Region")).toHaveValue("");
 		expect(
-			within(screen.getByLabelText("Region")).getByRole("option", {
-				name: "United States",
-			}),
-		).toBeInTheDocument();
+			screen.getByRole("checkbox", { name: "United States" }),
+		).not.toBeChecked();
 		created.unmount();
 		render(
 			await IncidentPage({
@@ -1145,9 +1144,11 @@ describe("incident pages", () => {
 			}),
 		);
 		expect(screen.getAllByText("United States").length).toBeGreaterThan(0);
-		expect(screen.getByLabelText("Region")).toHaveValue(region.id);
 		expect(
-			screen.getByRole("button", { name: "Save region" }),
+			screen.getByRole("checkbox", { name: "United States" }),
+		).toBeChecked();
+		expect(
+			screen.getByRole("button", { name: "Save regions" }),
 		).toBeInTheDocument();
 	});
 
@@ -1509,10 +1510,12 @@ describe("notification draft pages", () => {
 		const region = await services.regions.create(SYSTEM_ACTOR, {
 			name: "United States",
 		});
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
 		const withRegion = await services.drafts.create(AGENT, {
 			title: "US errors",
 			message: "Looking",
-			regionId: region.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
 		const global = await services.drafts.create(AGENT, {
 			title: "Global errors",
@@ -1520,7 +1523,9 @@ describe("notification draft pages", () => {
 		});
 		await signIn(app, "editor");
 		const editor = render(await draftPage(withRegion.id));
-		expect(screen.getByLabelText("Region")).toHaveValue(region.id);
+		expect(
+			screen.getByRole("checkbox", { name: "United States" }),
+		).toBeChecked();
 		editor.unmount();
 		await signIn(app, "viewer");
 		const named = render(await draftPage(withRegion.id));
