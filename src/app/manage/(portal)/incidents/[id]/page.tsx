@@ -10,7 +10,6 @@ import { ConfirmButton } from "@/components/manage/confirm-button";
 import {
 	AddServices,
 	ImpactSelect,
-	ServicePicker,
 	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
@@ -135,10 +134,6 @@ export default async function ManageIncidentPage({
 										end={incident.scheduledEnd}
 									/>
 								)}
-								<ServicePicker
-									services={catalog}
-									selected={incident.serviceIds}
-								/>
 								<SubmitButton className={buttonClass.secondary}>
 									Save details
 								</SubmitButton>

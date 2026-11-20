@@ -209,7 +209,6 @@ export async function editIncidentAction(form: FormData): Promise<void> {
 		services.incidents.edit(actor, id, {
 			title: text(form, "title"),
 			impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
-			serviceIds: list(form, "serviceIds"),
 			scheduledStart: dateTime(form, "scheduledStart"),
 			scheduledEnd: dateTime(form, "scheduledEnd"),
 		}),

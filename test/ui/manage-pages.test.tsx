@@ -682,7 +682,13 @@ describe("incident pages", () => {
 			screen.getByRole("button", { name: "Post update" }),
 		).toBeInTheDocument();
 		expect(screen.getByDisplayValue("API errors")).toBeInTheDocument();
-		expect(screen.getByRole("checkbox", { name: /API/ })).toBeChecked();
+		const detailsForm = screen
+			.getByRole("button", { name: "Save details" })
+			.closest("form") as HTMLElement;
+		expect(
+			within(detailsForm).queryByText("Affected services"),
+		).not.toBeInTheDocument();
+		expect(within(detailsForm).queryByRole("checkbox")).not.toBeInTheDocument();
 		expect(screen.getByText(/System \(system\)/)).toBeInTheDocument();
 		expect(
 			screen.getByRole("button", { name: "Delete incident" }),

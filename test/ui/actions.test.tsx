@@ -293,9 +293,10 @@ describe("incident actions", () => {
 			),
 			`/manage/incidents/${incident?.id}?notice=Incident saved`,
 		);
-		expect((await services.incidents.get(incident?.id ?? "")).title).toBe(
-			"API outage",
-		);
+		expect(await services.incidents.get(incident?.id ?? "")).toMatchObject({
+			title: "API outage",
+			serviceIds: [api.id],
+		});
 
 		expectSameFlash(
 			await redirectOf(deleteIncidentAction(form({ id: incident?.id ?? "" }))),
