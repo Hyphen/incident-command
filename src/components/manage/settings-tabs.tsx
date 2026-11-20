@@ -16,27 +16,33 @@ export const SETTINGS_SECTIONS: {
 	},
 ];
 
-/** The section links at the top of each settings page. */
+/**
+ * The section links at the top of each settings page. The border is on
+ * the outer element. The nav overlaps that border, so horizontal scroll
+ * does not show a vertical scrollbar.
+ */
 export function SettingsTabs({ active }: { active: SettingsSection }) {
 	return (
-		<nav
-			aria-label="Settings sections"
-			className="flex gap-1 overflow-x-auto border-b border-border"
-		>
-			{SETTINGS_SECTIONS.map((section) => (
-				<Link
-					key={section.key}
-					href={section.href}
-					aria-current={section.key === active ? "page" : undefined}
-					className={`-mb-px border-b-2 px-3 py-2 text-sm whitespace-nowrap ${
-						section.key === active
-							? "border-brand font-medium text-fg"
-							: "border-transparent text-muted hover:text-fg"
-					}`}
-				>
-					{section.label}
-				</Link>
-			))}
-		</nav>
+		<div className="border-b border-border">
+			<nav
+				aria-label="Settings sections"
+				className="-mb-px flex gap-1 overflow-x-auto overflow-y-hidden"
+			>
+				{SETTINGS_SECTIONS.map((section) => (
+					<Link
+						key={section.key}
+						href={section.href}
+						aria-current={section.key === active ? "page" : undefined}
+						className={`border-b-2 px-3 py-2 text-sm whitespace-nowrap ${
+							section.key === active
+								? "border-brand font-medium text-fg"
+								: "border-transparent text-muted hover:text-fg"
+						}`}
+					>
+						{section.label}
+					</Link>
+				))}
+			</nav>
+		</div>
 	);
 }
