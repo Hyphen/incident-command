@@ -43,29 +43,41 @@ function byTime(a: ServiceStatusChange, b: ServiceStatusChange): number {
 }
 
 /**
- * Orders changes that share one time. The order follows the status chain.
- * An id can sort first when that change is not the first change.
+ * One status chain, or nothing when more than one order is possible.
+ * A branch, a fork, or a leftover change is not one chain.
+ */
+function unambiguousChain(
+	group: readonly ServiceStatusChange[],
+): ServiceStatusChange[] | undefined {
+	const remaining = group.slice();
+	const produced = new Set(remaining.map((change) => change.status));
+	let pending = remaining.filter(
+		(change) => !produced.has(change.previousStatus),
+	);
+	if (pending.length !== 1) {
+		return undefined;
+	}
+	const ordered: ServiceStatusChange[] = [];
+	while (pending.length === 1) {
+		const current = pending[0] as ServiceStatusChange;
+		ordered.push(current);
+		remaining.splice(remaining.indexOf(current), 1);
+		pending = remaining.filter(
+			(change) => change.previousStatus === current.status,
+		);
+	}
+	return remaining.length === 0 ? ordered : undefined;
+}
+
+/**
+ * Orders changes that share one time.
+ * One chain follows the status links. Any other group stays in write order.
  */
 function chainSameTime(
 	group: readonly ServiceStatusChange[],
 ): ServiceStatusChange[] {
-	const remaining = group.slice().sort(byTime);
-	const ordered: ServiceStatusChange[] = [];
-	let previous: ServiceStatus | undefined;
-	while (remaining.length > 0) {
-		const produced = new Set(remaining.map((change) => change.status));
-		const index =
-			previous === undefined
-				? remaining.findIndex((change) => !produced.has(change.previousStatus))
-				: remaining.findIndex((change) => change.previousStatus === previous);
-		const next = remaining.splice(
-			index === -1 ? 0 : index,
-			1,
-		)[0] as ServiceStatusChange;
-		ordered.push(next);
-		previous = next.status;
-	}
-	return ordered;
+	const written = group.slice().sort(byTime);
+	return unambiguousChain(written) ?? written;
 }
 
 /** Orders the changes of one service. The same time follows the status chain. */

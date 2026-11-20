@@ -267,6 +267,25 @@ describe("incident regions", () => {
 				],
 			),
 		).toBe("operational");
+		const branched = [
+			change("ch_a", AT, "degraded_performance", "operational"),
+			change("ch_b", AT, "partial_outage", "operational"),
+			change("ch_c", AT, "major_outage", "degraded_performance"),
+		];
+		expect(status(branched, [])).toBe("major_outage");
+		expect(changesOnRegion(branched, [], here).at(-1)?.status).toBe(
+			"major_outage",
+		);
+		expect(
+			status(
+				[
+					change("ch_a", AT, "degraded_performance", "operational"),
+					change("ch_b", AT, "major_outage", "degraded_performance"),
+					change("ch_c", AT, "partial_outage", "degraded_performance"),
+				],
+				[],
+			),
+		).toBe("partial_outage");
 	});
 
 	it("keeps a status that a close recorded", () => {
