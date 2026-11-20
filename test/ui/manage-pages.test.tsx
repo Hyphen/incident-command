@@ -888,22 +888,25 @@ describe("notification draft pages", () => {
 
 		render(await DraftsPage(flash({ notice: "draft_discarded" })));
 		expect(screen.getByRole("status")).toHaveTextContent("Draft discarded");
-		expect(screen.getByRole("link", { name: "API errors" })).toHaveAttribute(
+		expect(screen.getByRole("link", { name: /^API errors/ })).toHaveAttribute(
 			"href",
 			`/manage/drafts/${created.id}`,
 		);
-		expect(screen.getByRole("link", { name: "Database slow" })).toHaveAttribute(
-			"href",
-			`/manage/drafts/${update.id}`,
-		);
 		expect(
-			screen.getByRole("link", { name: "Deleted incident" }),
+			screen.getByRole("link", { name: /^Database slow/ }),
+		).toHaveAttribute("href", `/manage/drafts/${update.id}`);
+		expect(
+			screen.getByRole("link", { name: /^Deleted incident/ }),
 		).toBeInTheDocument();
 		expect(
 			screen.getAllByText(/New incident · Drafted by Test agent/),
 		).toHaveLength(1);
 		expect(screen.getAllByText(/Incident update · Drafted by/)).toHaveLength(2);
-		expect(screen.getAllByText("Waiting for review")).toHaveLength(4);
+		expect(
+			screen.getByRole("heading", { name: "Waiting for review" }),
+		).toBeInTheDocument();
+		expect(screen.getAllByText("Waiting for review")).toHaveLength(1);
+		expect(screen.getAllByText("Review")).toHaveLength(3);
 		expect(screen.getByText("Discarded by Editor User")).toBeInTheDocument();
 		expect(screen.getByText(/New maintenance/)).toBeInTheDocument();
 	});

@@ -33,35 +33,45 @@ async function withTitles(
 	);
 }
 
+/**
+ * Lists drafts. Each row is one link. A pending row shows Review.
+ * A reviewed row shows its state.
+ */
 function DraftList({ items, empty }: { items: DraftItem[]; empty: string }) {
 	if (items.length === 0) {
 		return <EmptyState>{empty}</EmptyState>;
 	}
 	return (
-		<ul className="divide-y divide-border">
-			{items.map(({ draft, title }) => (
-				<li
-					key={draft.id}
-					className="flex flex-wrap items-center justify-between gap-2 py-3"
-				>
-					<div className="min-w-0">
+		<ul className="space-y-2">
+			{items.map(({ draft, title }) => {
+				const pending = draft.state === "pending";
+				return (
+					<li key={draft.id}>
 						<Link
 							href={draftPath(draft.id)}
-							className="font-medium break-words hover:underline"
+							className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border border-l-4 bg-bg py-3 pr-4 pl-4 outline-none transition-colors hover:border-brand hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${pending ? "border-l-degraded" : "border-l-border"}`}
 						>
-							{title}
+							<span className="min-w-0">
+								<span className="block font-medium break-words">{title}</span>
+								<span className="mt-0.5 block text-xs text-muted">
+									{DRAFT_LABELS[draft.action][draft.kind]} · Drafted by{" "}
+									{draft.createdBy.name} · <LocalTime iso={draft.createdAt} />
+								</span>
+							</span>
+							{pending ? (
+								<span className="inline-flex shrink-0 items-center rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-brand-fg">
+									Review
+								</span>
+							) : (
+								<span className="inline-flex shrink-0 items-center rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs font-medium text-muted">
+									{DRAFT_STATE_LABELS[draft.state]}
+									{draft.reviewedBy && ` by ${draft.reviewedBy.name}`}
+								</span>
+							)}
 						</Link>
-						<p className="text-xs text-muted">
-							{DRAFT_LABELS[draft.action][draft.kind]} · Drafted by{" "}
-							{draft.createdBy.name} · <LocalTime iso={draft.createdAt} />
-						</p>
-					</div>
-					<span className="text-xs text-muted">
-						{DRAFT_STATE_LABELS[draft.state]}
-						{draft.reviewedBy && ` by ${draft.reviewedBy.name}`}
-					</span>
-				</li>
-			))}
+					</li>
+				);
+			})}
 		</ul>
 	);
 }
@@ -87,10 +97,11 @@ export default async function DraftsPage({
 			flash={flash}
 			health={app.store.health}
 		>
-			<Card
-				title="Waiting for review"
-				description="Agents write drafts with the draft_notification MCP tool. Nothing is published or sent until an editor approves a draft."
-			>
+			<Card title="Waiting for review">
+				<p className="mb-4 text-sm text-muted">
+					Agents write drafts with the draft_notification MCP tool. Nothing is
+					published or sent until an editor approves a draft.
+				</p>
 				<DraftList items={pendingItems} empty="No drafts wait for review." />
 			</Card>
 			<Card title="Reviewed" description="The 50 most recent.">
