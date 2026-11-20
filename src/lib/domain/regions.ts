@@ -97,7 +97,10 @@ function affectsEveryRegion(incident: RegionalIncident): boolean {
 	return incident.regionId === undefined;
 }
 
-/** True when this service is down on the region tab. */
+/**
+ * True when this service lists this region.
+ * A Global service is not down on a region tab.
+ */
 export function serviceOnRegion(
 	incident: RegionalIncident,
 	serviceId: string,
@@ -106,14 +109,13 @@ export function serviceOnRegion(
 	if (!incident.serviceIds.includes(serviceId)) {
 		return false;
 	}
-	const ids = serviceRegionIds(incident, serviceId);
-	return ids.length === 0 || ids.includes(regionId);
+	return serviceRegionIds(incident, serviceId).includes(regionId);
 }
 
 /**
  * True when the incident belongs on this region tab.
- * A Global service puts the incident on every tab.
- * An old incident with no `serviceRegions` uses its single region.
+ * A service must list the region. A Global service does not.
+ * An old incident belongs only when its `regionId` matches.
  */
 export function incidentOnRegion(
 	incident: RegionalIncident,
@@ -124,13 +126,12 @@ export function incidentOnRegion(
 			serviceOnRegion(incident, serviceId, regionId),
 		);
 	}
-	return incident.regionId === undefined || incident.regionId === regionId;
+	return incident.regionId === regionId;
 }
 
 /**
  * True when a status change from this incident counts on the region tab.
- * An old incident counts for every service. A new incident counts for a
- * service that lists the region, or for a Global service.
+ * A Global service does not count. An old incident counts only in its region.
  * A service that left the incident still counts when its region entry remains.
  */
 function countsOnRegion(
@@ -142,12 +143,9 @@ function countsOnRegion(
 		const entry = incident.serviceRegions.find(
 			(item) => item.serviceId === serviceId,
 		);
-		if (entry) {
-			return entry.regionIds.length === 0 || entry.regionIds.includes(regionId);
-		}
-		return incident.serviceIds.includes(serviceId);
+		return entry?.regionIds.includes(regionId) ?? false;
 	}
-	return incident.regionId === undefined || incident.regionId === regionId;
+	return incident.regionId === regionId;
 }
 
 /**
@@ -196,6 +194,66 @@ export function regionTabPath(
 
 function byTime(a: ServiceStatusChange, b: ServiceStatusChange): number {
 	return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+}
+
+/**
+ * One status chain, or nothing when more than one order is possible.
+ * A branch, a fork, or a leftover change is not one chain.
+ */
+function unambiguousChain(
+	group: readonly ServiceStatusChange[],
+): ServiceStatusChange[] | undefined {
+	const remaining = group.slice();
+	const produced = new Set(remaining.map((change) => change.status));
+	let pending = remaining.filter(
+		(change) => !produced.has(change.previousStatus),
+	);
+	if (pending.length !== 1) {
+		return undefined;
+	}
+	const ordered: ServiceStatusChange[] = [];
+	while (pending.length === 1) {
+		const current = pending[0] as ServiceStatusChange;
+		ordered.push(current);
+		remaining.splice(remaining.indexOf(current), 1);
+		pending = remaining.filter(
+			(change) => change.previousStatus === current.status,
+		);
+	}
+	return remaining.length === 0 ? ordered : undefined;
+}
+
+/**
+ * Orders changes that share one time.
+ * One chain follows the status links. Any other group stays in write order.
+ */
+function chainSameTime(
+	group: readonly ServiceStatusChange[],
+): ServiceStatusChange[] {
+	const written = group.slice().sort(byTime);
+	return unambiguousChain(written) ?? written;
+}
+
+/** Orders the changes of one service. The same time follows the status chain. */
+function orderChanges(
+	changes: readonly ServiceStatusChange[],
+): ServiceStatusChange[] {
+	const byStamp = new Map<string, ServiceStatusChange[]>();
+	for (const change of changes) {
+		const list = byStamp.get(change.createdAt);
+		if (list) {
+			list.push(change);
+		} else {
+			byStamp.set(change.createdAt, [change]);
+		}
+	}
+	const ordered: ServiceStatusChange[] = [];
+	for (const [, group] of [...byStamp.entries()].sort((left, right) =>
+		left[0].localeCompare(right[0]),
+	)) {
+		ordered.push(...chainSameTime(group));
+	}
+	return ordered;
 }
 
 /** The status an open incident implies when it did not record a change. */
@@ -309,7 +367,7 @@ function replay(
 /**
  * The status of a service on one region tab.
  * A manual status stays. An incident in another region does not count.
- * A global incident counts on every region tab.
+ * A Global incident does not count.
  * A closed incident keeps a status that its close recorded.
  */
 export function serviceStatusOnRegion(
@@ -318,9 +376,9 @@ export function serviceStatusOnRegion(
 	incidents: readonly Incident[],
 	regionId: string,
 ): ServiceStatus {
-	const mine = changes
-		.filter((change) => change.serviceId === service.id)
-		.sort(byTime);
+	const mine = orderChanges(
+		changes.filter((change) => change.serviceId === service.id),
+	);
 	const initial = mine[0]?.previousStatus ?? service.status;
 	return replay(
 		service.id,
@@ -334,8 +392,9 @@ export function serviceStatusOnRegion(
 
 /**
  * Status changes as one region sees them. Uptime for a region uses this list.
- * An outage in another region does not count. An outage ends when its
- * incident ends, unless another incident on this tab still affects the service.
+ * An outage in another region does not count. A Global outage does not count.
+ * An outage ends when its incident ends, unless another incident on this tab
+ * still affects the service.
  */
 export function changesOnRegion(
 	changes: readonly ServiceStatusChange[],
@@ -353,11 +412,8 @@ export function changesOnRegion(
 	}
 	const result: ServiceStatusChange[] = [];
 	for (const [serviceId, mine] of byService) {
-		const earliest = mine.reduce((best, change) =>
-			byTime(change, best) < 0 ? change : best,
-		);
-		const initial = earliest.previousStatus;
-		const sorted = mine.slice().sort(byTime);
+		const sorted = orderChanges(mine);
+		const initial = (sorted[0] as ServiceStatusChange).previousStatus;
 		const times = new Set<number>();
 		for (const change of sorted) {
 			times.add(at(change.createdAt));

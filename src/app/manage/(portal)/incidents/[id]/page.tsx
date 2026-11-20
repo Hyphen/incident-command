@@ -2,11 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-	deleteIncidentAction,
 	editIncidentAction,
 	postIncidentUpdateAction,
 } from "@/app/manage/actions";
-import { ConfirmButton } from "@/components/manage/confirm-button";
+import { DeleteIncidentDialog } from "@/components/manage/delete-incident-dialog";
 import { DraftList } from "@/components/manage/draft-list";
 import {
 	AddServices,
@@ -37,11 +36,13 @@ import { EventStatusBadge, ImpactBadge } from "@/components/status/badges";
 import { StatusTimeline } from "@/components/status/status-timeline";
 import { Timeline } from "@/components/status/timeline";
 import { SubmitButton } from "@/components/submit-button";
+import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
 import { boundServiceRegions, regionNameFor } from "@/lib/domain/regions";
-import { hasRole } from "@/lib/domain/status";
+import { hasRole, isDeletedIncident } from "@/lib/domain/status";
 import type {
 	Incident,
+	IncidentDeletion,
 	NotificationDraft,
 	Region,
 	Service,
@@ -182,6 +183,71 @@ function PostsCard({
 	);
 }
 
+const DELETE_EFFECTS = [
+	"The status page, the history, the RSS feed, the API, and the agents do not show the incident.",
+	"A link to the public page of the incident shows a not found page.",
+	"Subscribers get no message about the deletion. The product cannot undo a message that it sent before.",
+	"The affected services keep their current status. Change a wrong status on the Services page.",
+	"Nobody can add a post, change the incident, or approve a draft for it.",
+	"The Overview page does not count the incident.",
+	"You cannot restore the incident from the portal.",
+];
+
+function DeleteIncidentBanner({ incidentId }: { incidentId: string }) {
+	return (
+		<section
+			aria-labelledby="delete-incident-title"
+			className="rounded-card border-2 border-major bg-major/10 p-6"
+		>
+			<h2
+				id="delete-incident-title"
+				className="text-lg font-semibold text-major"
+			>
+				Delete this incident
+			</h2>
+			<p className="mt-2 font-medium text-major">
+				Be very careful. Delete an incident only when customers must not see it.
+			</p>
+			<p className="mt-3 text-sm">A deletion has these effects:</p>
+			<ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+				{DELETE_EFFECTS.map((effect) => (
+					<li key={effect}>{effect}</li>
+				))}
+			</ul>
+			<p className="mt-3 text-sm">
+				The portal keeps the incident. The record shows who deleted it and why.
+			</p>
+			<div className="mt-4">
+				<DeleteIncidentDialog incidentId={incidentId} />
+			</div>
+		</section>
+	);
+}
+
+function DeletionRecord({
+	incident,
+}: {
+	incident: Incident & IncidentDeletion;
+}) {
+	return (
+		<section
+			aria-labelledby="deletion-record-title"
+			className="rounded-card border border-major/40 bg-major/10 px-5 py-4"
+		>
+			<h2 id="deletion-record-title" className="font-semibold text-major">
+				Deleted from the public view
+			</h2>
+			<p className="mt-2 text-sm">
+				{incident.deletedBy.name} deleted this incident on{" "}
+				<LocalTime iso={incident.deletedAt} />.
+			</p>
+			<p className="mt-2 text-sm break-words whitespace-pre-wrap">
+				Reason: {incident.deletedReason}
+			</p>
+		</section>
+	);
+}
+
 function IncidentBody({
 	tab,
 	incident,
@@ -255,12 +321,13 @@ export default async function ManageIncidentPage({
 }: Props) {
 	const [{ id }, query] = await Promise.all([params, searchParams]);
 	const { member, services, app } = await requireMember();
-	const incident = await services.incidents.find(id);
+	const incident = await services.incidents.find(id, { includeDeleted: true });
 	if (!incident) {
 		notFound();
 	}
 	const tab = incidentTab(query.tab);
-	const canEdit = hasRole(member.role, "editor");
+	const deleted = isDeletedIncident(incident);
+	const canEdit = hasRole(member.role, "editor") && !deleted;
 	const [catalog, regions, timeline, pending, reviewed] = await Promise.all([
 		services.catalog.list(),
 		services.regions.list(),
@@ -292,12 +359,14 @@ export default async function ManageIncidentPage({
 			flash={query}
 			health={app.store.health}
 			actions={
-				<Link
-					href={`/incidents/${incident.id}`}
-					className={buttonClass.secondary}
-				>
-					View public page
-				</Link>
+				!deleted && (
+					<Link
+						href={`/incidents/${incident.id}`}
+						className={buttonClass.secondary}
+					>
+						View public page
+					</Link>
+				)
 			}
 		>
 			<div className="flex flex-wrap gap-2">
@@ -309,12 +378,17 @@ export default async function ManageIncidentPage({
 				{isIncident && <ImpactBadge impact={incident.impact} />}
 				{regionName && <span className="text-sm text-muted">{regionName}</span>}
 			</div>
+			{deleted && <DeletionRecord incident={incident} />}
 			<IncidentTabs id={incident.id} active={tab} />
 			{tab === "dashboard" && timeline.services.length > 0 && (
 				<StatusTimeline {...timeline} />
 			)}
 			<div
-				className={canEdit ? "grid gap-6 lg:grid-cols-[1fr_320px]" : undefined}
+				className={
+					canEdit && tab === "dashboard"
+						? "grid gap-6 lg:grid-cols-[1fr_320px]"
+						: undefined
+				}
 			>
 				<IncidentBody
 					tab={tab}
@@ -327,7 +401,7 @@ export default async function ManageIncidentPage({
 					pending={pending}
 					reviewed={reviewed}
 				/>
-				{canEdit && (
+				{tab === "dashboard" && canEdit && (
 					<div className="space-y-6">
 						{(!isIncident || (regions.length > 0 && affected.length > 0)) && (
 							<Card title={isIncident ? "Regions" : "Maintenance window"}>
@@ -350,15 +424,12 @@ export default async function ManageIncidentPage({
 								</form>
 							</Card>
 						)}
-						<form action={deleteIncidentAction}>
-							<input type="hidden" name="id" value={incident.id} />
-							<ConfirmButton message="Delete this incident permanently? This cannot be undone.">
-								Delete incident
-							</ConfirmButton>
-						</form>
 					</div>
 				)}
 			</div>
+			{tab === "dashboard" && canEdit && (
+				<DeleteIncidentBanner incidentId={incident.id} />
+			)}
 		</ManagePage>
 	);
 }

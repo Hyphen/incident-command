@@ -356,15 +356,36 @@ describe("incident actions", () => {
 			"resolved",
 		);
 
+		const incidentId = incident?.id ?? "";
 		expectSameFlash(
-			await redirectOf(deleteIncidentAction(form({ id: incident?.id ?? "" }))),
-			"/manage/incidents?notice=Incident deleted",
+			await redirectOf(
+				deleteIncidentAction(form({ id: incidentId, reason: "   " })),
+			),
+			`/manage/incidents/${incidentId}?error=Write a reason before you delete the incident.`,
 		);
+		expect(await services.incidents.get(incidentId)).toMatchObject({
+			title: "API outage",
+		});
+		expectSameFlash(
+			await redirectOf(
+				deleteIncidentAction(
+					form({ id: incidentId, reason: "Duplicate report" }),
+				),
+			),
+			"/manage/incidents?notice=Incident deleted from the public view",
+		);
+		const hidden = await services.incidents.find(incidentId, {
+			includeDeleted: true,
+		});
+		expect(hidden).toMatchObject({
+			deletedReason: "Duplicate report",
+			deletedBy: { name: "Editor User", type: "member" },
+		});
 		const deletedAgain = await redirectOf(
-			deleteIncidentAction(form({ id: incident?.id ?? "" })),
+			deleteIncidentAction(form({ id: incidentId, reason: "Again" })),
 		);
 		expect(new URL(deletedAgain, "http://localhost").pathname).toBe(
-			"/manage/incidents",
+			`/manage/incidents/${incidentId}`,
 		);
 		expect(flashMessage(deletedAgain, "error")).toBe(
 			"That item was not found.",

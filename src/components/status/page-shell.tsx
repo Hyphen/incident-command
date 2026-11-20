@@ -7,6 +7,13 @@ import type { Settings } from "@/lib/domain/types";
 import { FEED_PATH } from "@/lib/feed";
 import { LLMS_PATH } from "@/lib/llms";
 
+/**
+ * The column of the header, the main content and the footer.
+ * The width is 58rem on a 1280px screen. The width grows to 80rem on a 2560px screen.
+ */
+const COLUMN =
+	"mx-auto w-full max-w-[clamp(58rem,36rem_+_27.5vw,80rem)] px-4 md:px-6";
+
 export function SiteHeader({
 	settings,
 	canSubscribe,
@@ -16,7 +23,9 @@ export function SiteHeader({
 }) {
 	const logoSrc = publicLogoSrc(settings);
 	return (
-		<header className="ic-header mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-4 px-4 pt-10 pb-6">
+		<header
+			className={`ic-header ${COLUMN} flex flex-wrap items-center justify-between gap-4 pt-10 pb-6`}
+		>
 			<Link href="/" className="flex items-center gap-3">
 				{logoSrc ? (
 					<LogoImage
@@ -56,7 +65,9 @@ export function SiteHeader({
 
 export function SiteFooter({ settings }: { settings: Settings }) {
 	return (
-		<footer className="ic-footer mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-4 pb-10 text-xs text-muted">
+		<footer
+			className={`ic-footer ${COLUMN} flex flex-wrap items-center justify-between gap-2 pb-10 text-xs text-muted`}
+		>
 			{settings.showPoweredBy ? <PoweredBy /> : null}
 			<span className="ml-auto flex gap-4">
 				<Link href="/history" className="hover:text-fg">
@@ -84,17 +95,24 @@ export function SiteFooter({ settings }: { settings: Settings }) {
 export function PublicPage({
 	settings,
 	canSubscribe,
+	narrow = false,
 	children,
 }: {
 	settings: Settings;
 	canSubscribe: boolean;
+	/** Keep a short form in a narrow column. The header and the footer stay wide. */
+	narrow?: boolean;
 	children: ReactNode;
 }) {
 	return (
 		<div className="ic-page flex min-h-dvh flex-col">
 			<SiteHeader settings={settings} canSubscribe={canSubscribe} />
-			<main className="ic-main mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 pb-16">
-				{children}
+			<main className={`ic-main ${COLUMN} flex-1 space-y-8 pb-16`}>
+				{narrow ? (
+					<div className="mx-auto w-full max-w-2xl space-y-8">{children}</div>
+				) : (
+					children
+				)}
 			</main>
 			<SiteFooter settings={settings} />
 		</div>

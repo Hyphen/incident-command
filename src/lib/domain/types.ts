@@ -224,7 +224,7 @@ export interface ServiceStatusOverride {
 
 /**
  * Regions where one affected service is down.
- * An empty list means Global. The service is then down on every region tab.
+ * An empty list means Global. A Global service stays on the Global tab.
  */
 export interface ServiceRegions {
 	serviceId: string;
@@ -264,7 +264,17 @@ export interface IncidentUpdate extends StoredIncidentUpdate {
 	impact: IncidentImpact;
 }
 
-export interface Incident {
+/** The record of a deletion from the public view. */
+export interface IncidentDeletion {
+	/** The time when the incident left the public view. */
+	deletedAt: string;
+	/** The member or agent that deleted the incident. */
+	deletedBy: AuthorRef;
+	/** The reason that the member or agent gave. */
+	deletedReason: string;
+}
+
+export interface Incident extends Partial<IncidentDeletion> {
 	id: string;
 	kind: IncidentKind;
 	/** The title of the latest post. */

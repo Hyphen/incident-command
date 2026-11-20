@@ -429,8 +429,9 @@ export async function editIncidentAction(form: FormData): Promise<void> {
 
 export async function deleteIncidentAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("editor");
-	await attempt("/manage/incidents", () =>
-		services.incidents.delete(actor, text(form, "id")),
+	const id = text(form, "id");
+	await attempt(`/manage/incidents/${id}`, () =>
+		services.incidents.delete(actor, id, { reason: text(form, "reason") }),
 	);
 	redirect(flash("/manage/incidents", "incident_deleted"));
 }

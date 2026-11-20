@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ExternalLinkIcon } from "@/components/icons";
 
 export interface PortalNavItem {
 	label: string;
 	href: string;
+	/** Opens in a new tab. The item is not a portal section. */
+	external?: boolean;
 }
 
 /** A section is active on its own path and on each path below it. */
@@ -16,33 +19,51 @@ function isActive(href: string, pathname: string): boolean {
 }
 
 /**
- * The section links of the portal sidebar. The portal layout does not render
- * again when the page changes, so this component reads the path in the browser.
+ * The section links of the portal sidebar. An external item opens in a new
+ * tab and is not a section. The portal layout does not render again when the
+ * page changes, so this component reads the path in the browser.
  */
 export function PortalNav({ items }: { items: PortalNavItem[] }) {
 	const pathname = usePathname();
+	const sections = items.filter((item) => !item.external);
+	const external = items.filter((item) => item.external);
 	return (
 		<nav
-			className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:pb-0"
+			className="px-3 pb-3 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-y-auto lg:pb-0"
 			aria-label="Manage"
 		>
-			{items.map((item) => {
-				const active = isActive(item.href, pathname);
-				return (
-					<Link
-						key={item.href}
-						href={item.href}
-						aria-current={active ? "page" : undefined}
-						className={`rounded-lg px-3 py-2 text-sm whitespace-nowrap ${
-							active
-								? "bg-surface-muted font-medium text-fg"
-								: "text-muted hover:bg-surface-muted hover:text-fg"
-						}`}
-					>
-						{item.label}
-					</Link>
-				);
-			})}
+			<div className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+				{sections.map((item) => {
+					const active = isActive(item.href, pathname);
+					return (
+						<Link
+							key={item.href}
+							href={item.href}
+							aria-current={active ? "page" : undefined}
+							className={`rounded-lg px-3 py-2 text-sm whitespace-nowrap ${
+								active
+									? "bg-surface-muted font-medium text-fg"
+									: "text-muted hover:bg-surface-muted hover:text-fg"
+							}`}
+						>
+							{item.label}
+						</Link>
+					);
+				})}
+			</div>
+			{external.map((item) => (
+				<a
+					key={item.href}
+					href={item.href}
+					target="_blank"
+					rel="noreferrer"
+					aria-label={`${item.label} (opens in a new tab)`}
+					className="mt-1 flex items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium whitespace-nowrap text-fg hover:bg-surface-muted"
+				>
+					{item.label}
+					<ExternalLinkIcon className="size-4 shrink-0 text-muted" />
+				</a>
+			))}
 		</nav>
 	);
 }

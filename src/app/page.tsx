@@ -5,7 +5,7 @@ import { OverallBanner } from "@/components/status/banner";
 import { IncidentCard } from "@/components/status/incident-card";
 import { PublicPage } from "@/components/status/page-shell";
 import { IncidentList } from "@/components/status/recent-incidents";
-import { RegionTabs } from "@/components/status/region-tabs";
+import { RegionTabs, regionHref } from "@/components/status/region-tabs";
 import { SystemStatus } from "@/components/status/system-status";
 import { getApp } from "@/lib/app";
 import { regionNameFor, serviceOnRegion } from "@/lib/domain/regions";
@@ -76,7 +76,7 @@ export default async function StatusPage({ searchParams }: Props = {}) {
 			/>
 			<OverallBanner status={summary.overall} />
 			{summary.settings.description && (
-				<p className="ic-description text-muted">
+				<p className="ic-description max-w-prose text-muted">
 					{summary.settings.description}
 				</p>
 			)}
@@ -113,7 +113,10 @@ export default async function StatusPage({ searchParams }: Props = {}) {
 			<section>
 				<div className="mb-4 flex items-center justify-between">
 					<h2 className="font-semibold">Recent incidents</h2>
-					<Link href="/history" className="text-sm text-muted hover:text-fg">
+					<Link
+						href={regionHref("/history", summary.region?.id)}
+						className="text-sm text-muted hover:text-fg"
+					>
 						View history →
 					</Link>
 				</div>

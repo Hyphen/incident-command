@@ -3,6 +3,7 @@ import type {
 	DraftState,
 	EventStatus,
 	Incident,
+	IncidentDeletion,
 	IncidentImpact,
 	IncidentKind,
 	Role,
@@ -126,6 +127,13 @@ export function isClosedStatus(status: EventStatus): boolean {
 
 export function isOpen(incident: Pick<Incident, "status">): boolean {
 	return !isClosedStatus(incident.status);
+}
+
+/** True when the incident left the public view and the portal kept a record. */
+export function isDeletedIncident(
+	incident: Incident,
+): incident is Incident & IncidentDeletion {
+	return incident.deletedAt !== undefined;
 }
 
 export function initialStatus(kind: IncidentKind): EventStatus {

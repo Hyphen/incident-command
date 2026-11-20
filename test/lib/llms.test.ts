@@ -375,6 +375,15 @@ describe("region markdown", () => {
 		const statusText = await status.text();
 		expect(statusText).toContain("Region: United States.");
 		expect(statusText).toContain("- Region: United States");
+		expect(statusText).toContain(
+			`(https://status.acme.dev/?region=${region.id})`,
+		);
+		expect(statusText).toContain(
+			`(https://status.acme.dev/history.md?region=${region.id})`,
+		);
+		expect(statusText).toContain(
+			`(https://status.acme.dev/api/v1/status?region=${region.id})`,
+		);
 		const global = await llms(new Request("https://status.acme.dev/llms.txt"));
 		expect(await global.text()).toContain("Region: Global.");
 		const missing = await llms(
@@ -390,6 +399,9 @@ describe("region markdown", () => {
 		);
 		expect(historyText).toContain("Region: United States");
 		expect(historyText).toContain(`region=${region.id}`);
+		expect(historyText).toContain(
+			`(https://status.acme.dev/llms.txt?region=${region.id})`,
+		);
 		const historyMissing = await historyMarkdown(
 			new Request("https://status.acme.dev/history.md?region=reg_missing"),
 		);

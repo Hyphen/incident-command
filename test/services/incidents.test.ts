@@ -848,18 +848,75 @@ describe("IncidentService", () => {
 		);
 	});
 
-	it("deletes incidents", async () => {
+	it("deletes an incident from the public view and keeps the record", async () => {
 		const incident = await t.services.incidents.create(EDITOR, {
 			title: "A",
 			message: "A",
+			serviceIds: [api],
 		});
-		await t.services.incidents.delete(EDITOR, incident.id);
+		const notices = t.notifier.incidents.length;
+		const status = await statusOf(api);
+		await t.services.incidents.delete(EDITOR, incident.id, {
+			reason: "  Wrong report  ",
+		});
+		expect(t.notifier.incidents).toHaveLength(notices);
+		expect(await statusOf(api)).toBe(status);
 		await expect(
-			t.services.incidents.delete(EDITOR, incident.id),
+			t.services.incidents.find(incident.id),
+		).resolves.toBeUndefined();
+		await expect(t.services.incidents.get(incident.id)).rejects.toBeInstanceOf(
+			NotFoundError,
+		);
+		await expect(t.services.incidents.list()).resolves.toEqual([]);
+		const kept = await t.services.incidents.find(incident.id, {
+			includeDeleted: true,
+		});
+		expect(kept).toMatchObject({
+			deletedBy: { type: "member", id: EDITOR.id, name: EDITOR.name },
+			deletedReason: "Wrong report",
+			deletedAt: "2026-11-02T12:00:00.000Z",
+		});
+		expect(
+			(await t.services.incidents.list({ deleted: true })).map(
+				(item) => item.id,
+			),
+		).toEqual([incident.id]);
+		await expect(
+			t.services.incidents.delete(EDITOR, incident.id, { reason: "Again" }),
 		).rejects.toBeInstanceOf(NotFoundError);
 		await expect(
 			t.services.incidents.edit(EDITOR, incident.id, {}),
 		).rejects.toBeInstanceOf(NotFoundError);
+		await expect(
+			t.services.incidents.postUpdate(EDITOR, incident.id, {
+				message: "Later",
+			}),
+		).rejects.toBeInstanceOf(NotFoundError);
+	});
+
+	it("requires a reason and the permission to delete", async () => {
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "A",
+			message: "A",
+			notify: false,
+		});
+		await expect(
+			t.services.incidents.delete(VIEWER, incident.id, { reason: "No" }),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		await expect(
+			t.services.incidents.delete(agentActor([]), incident.id, {
+				reason: "No",
+			}),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		await expect(
+			t.services.incidents.delete(EDITOR, incident.id, { reason: "   " }),
+		).rejects.toThrow("Write a reason before you delete the incident.");
+		await expect(
+			t.services.incidents.delete(EDITOR, incident.id, {
+				reason: "x".repeat(1001),
+			}),
+		).rejects.toBeInstanceOf(ValidationError);
+		await expect(t.services.incidents.list()).resolves.toHaveLength(1);
 	});
 
 	it("skips notifications without subscribers and survives notifier failures", async () => {

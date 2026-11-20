@@ -61,7 +61,8 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
   draft_notification and edit_incident.
   On an update, serviceRegions sets regions for the services in that list. Other services keep their regions.
   Pass an empty list or null to edit_incident to make every service Global. Omit it to keep the current regions.
-  Pass regionId to get_status to read one region. With no regions, the status page is one page.
+  Pass regionId to get_status to read one region. A region tab omits Global services.
+  With no regions, the status page is one page.
 - When a person must review a notification first, use draft_notification and give that person the reviewUrl.
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
 - Everything you post is public on the status page and may notify subscribers. Write for customers.`;
@@ -332,7 +333,7 @@ export function createMcpServer(
 		{
 			title: "Get status",
 			description:
-				"Current overall status, every visible service with its status and uptime, open incidents and maintenance. Pass regionId to read one region.",
+				"Current overall status, every visible service with its status and uptime, open incidents and maintenance. Pass regionId to read one region. A region omits Global.",
 			inputSchema: {
 				regionId: z
 					.string()
@@ -672,11 +673,21 @@ export function createMcpServer(
 		"delete_incident",
 		{
 			title: "Delete incident",
-			description: "Permanently deletes an incident or maintenance.",
-			inputSchema: { id },
+			description:
+				"Deletes an incident or maintenance from the public view. The record stays in the portal, with this agent and the reason.",
+			inputSchema: {
+				id,
+				reason: z
+					.string()
+					.describe(
+						"Why you delete it. The portal records the reason and this agent.",
+					),
+			},
 		},
 		async (args) => {
-			await services.incidents.delete(actor, args.id);
+			await services.incidents.delete(actor, args.id, {
+				reason: args.reason,
+			});
 			return { deleted: args.id };
 		},
 	);

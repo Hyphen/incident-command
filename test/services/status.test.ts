@@ -300,6 +300,19 @@ describe("StatusService", () => {
 		);
 	});
 
+	it("does not start the history at a deleted incident", async () => {
+		t.clock.set("2026-05-05T00:00:00.000Z");
+		const may = await t.services.incidents.create(EDITOR, {
+			title: "May",
+			message: "m",
+			status: "resolved",
+		});
+		t.clock.set("2026-11-02T12:00:00.000Z");
+		await t.services.incidents.delete(EDITOR, may.id, { reason: "Wrong" });
+		const latest = await t.services.status.history();
+		expect(latest.older).toBeNull();
+	});
+
 	it("has one history page when no incident started", async () => {
 		t.clock.set("2026-05-05T00:00:00.000Z");
 		await t.services.incidents.create(EDITOR, {
@@ -366,23 +379,35 @@ describe("StatusService", () => {
 			impact: "major",
 			serviceIds: [api.id],
 		});
+		const maintenance = await t.services.incidents.create(EDITOR, {
+			kind: "maintenance",
+			title: "Global window",
+			message: "Work",
+			scheduledStart: "2026-11-21T06:00:00.000Z",
+			scheduledEnd: "2026-11-22T08:00:00.000Z",
+		});
 		const globalView = await t.services.status.summary();
 		expect(globalView.services[0]?.status).toBe("partial_outage");
 		expect(globalView.activeIncidents.map((item) => item.id)).toEqual([
 			everywhere.id,
 			open.id,
 		]);
+		expect(globalView.upcomingMaintenance.map((item) => item.id)).toEqual([
+			maintenance.id,
+		]);
 		const usView = await t.services.status.summary({ regionId: united.id });
-		expect(usView.activeIncidents.map((item) => item.id)).toEqual([
+		expect(usView.activeIncidents.map((item) => item.id)).toEqual([open.id]);
+		expect(usView.upcomingMaintenance).toEqual([]);
+		expect(usView.recentIncidents.map((item) => item.id)).not.toContain(
 			everywhere.id,
-			open.id,
-		]);
-		expect(usView.services[0]?.status).toBe("partial_outage");
+		);
+		expect(usView.services[0]?.status).toBe("major_outage");
 		const euView = await t.services.status.summary({ regionId: europe.id });
-		expect(euView.activeIncidents.map((item) => item.id)).toEqual([
-			everywhere.id,
-		]);
-		expect(euView.services[0]?.status).toBe("partial_outage");
+		expect(euView.activeIncidents).toEqual([]);
+		expect(euView.upcomingMaintenance).toEqual([]);
+		expect(euView.recentIncidents).toEqual([]);
+		expect(euView.services[0]?.status).toBe("operational");
+		expect(euView.services[0]?.uptime).toBe(1);
 		await expect(
 			t.services.status.summary({ regionId: "reg_missing" }),
 		).rejects.toBeInstanceOf(NotFoundError);
@@ -463,6 +488,11 @@ describe("StatusService", () => {
 			us.months
 				.find((month) => month.key === "2026-11")
 				?.incidents.map((item) => item.id),
+		).toEqual([usOnly.id]);
+		expect(
+			all.months
+				.find((month) => month.key === "2026-11")
+				?.incidents.map((item) => item.id),
 		).toEqual([global.id, usOnly.id]);
 		expect(
 			all.months
@@ -527,6 +557,7 @@ describe("StatusService", () => {
 			message: "Errors",
 			impact: "critical",
 			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [europe.id] }],
 		});
 		t.clock.set("2026-11-02T11:00:00.000Z");
 		await t.services.incidents.postUpdate(EDITOR, incident.id, {
@@ -561,6 +592,7 @@ describe("StatusService", () => {
 			message: "No impact yet",
 			impact: "none",
 			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
 		});
 		t.clock.set("2026-11-02T11:00:00.000Z");
 		await t.services.incidents.resolve(EDITOR, us.id);

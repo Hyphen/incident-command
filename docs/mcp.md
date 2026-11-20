@@ -141,6 +141,8 @@ With no regions, the status page is one page.
 
 With regions, the page shows Global and a tab for each region.
 
+A region tab shows only the services bound to that region. A Global service stays on the Global tab.
+
 Delete a region. A service that used only that region becomes Global. A service that also uses other regions keeps those regions.
 
 ## Tools
@@ -164,7 +166,7 @@ Delete a region. A service that used only that region becomes Global. A service 
 | `post_incident_update`        | `incidents.publish`   | Add a timeline update. It records the title and the impact, and it can change them.          |
 | `resolve_incident`            | `incidents.publish`   | Resolve an incident or complete maintenance; restores affected services.                     |
 | `edit_incident`               | `incidents.edit`      | Replace the service list or the regions of each service, or change the window.               |
-| `delete_incident`             | `incidents.delete`    | Delete an incident or maintenance.                                                           |
+| `delete_incident`             | `incidents.delete`    | Delete an incident from the public view. The portal keeps the reason.                        |
 | `schedule_maintenance`        | `incidents.publish`   | Announce planned maintenance with a window.                                                  |
 | `draft_notification`          | `drafts.write`        | Save a notification for review by a person. Returns the `reviewUrl`.                         |
 | `get_notification_draft`      | `drafts.read`         | One notification draft and its review state.                                                 |
