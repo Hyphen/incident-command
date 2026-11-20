@@ -318,7 +318,7 @@ function serviceStatuses(form: FormData) {
 /**
  * Regions for the selected services.
  * Returns nothing when the form has no region choices.
- * An empty list means every selected service is Global.
+ * A service in `serviceIds` with no checked region is Global.
  */
 function regionsByService(form: FormData, serviceIds?: readonly string[]) {
 	if (!form.has("serviceRegions")) {
@@ -338,9 +338,13 @@ function regionsByService(form: FormData, serviceIds?: readonly string[]) {
 			continue;
 		}
 		seen.add(serviceId);
-		const regionIds = list(form, key);
-		if (regionIds.length > 0) {
-			entries.push({ serviceId, regionIds });
+		entries.push({ serviceId, regionIds: list(form, key) });
+	}
+	if (serviceIds) {
+		for (const serviceId of serviceIds) {
+			if (!seen.has(serviceId)) {
+				entries.push({ serviceId, regionIds: [] });
+			}
 		}
 	}
 	return entries;

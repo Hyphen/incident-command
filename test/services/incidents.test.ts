@@ -967,6 +967,7 @@ describe("IncidentService", () => {
 		expect(onlyApi.serviceIds).toEqual([api.id]);
 		expect(onlyApi.serviceRegions).toEqual([
 			{ serviceId: api.id, regionIds: [europe.id] },
+			{ serviceId: web.id, regionIds: [united.id] },
 		]);
 		await expect(
 			t.services.incidents.postUpdate(EDITOR, incident.id, {
@@ -1035,5 +1036,84 @@ describe("IncidentService", () => {
 		expect(withWeb.serviceRegions).toEqual([
 			{ serviceId: api.id, regionIds: [united.id] },
 		]);
+
+		const legacy = await t.services.incidents.create(EDITOR, {
+			title: "Legacy pair",
+			message: "x",
+			serviceIds: [api.id, web.id],
+		});
+		const legacyDoc = await t.store.get("incidents", legacy.id);
+		if (!legacyDoc) {
+			throw new Error("missing incident");
+		}
+		legacyDoc.regionId = united.id;
+		delete legacyDoc.serviceRegions;
+		await t.store.update("incidents", legacyDoc);
+		const legacyKept = await t.services.incidents.edit(EDITOR, legacy.id, {
+			serviceIds: [api.id],
+		});
+		expect(legacyKept.regionId).toBeUndefined();
+		expect(legacyKept.serviceIds).toEqual([api.id]);
+		expect(legacyKept.serviceRegions).toEqual([
+			{ serviceId: api.id, regionIds: [united.id] },
+			{ serviceId: web.id, regionIds: [united.id] },
+		]);
+		const legacyRegions = await t.services.incidents.create(EDITOR, {
+			title: "Legacy regions",
+			message: "x",
+			serviceIds: [api.id, web.id],
+		});
+		const legacyRegionsDoc = await t.store.get("incidents", legacyRegions.id);
+		if (!legacyRegionsDoc) {
+			throw new Error("missing incident");
+		}
+		legacyRegionsDoc.regionId = united.id;
+		delete legacyRegionsDoc.serviceRegions;
+		await t.store.update("incidents", legacyRegionsDoc);
+		const legacyEdited = await t.services.incidents.edit(
+			EDITOR,
+			legacyRegions.id,
+			{
+				serviceRegions: [{ serviceId: api.id, regionIds: [europe.id] }],
+			},
+		);
+		expect(legacyEdited.regionId).toBeUndefined();
+		expect(legacyEdited.serviceRegions).toEqual([
+			{ serviceId: api.id, regionIds: [europe.id] },
+		]);
+
+		const current = await t.services.incidents.create(EDITOR, {
+			title: "Both regions",
+			message: "x",
+			serviceIds: [api.id, web.id],
+			serviceRegions: [
+				{ serviceId: api.id, regionIds: [europe.id] },
+				{ serviceId: web.id, regionIds: [united.id] },
+			],
+		});
+		const stale = {
+			...current,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
+		};
+		const getIncident = vi
+			.spyOn(t.services.incidents, "get")
+			.mockResolvedValueOnce(stale);
+		const windowEdit = await t.services.incidents.edit(EDITOR, current.id, {});
+		expect(windowEdit.serviceIds).toEqual([api.id, web.id]);
+		expect(windowEdit.serviceRegions).toEqual([
+			{ serviceId: api.id, regionIds: [europe.id] },
+			{ serviceId: web.id, regionIds: [united.id] },
+		]);
+		getIncident.mockResolvedValueOnce(stale);
+		const regionEdit = await t.services.incidents.edit(EDITOR, current.id, {
+			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
+		});
+		expect(regionEdit.serviceIds).toEqual([api.id, web.id]);
+		expect(regionEdit.serviceRegions).toEqual([
+			{ serviceId: api.id, regionIds: [united.id] },
+			{ serviceId: web.id, regionIds: [united.id] },
+		]);
+		getIncident.mockRestore();
 	});
 });

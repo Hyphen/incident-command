@@ -171,6 +171,55 @@ function assertRegionServices(
 }
 
 /**
+ * Region entries for services that are no longer affected.
+ * Uptime still uses these entries.
+ */
+function historicalRegions(
+	incident: Incident,
+	serviceIds: readonly string[],
+): ServiceRegions[] {
+	const source = incident.serviceRegions
+		? incident.serviceRegions
+		: incident.regionId
+			? incident.serviceIds.map((serviceId) => ({
+					serviceId,
+					regionIds: [incident.regionId as string],
+				}))
+			: [];
+	return source.flatMap((entry) =>
+		serviceIds.includes(entry.serviceId)
+			? []
+			: [
+					{
+						serviceId: entry.serviceId,
+						regionIds: [...new Set(entry.regionIds)],
+					},
+				],
+	);
+}
+
+/**
+ * Regions for services that this edit did not see.
+ * A service added after the read keeps its regions.
+ * `null` clears every service.
+ */
+function regionsForEdit(
+	knownIds: readonly string[],
+	current: Incident,
+	patch: ServiceRegions[] | null | undefined,
+	replacesServices: boolean,
+): ServiceRegions[] | null | undefined {
+	if (replacesServices || patch == null) {
+		return patch;
+	}
+	const known = new Set(knownIds);
+	const kept = (current.serviceRegions ?? []).filter(
+		(entry) => !known.has(entry.serviceId),
+	);
+	return [...patch, ...kept];
+}
+
+/**
  * Writes `serviceRegions` and drops the old `regionId`.
  * Call this before you change `incident.serviceIds`.
  * `serviceIds` is the list after the write.
@@ -178,6 +227,7 @@ function assertRegionServices(
  * Omit `patch` to keep the current regions of the services that remain.
  * `merge` sets only the services in `patch`. Other services keep their regions.
  * An empty `regionIds` list makes that service Global.
+ * A service that leaves the incident keeps its region entry for uptime.
  * An old incident with no services keeps `regionId` until a service can hold it.
  */
 function assignRegions(
@@ -187,7 +237,11 @@ function assignRegions(
 	mode: "replace" | "merge",
 ): void {
 	const map = new Map<string, string[]>();
-	if (patch === undefined || mode === "merge") {
+	const clearAll =
+		mode === "replace" &&
+		patch !== undefined &&
+		(patch === null || patch.length === 0);
+	if (!clearAll && (patch === undefined || mode === "merge")) {
 		for (const entry of boundServiceRegions(incident)) {
 			if (serviceIds.includes(entry.serviceId)) {
 				map.set(entry.serviceId, entry.regionIds);
@@ -203,6 +257,11 @@ function assignRegions(
 				map.delete(entry.serviceId);
 				continue;
 			}
+			map.set(entry.serviceId, entry.regionIds);
+		}
+	}
+	if (!clearAll) {
+		for (const entry of historicalRegions(incident, serviceIds)) {
 			map.set(entry.serviceId, entry.regionIds);
 		}
 	}
@@ -543,12 +602,12 @@ export class IncidentService {
 		requirePermission(actor, "incidents.edit");
 		rejectLegacyRegion(input);
 		const patch = parse(editIncidentSchema, input);
-		const current = await this.get(id);
-		const serviceIds = patch.serviceIds
+		const validatedIds = patch.serviceIds
 			? await this.validateServices(patch.serviceIds)
-			: current.serviceIds;
+			: undefined;
+		const read = await this.get(id);
 		const serviceRegions = await this.validateRegions(
-			serviceIds,
+			validatedIds ?? read.serviceIds,
 			patch.serviceRegions,
 		);
 		const { next } = await this.mutate(id, (current) => {
@@ -556,8 +615,19 @@ export class IncidentService {
 				...current,
 				updatedAt: iso(this.ctx.now()),
 			};
-			assignRegions(next, serviceIds, serviceRegions, "replace");
-			if (patch.serviceIds) {
+			const serviceIds = validatedIds ?? current.serviceIds;
+			assignRegions(
+				next,
+				serviceIds,
+				regionsForEdit(
+					read.serviceIds,
+					current,
+					serviceRegions,
+					validatedIds !== undefined,
+				),
+				"replace",
+			);
+			if (validatedIds) {
 				next.serviceIds = serviceIds;
 			}
 			if (current.kind === "maintenance") {

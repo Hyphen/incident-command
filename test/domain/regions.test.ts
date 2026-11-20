@@ -514,4 +514,51 @@ describe("incident regions", () => {
 		);
 		expect(mixed.at(-1)?.status).toBe("degraded_performance");
 	});
+
+	it("keeps an outage after a service leaves the incident", () => {
+		const left = incident({
+			id: "inc_left",
+			serviceIds: ["svc_web"],
+			serviceRegions: [
+				{ serviceId: "svc_api", regionIds: ["reg_us"] },
+				{ serviceId: "svc_web", regionIds: ["reg_eu"] },
+			],
+			status: "resolved",
+			impact: "critical",
+			startedAt: "2026-11-02T10:00:00.000Z",
+			resolvedAt: "2026-11-02T11:00:00.000Z",
+		});
+		const outage = change(
+			"ch_api",
+			"2026-11-02T10:00:00.000Z",
+			"major_outage",
+			"operational",
+			"inc_left",
+		);
+		const us = changesOnRegion([outage], [left], "reg_us").filter(
+			(item) => item.serviceId === "svc_api",
+		);
+		expect(us.map((item) => [item.createdAt, item.status])).toEqual([
+			["2026-11-02T10:00:00.000Z", "major_outage"],
+			["2026-11-02T11:00:00.000Z", "operational"],
+		]);
+		const eu = changesOnRegion([outage], [left], "reg_eu").filter(
+			(item) => item.serviceId === "svc_api",
+		);
+		expect(eu.map((item) => item.status)).toEqual(["operational"]);
+		expect(serviceStatusOnRegion(service(), [outage], [left], "reg_us")).toBe(
+			"operational",
+		);
+		const open = incident({
+			...left,
+			status: "investigating",
+			resolvedAt: undefined,
+		});
+		expect(serviceStatusOnRegion(service(), [], [open], "reg_us")).toBe(
+			"operational",
+		);
+		expect(serviceStatusOnRegion(service(), [outage], [open], "reg_us")).toBe(
+			"major_outage",
+		);
+	});
 });

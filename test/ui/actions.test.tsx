@@ -1934,6 +1934,27 @@ describe("region actions", () => {
 		expect(
 			(await services.incidents.get(incident?.id ?? "")).serviceRegions,
 		).toEqual([{ serviceId: api.id, regionIds: [region?.id] }]);
+		const clearDraft = await services.drafts.create(agentActor(), {
+			incidentId: incident?.id,
+			message: "Clear API",
+		});
+		expectSameFlash(
+			await redirectOf(
+				approveDraftAction(
+					form({
+						id: clearDraft.id,
+						message: "Clear API",
+						serviceRegions: "",
+						boundServiceIds: [api.id, web.id],
+						[`regionIds:${web.id}`]: europe.id,
+					}),
+				),
+			),
+			`/manage/incidents/${incident?.id}?notice=Draft approved. The update is published and subscribers are notified.`,
+		);
+		expect(
+			(await services.incidents.get(incident?.id ?? "")).serviceRegions,
+		).toEqual([{ serviceId: web.id, regionIds: [europe.id] }]);
 		expectSameFlash(
 			await redirectOf(deleteRegionAction(form({ id: region?.id ?? "" }))),
 			"/manage/regions?notice=Region deleted",

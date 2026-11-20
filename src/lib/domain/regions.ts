@@ -129,8 +129,9 @@ export function incidentOnRegion(
 
 /**
  * True when a status change from this incident counts on the region tab.
- * An old incident counts for every service. A new incident counts only
- * for a service that lists the region, or for a Global service.
+ * An old incident counts for every service. A new incident counts for a
+ * service that lists the region, or for a Global service.
+ * A service that left the incident still counts when its region entry remains.
  */
 function countsOnRegion(
 	incident: RegionalIncident,
@@ -138,7 +139,13 @@ function countsOnRegion(
 	regionId: string,
 ): boolean {
 	if (incident.serviceRegions) {
-		return serviceOnRegion(incident, serviceId, regionId);
+		const entry = incident.serviceRegions.find(
+			(item) => item.serviceId === serviceId,
+		);
+		if (entry) {
+			return entry.regionIds.length === 0 || entry.regionIds.includes(regionId);
+		}
+		return incident.serviceIds.includes(serviceId);
 	}
 	return incident.regionId === undefined || incident.regionId === regionId;
 }
