@@ -68,7 +68,7 @@ export function RegionSelect({
 		<Field
 			label="Region"
 			htmlFor="regionId"
-			hint="Global is the default. It shows on every region tab."
+			hint="Global is the default. A region tab does not show it."
 		>
 			<Select id="regionId" name="regionId" defaultValue={value ?? ""}>
 				<option value="">Global</option>

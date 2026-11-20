@@ -131,6 +131,8 @@ With no regions, the status page is one page.
 
 With regions, the page shows Global and a tab for each region.
 
+A region tab shows only that region.
+
 Delete a region and its incidents move to Global.
 
 ## Tools

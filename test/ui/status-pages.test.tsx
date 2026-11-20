@@ -329,9 +329,13 @@ describe("status page", () => {
 			"page",
 		);
 		expect(screen.queryAllByText("US only")).toEqual([]);
-		expect(screen.getAllByText("Everywhere").length).toBeGreaterThan(0);
-		expect(screen.getAllByText("Partial outage").length).toBeGreaterThan(0);
+		expect(screen.queryAllByText("Everywhere")).toEqual([]);
+		expect(screen.getByText("We're fully operational")).toBeInTheDocument();
+		expect(screen.queryAllByText("Partial outage")).toEqual([]);
 		expect(screen.queryAllByText("Major outage")).toEqual([]);
+		expect(
+			screen.getByRole("link", { name: "View history →" }),
+		).toHaveAttribute("href", `/history?region=${europe.id}`);
 		expect(
 			(
 				await statusMetadata({
@@ -589,6 +593,9 @@ describe("history page", () => {
 			"href",
 			`/history?month=2026-08&region=${united.id}`,
 		);
+		expect(
+			screen.getByRole("link", { name: "Current status" }),
+		).toHaveAttribute("href", `/?region=${united.id}`);
 		expect(
 			await historyMetadata({
 				searchParams: params({ month: "2026-05", region: united.id }),

@@ -202,6 +202,11 @@ function servicesSection(summary: StatusSummary): string {
 	]);
 }
 
+/** A query that keeps the reader on one region. Empty on the Global tab. */
+function regionQuery(region?: Region): string {
+	return region ? `?region=${region.id}` : "";
+}
+
 /** The status page in Markdown: the llms.txt file of the site. */
 export function statusMarkdown(summary: StatusSummary, origin: string): string {
 	const { settings, services } = summary;
@@ -249,9 +254,9 @@ export function statusMarkdown(summary: StatusSummary, origin: string): string {
 			),
 		]),
 		pages([
-			`- ${link("Status page", `${origin}/`)}: this page in HTML.`,
-			`- ${link("Incident history", `${origin}${HISTORY_MARKDOWN_PATH}`)}: the incidents and maintenance of each month, in Markdown.`,
-			`- ${link("Status API", `${origin}/api/v1/status`)}: the current status in JSON.`,
+			`- ${link("Status page", `${origin}/${regionQuery(summary.region)}`)}: this page in HTML.`,
+			`- ${link("Incident history", `${origin}${HISTORY_MARKDOWN_PATH}${regionQuery(summary.region)}`)}: the incidents and maintenance of each month, in Markdown.`,
+			`- ${link("Status API", `${origin}/api/v1/status${regionQuery(summary.region)}`)}: the current status in JSON.`,
 			`- ${link("RSS feed", `${origin}${FEED_PATH}`)}: one item for each incident and maintenance update.`,
 			settings.supportUrl &&
 				`- ${link("Support", settings.supportUrl)}: the support site of ${name}.`,
@@ -287,7 +292,7 @@ export function historyMarkdown(
 		pages([
 			history.older && `- ${link("Older months", page(history.older))}`,
 			history.newer && `- ${link("Newer months", page(history.newer))}`,
-			`- ${link("Current status", `${origin}${LLMS_PATH}`)}`,
+			`- ${link("Current status", `${origin}${LLMS_PATH}${regionQuery(region)}`)}`,
 		]),
 	]);
 }
