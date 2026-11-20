@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { logoutAction } from "@/app/manage/actions";
 import { ChevronDownIcon } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
@@ -15,6 +15,7 @@ import type { PublicMember } from "@/lib/domain/types";
  */
 export function UserMenu({ member }: { member: PublicMember }) {
 	const [open, setOpen] = useState(false);
+	const buttonRef = useRef<HTMLButtonElement>(null);
 	const menuId = useId();
 	const pathname = usePathname();
 	const onProfile = pathname === "/manage/account";
@@ -31,6 +32,8 @@ export function UserMenu({ member }: { member: PublicMember }) {
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.key !== "Escape") return;
 			setOpen(false);
+			// Return focus before the menu leaves the page.
+			buttonRef.current?.focus();
 		};
 		document.addEventListener("pointerdown", onPointerDown);
 		document.addEventListener("keydown", onKeyDown);
@@ -48,6 +51,7 @@ export function UserMenu({ member }: { member: PublicMember }) {
 			className="relative border-t border-border px-3 py-3 lg:mt-6"
 		>
 			<button
+				ref={buttonRef}
 				type="button"
 				aria-expanded={open}
 				aria-haspopup="menu"

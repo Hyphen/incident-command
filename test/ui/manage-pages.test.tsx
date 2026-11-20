@@ -402,10 +402,12 @@ describe("portal layout", () => {
 		).not.toBeInTheDocument();
 
 		fireEvent.click(user);
+		screen.getByRole("menuitem", { name: "My Profile" }).focus();
 		fireEvent.keyDown(document, { key: "Escape" });
 		expect(
 			screen.queryByRole("menu", { name: "User" }),
 		).not.toBeInTheDocument();
+		expect(user).toHaveFocus();
 
 		fireEvent.click(user);
 		fireEvent.click(screen.getByRole("menuitem", { name: "My Profile" }));
