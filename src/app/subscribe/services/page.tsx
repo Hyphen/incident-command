@@ -36,7 +36,7 @@ export default async function ServicesPage({
 		services.catalog.list({ includeHidden: false }),
 	]);
 	return (
-		<PublicPage settings={settings} canSubscribe={canSubscribe}>
+		<PublicPage settings={settings} canSubscribe={canSubscribe} narrow>
 			{subscriber ? (
 				<NoticeCard title="Choose services">
 					<p>

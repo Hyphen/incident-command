@@ -408,6 +408,31 @@ describe("status components", () => {
 		).toBeInTheDocument();
 		expect(screen.getByText("Outage")).toBeInTheDocument();
 		expect(screen.getByText(/50% uptime/)).toBeInTheDocument();
+		for (const item of screen.getAllByRole("listitem", { name: /2026/ })) {
+			const tip = item.querySelector(".absolute");
+			expect(tip).toHaveClass("left-1/2");
+			expect(tip).not.toHaveClass("right-0");
+		}
+	});
+
+	it("keeps a tooltip at either end of a long row inside the row", () => {
+		const days = Array.from({ length: 25 }, (_, index) => ({
+			date: `2026-10-${String(index + 1).padStart(2, "0")}`,
+			status: "operational" as const,
+			uptime: 1,
+			trackedMs: 86_400_000,
+			downtimeMs: 0,
+			incidents: [],
+		}));
+		const { container } = render(<UptimeBars days={days} />);
+		const tips = [...container.querySelectorAll(".ic-uptime-day .absolute")];
+		expect(tips).toHaveLength(25);
+		expect(tips[0]).toHaveClass("left-0");
+		expect(tips[11]).toHaveClass("left-0");
+		expect(tips[12]).toHaveClass("left-1/2", "-translate-x-1/2");
+		expect(tips[13]).toHaveClass("right-0");
+		expect(tips[24]).toHaveClass("right-0");
+		expect(tips[24]).not.toHaveClass("left-1/2");
 	});
 
 	it("renders the minute timeline of each service", () => {

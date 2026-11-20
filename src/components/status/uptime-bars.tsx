@@ -7,6 +7,24 @@ import { STATUS_BG } from "./badges";
 /** Days older than this are hidden on small screens. */
 export const MOBILE_DAYS = 30;
 
+/** Days this close to either end keep the tooltip inside the row. */
+const EDGE_DAYS = 12;
+
+/**
+ * The tooltip of a day near either end of the row stays inside the row.
+ * A short row keeps each tooltip in the center of its day.
+ */
+function tooltipPosition(index: number, total: number): string {
+	const edge = Math.min(EDGE_DAYS, Math.floor((total - 1) / 2));
+	if (edge > 0 && index >= total - edge) {
+		return "right-0";
+	}
+	if (edge > 0 && index < edge) {
+		return "left-0";
+	}
+	return "left-1/2 -translate-x-1/2";
+}
+
 /**
  * The start and end labels under the uptime bars. Small screens show only
  * the last `MOBILE_DAYS` days.
@@ -42,7 +60,9 @@ export function UptimeBars({ days }: { days: DayStatus[] }) {
 						<div
 							className={`ic-uptime-bar h-full rounded-[2px] ${color} transition-opacity group-hover:opacity-70`}
 						/>
-						<div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-lg border border-border bg-surface p-3 text-left text-xs shadow-lg group-hover:block">
+						<div
+							className={`pointer-events-none absolute bottom-full z-20 mb-2 hidden w-56 rounded-lg border border-border bg-surface p-3 text-left text-xs shadow-lg group-hover:block ${tooltipPosition(index, days.length)}`}
+						>
 							<p className="font-semibold">{formatDay(day.date)}</p>
 							<p className="mt-1 text-muted">
 								{label}

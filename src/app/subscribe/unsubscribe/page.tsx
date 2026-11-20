@@ -89,7 +89,7 @@ export default async function UnsubscribePage({
 	}
 
 	return (
-		<PublicPage settings={settings} canSubscribe={canSubscribe}>
+		<PublicPage settings={settings} canSubscribe={canSubscribe} narrow>
 			{body}
 			<Link href="/" className="text-sm text-muted hover:text-fg">
 				← Back to status

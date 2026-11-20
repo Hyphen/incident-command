@@ -20,7 +20,7 @@ export default async function ConfirmPage({
 		services.subscribers.canSubscribe(),
 	]);
 	return (
-		<PublicPage settings={settings} canSubscribe={canSubscribe}>
+		<PublicPage settings={settings} canSubscribe={canSubscribe} narrow>
 			{subscriber ? (
 				<NoticeCard title="You're subscribed">
 					<p>
