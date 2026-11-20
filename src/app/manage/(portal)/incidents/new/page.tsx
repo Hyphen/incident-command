@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
-import { createIncidentAction } from "@/app/manage/actions";
+import {
+	createIncidentAction,
+	createIncidentWithProgressAction,
+} from "@/app/manage/actions";
 import {
 	ImpactSelect,
 	RegionSelect,
@@ -9,6 +12,7 @@ import {
 	TitleField,
 	WindowFields,
 } from "@/components/manage/incident-fields";
+import { SendButton } from "@/components/manage/send-button";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import {
 	buttonClass,
@@ -17,7 +21,6 @@ import {
 	Field,
 	inputClass,
 } from "@/components/manage/ui";
-import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
 import type { IncidentKind } from "@/lib/domain/types";
 
@@ -33,6 +36,7 @@ export default async function NewIncidentPage({
 	const kind: IncidentKind =
 		rawKind === "maintenance" ? "maintenance" : "incident";
 	const { services, app } = await requireMember("editor");
+	const queueProvider = await services.notificationQueue.provider();
 	const [catalog, regions] = await Promise.all([
 		services.catalog.list(),
 		services.regions.list(),
@@ -72,9 +76,14 @@ export default async function NewIncidentPage({
 						<ServiceStatusSelect hint="Automatic derives the status from the impact." />
 					)}
 					<Checkbox name="notify" label="Notify subscribers" defaultChecked />
-					<SubmitButton className={buttonClass.primary}>
+					<SendButton
+						modal={!queueProvider}
+						progressAction={createIncidentWithProgressAction}
+						formAction={createIncidentAction}
+						className={buttonClass.primary}
+					>
 						{isIncident ? "Declare incident" : "Schedule maintenance"}
-					</SubmitButton>
+					</SendButton>
 				</form>
 			</Card>
 		</ManagePage>

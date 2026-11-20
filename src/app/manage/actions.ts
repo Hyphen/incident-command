@@ -16,18 +16,21 @@ import {
 	startSession,
 	twoFactorPath,
 } from "@/lib/auth";
+import { createId } from "@/lib/crypto";
 import type { MoveDirection } from "@/lib/domain/schemas";
 import {
 	TWO_FACTOR_ALREADY_ON,
 	TWO_FACTOR_SECRET_UNREADABLE,
 } from "@/lib/domain/totp";
 import type {
+	Actor,
 	DeliveryStrategy,
 	EventStatus,
 	IncidentImpact,
 	IncidentKind,
 	NotificationChannel,
 	ProviderType,
+	QueueProviderId,
 	Role,
 	ServiceStatus,
 } from "@/lib/domain/types";
@@ -315,33 +318,88 @@ function serviceStatuses(form: FormData) {
 		}));
 }
 
-export async function createIncidentAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMemberForAction("editor");
+function incidentInput(form: FormData) {
 	const kind = (text(form, "kind") || "incident") as IncidentKind;
-	const incident = await attempt(`/manage/incidents/new?kind=${kind}`, () =>
-		services.incidents.create(actor, {
-			kind,
-			title: text(form, "title"),
-			message: text(form, "message"),
-			impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
-			status: nonEmpty(form, "status") as EventStatus | undefined,
-			serviceIds: list(form, "serviceIds"),
-			serviceStatus: nonEmpty(form, "serviceStatus") as
-				| ServiceStatus
-				| undefined,
-			serviceStatuses: serviceStatuses(form),
-			scheduledStart: dateTime(form, "scheduledStart"),
-			scheduledEnd: dateTime(form, "scheduledEnd"),
-			regionId: nonEmpty(form, "regionId"),
-			notify: checkbox(form, "notify"),
-		}),
+	return {
+		kind,
+		title: text(form, "title"),
+		message: text(form, "message"),
+		impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
+		status: nonEmpty(form, "status") as EventStatus | undefined,
+		serviceIds: list(form, "serviceIds"),
+		serviceStatus: nonEmpty(form, "serviceStatus") as ServiceStatus | undefined,
+		serviceStatuses: serviceStatuses(form),
+		scheduledStart: dateTime(form, "scheduledStart"),
+		scheduledEnd: dateTime(form, "scheduledEnd"),
+		regionId: nonEmpty(form, "regionId"),
+		notify: checkbox(form, "notify"),
+	};
+}
+
+async function createIncident(
+	form: FormData,
+	progress: boolean,
+): Promise<SendResult | undefined> {
+	const { actor, services } = await requireMemberForAction("editor");
+	const input = incidentInput(form);
+	const jobId = createId("njb");
+	const incident = await attempt(
+		`/manage/incidents/new?kind=${input.kind}`,
+		() =>
+			services.incidents.create(actor, input, {
+				jobId,
+				delivery: progress ? "background" : "wait",
+			}),
 	);
-	redirect(
-		flash(
-			`/manage/incidents/${incident.id}`,
-			kind === "incident" ? "incident_declared" : "maintenance_scheduled",
-		),
+	const notice =
+		input.kind === "incident" ? "incident_declared" : "maintenance_scheduled";
+	return finishSend(
+		services,
+		actor,
+		incident.id,
+		jobId,
+		flash(`/manage/incidents/${incident.id}`, notice),
+		progress,
 	);
+}
+
+export async function createIncidentAction(form: FormData): Promise<void> {
+	await createIncident(form, false);
+}
+
+/** Declares an incident and returns the job so the status window can poll. */
+export async function createIncidentWithProgressAction(
+	form: FormData,
+): Promise<SendResult | undefined> {
+	return createIncident(form, true);
+}
+
+/** The result of a send that stays on the page and shows the status window. */
+export interface SendResult {
+	jobId: string;
+	href: string;
+}
+
+/**
+ * Redirects after a send. A queued send opens the incident dashboard.
+ * A direct send from the status window returns the job instead.
+ */
+async function finishSend(
+	services: App["services"],
+	actor: Actor,
+	incidentId: string,
+	jobId: string,
+	plain: string,
+	progress: boolean,
+): Promise<SendResult | undefined> {
+	const job = await services.notificationJobs.lookup(actor, jobId);
+	if (job?.queued) {
+		redirect(flash(`/manage/incidents/${incidentId}`, "notifications_queued"));
+	}
+	if (progress && job) {
+		return { jobId: job.id, href: plain };
+	}
+	redirect(plain);
 }
 
 /** The path after a post. A post from the posts tab returns to that tab. */
@@ -353,25 +411,52 @@ function postedPath(id: string, tab: string, formOpen: boolean): string {
 	return formOpen ? `${path}?post=1` : path;
 }
 
-export async function postIncidentUpdateAction(form: FormData): Promise<void> {
+function updateInput(form: FormData) {
+	return {
+		title: nonEmpty(form, "title"),
+		impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
+		status: nonEmpty(form, "status") as EventStatus | undefined,
+		message: text(form, "message"),
+		serviceIds: list(form, "addServiceIds"),
+		serviceStatus: nonEmpty(form, "serviceStatus") as ServiceStatus | undefined,
+		serviceStatuses: serviceStatuses(form),
+		notify: checkbox(form, "notify"),
+	};
+}
+
+async function postIncidentUpdate(
+	form: FormData,
+	progress: boolean,
+): Promise<SendResult | undefined> {
 	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
 	const tab = text(form, "tab");
+	const jobId = createId("njb");
 	await attempt(postedPath(id, tab, true), () =>
-		services.incidents.postUpdate(actor, id, {
-			title: nonEmpty(form, "title"),
-			impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
-			status: nonEmpty(form, "status") as EventStatus | undefined,
-			message: text(form, "message"),
-			serviceIds: list(form, "addServiceIds"),
-			serviceStatus: nonEmpty(form, "serviceStatus") as
-				| ServiceStatus
-				| undefined,
-			serviceStatuses: serviceStatuses(form),
-			notify: checkbox(form, "notify"),
+		services.incidents.postUpdate(actor, id, updateInput(form), {
+			jobId,
+			delivery: progress ? "background" : "wait",
 		}),
 	);
-	redirect(flash(postedPath(id, tab, false), "update_posted"));
+	return finishSend(
+		services,
+		actor,
+		id,
+		jobId,
+		flash(postedPath(id, tab, false), "update_posted"),
+		progress,
+	);
+}
+
+export async function postIncidentUpdateAction(form: FormData): Promise<void> {
+	await postIncidentUpdate(form, false);
+}
+
+/** Posts an update and returns the job so the status window can poll. */
+export async function postIncidentUpdateWithProgressAction(
+	form: FormData,
+): Promise<SendResult | undefined> {
+	return postIncidentUpdate(form, true);
 }
 
 export async function editIncidentAction(form: FormData): Promise<void> {
@@ -426,13 +511,38 @@ export async function saveDraftAction(form: FormData): Promise<void> {
 	redirect(flash(draftPath(id), "draft_saved"));
 }
 
-export async function approveDraftAction(form: FormData): Promise<void> {
+async function approveDraft(
+	form: FormData,
+	progress: boolean,
+): Promise<SendResult | undefined> {
 	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
+	const jobId = createId("njb");
 	const { incident } = await attempt(draftPath(id), () =>
-		services.drafts.approve(actor, id, draftContent(form)),
+		services.drafts.approve(actor, id, draftContent(form), {
+			jobId,
+			delivery: progress ? "background" : "wait",
+		}),
 	);
-	redirect(flash(`/manage/incidents/${incident.id}`, "draft_approved"));
+	return finishSend(
+		services,
+		actor,
+		incident.id,
+		jobId,
+		flash(`/manage/incidents/${incident.id}`, "draft_approved"),
+		progress,
+	);
+}
+
+export async function approveDraftAction(form: FormData): Promise<void> {
+	await approveDraft(form, false);
+}
+
+/** Approves a draft and returns the job so the status window can poll. */
+export async function approveDraftWithProgressAction(
+	form: FormData,
+): Promise<SendResult | undefined> {
+	return approveDraft(form, true);
 }
 
 export async function discardDraftAction(form: FormData): Promise<void> {
@@ -844,6 +954,28 @@ export async function updateNotificationChannelAction(
 		}),
 	);
 	redirect(flash(NOTIFICATIONS_PATH, "notification_channel_saved"));
+}
+
+export async function updateNotificationQueueAction(
+	form: FormData,
+): Promise<void> {
+	const { actor, services } = await requireMemberForAction("admin");
+	const raw = text(form, "provider");
+	const provider =
+		raw === "" || raw === "none" ? undefined : (raw as QueueProviderId);
+	const result = await attempt(NOTIFICATIONS_PATH, () =>
+		services.notificationQueue.update(actor, {
+			revision: integer(form, "revision") ?? Number.NaN,
+			provider,
+			uri: nonEmpty(form, "uri"),
+		}),
+	);
+	redirect(
+		flash(
+			NOTIFICATIONS_PATH,
+			result.ready ? "notification_queue_saved" : "queue_unreachable",
+		),
+	);
 }
 
 export async function addNotificationProviderAction(

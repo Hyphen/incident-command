@@ -53,11 +53,18 @@ const nextConfig: NextConfig = {
 		"@airhornjs/aws",
 		"@airhornjs/twilio",
 		"qrbit",
+		"qified",
+		"@qified/redis",
+		"@qified/rabbitmq",
+		"@qified/nats",
+		"@qified/zeromq",
 	],
 	// The standalone build must copy the qrbit addon. The loader picks the file by platform.
 	outputFileTracingIncludes: {
 		"/manage/account": ["./node_modules/qrbit/**/*"],
 		"/manage/login/two-factor": ["./node_modules/qrbit/**/*"],
+		"/manage/incidents/[id]": ["./node_modules/zeromq/**/*"],
+		"/manage/settings/notifications": ["./node_modules/zeromq/**/*"],
 	},
 };
 

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import {
 	approveDraftAction,
+	approveDraftWithProgressAction,
 	discardDraftAction,
 	saveDraftAction,
 } from "@/app/manage/actions";
@@ -19,6 +20,7 @@ import {
 	TitleField,
 	WindowFields,
 } from "@/components/manage/incident-fields";
+import { SendButton } from "@/components/manage/send-button";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import { buttonClass, Card, Field, inputClass } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
@@ -77,11 +79,13 @@ function ReviewForm({
 	incident,
 	catalog,
 	regions,
+	modal,
 }: {
 	draft: NotificationDraft;
 	incident?: Incident;
 	catalog: Service[];
 	regions: readonly Region[];
+	modal: boolean;
 }) {
 	const { content } = draft;
 	const isCreate = draft.action === "create";
@@ -182,12 +186,14 @@ function ReviewForm({
 					>
 						Save draft
 					</SubmitButton>
-					<SubmitButton
+					<SendButton
+						modal={modal}
+						progressAction={approveDraftWithProgressAction}
 						formAction={approveDraftAction}
 						className={buttonClass.primary}
 					>
 						Approve and send
-					</SubmitButton>
+					</SendButton>
 				</div>
 			</form>
 		</Card>
@@ -297,6 +303,9 @@ export default async function DraftPage({ params, searchParams }: Props) {
 	const pending = draft.state === "pending";
 	const canReview = pending && hasRole(member.role, "editor");
 	const missing = draft.action === "update" && !incident;
+	const queueProvider = canReview
+		? await services.notificationQueue.provider()
+		: undefined;
 	return (
 		<ManagePage
 			title={draft.content.title ?? incident?.title ?? "Deleted incident"}
@@ -330,6 +339,7 @@ export default async function DraftPage({ params, searchParams }: Props) {
 					incident={incident}
 					catalog={catalog}
 					regions={regions}
+					modal={queueProvider === undefined}
 				/>
 			) : (
 				<DraftSummary draft={draft} catalog={catalog} regions={regions} />
