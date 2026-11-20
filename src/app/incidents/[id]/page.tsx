@@ -7,6 +7,7 @@ import { StatusTimeline } from "@/components/status/status-timeline";
 import { Timeline } from "@/components/status/timeline";
 import { LocalTime } from "@/components/time";
 import { getApp } from "@/lib/app";
+import { regionNameFor } from "@/lib/domain/regions";
 import { affectedNames } from "@/lib/domain/status";
 import { formatDuration } from "@/lib/format";
 import { incidentMarkdownPath } from "@/lib/llms";
@@ -38,16 +39,24 @@ export default async function IncidentPage({ params }: Props) {
 	if (!incident) {
 		notFound();
 	}
-	const [settings, catalog, canSubscribe, timeline] = await Promise.all([
-		services.settings.get(),
-		services.catalog.list({ includeHidden: false }),
-		services.subscribers.canSubscribe(),
-		services.status.incidentTimeline(incident),
-	]);
+	const [settings, catalog, canSubscribe, timeline, regions] =
+		await Promise.all([
+			services.settings.get(),
+			services.catalog.list({ includeHidden: false }),
+			services.subscribers.canSubscribe(),
+			services.status.incidentTimeline(incident),
+			services.regions.list(),
+		]);
 	const names = affectedNames(incident, catalog);
+	const regionName = regionNameFor(incident, regions);
+	const backHref =
+		incident.regionId &&
+		regions.some((region) => region.id === incident.regionId)
+			? `/?region=${incident.regionId}`
+			: "/";
 	return (
 		<PublicPage settings={settings} canSubscribe={canSubscribe}>
-			<Link href="/" className="text-sm text-muted hover:text-fg">
+			<Link href={backHref} className="text-sm text-muted hover:text-fg">
 				← Back to status
 			</Link>
 			<article className="space-y-6">
@@ -71,6 +80,12 @@ export default async function IncidentPage({ params }: Props) {
 						)}
 					</div>
 					<dl className="grid gap-x-6 gap-y-1 text-sm text-muted sm:grid-cols-[auto_1fr]">
+						{regionName && (
+							<>
+								<dt>Region</dt>
+								<dd>{regionName}</dd>
+							</>
+						)}
 						{incident.kind === "maintenance" &&
 						incident.scheduledStart &&
 						incident.scheduledEnd ? (

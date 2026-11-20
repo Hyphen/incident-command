@@ -204,6 +204,18 @@ export interface Service {
 	updatedAt: string;
 }
 
+/**
+ * A named region on the status page. Global is not a record.
+ * An incident with no region is global.
+ */
+export interface Region {
+	id: string;
+	name: string;
+	order: number;
+	createdAt: string;
+	updatedAt: string;
+}
+
 /** The status for one affected service of an incident or maintenance. */
 export interface ServiceStatusOverride {
 	serviceId: string;
@@ -224,6 +236,8 @@ export interface IncidentUpdate {
 	status: EventStatus;
 	message: string;
 	author: AuthorRef;
+	/** The author asked to notify subscribers. Old posts omit this field. */
+	notified?: boolean;
 	createdAt: string;
 }
 
@@ -234,6 +248,8 @@ export interface Incident {
 	status: EventStatus;
 	impact: IncidentImpact;
 	serviceIds: string[];
+	/** The region of this incident. Missing means Global. */
+	regionId?: string;
 	updates: IncidentUpdate[];
 	scheduledStart?: string;
 	scheduledEnd?: string;
@@ -451,6 +467,11 @@ export interface Subscriber {
 	token: string;
 	confirmedAt?: string;
 	createdAt: string;
+	/**
+	 * Services that send a notification to this subscriber.
+	 * Omit the list to send a notification for every service.
+	 */
+	serviceIds?: string[];
 }
 
 /** The public text and fields of a notification draft. */
@@ -459,8 +480,13 @@ export interface DraftContent {
 	title?: string;
 	/** The impact of a new incident. Not used by an update. */
 	impact?: IncidentImpact;
-	/** The affected services of a new incident or maintenance. Not used by an update. */
+	/**
+	 * The affected services of a new incident or maintenance.
+	 * On an update, the services to add. An update does not remove a service.
+	 */
 	serviceIds?: string[];
+	/** The region of a new incident or maintenance. Missing means Global. */
+	regionId?: string;
 	/** The window of new maintenance. Not used by an update. */
 	scheduledStart?: string;
 	scheduledEnd?: string;
@@ -491,6 +517,8 @@ export interface NotificationDraft {
 	reviewedBy?: AuthorRef;
 	reviewedAt?: string;
 	publishedAt?: string;
+	/** The id of the post that this draft published. */
+	updateId?: string;
 	createdAt: string;
 	updatedAt: string;
 }

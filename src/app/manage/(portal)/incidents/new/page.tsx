@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { createIncidentAction } from "@/app/manage/actions";
 import {
 	ImpactSelect,
+	RegionSelect,
 	ServicePicker,
 	ServiceStatusSelect,
 	StatusSelect,
@@ -31,7 +32,10 @@ export default async function NewIncidentPage({
 	const kind: IncidentKind =
 		rawKind === "maintenance" ? "maintenance" : "incident";
 	const { services, app } = await requireMember("editor");
-	const catalog = await services.catalog.list();
+	const [catalog, regions] = await Promise.all([
+		services.catalog.list(),
+		services.regions.list(),
+	]);
 	const isIncident = kind === "incident";
 	return (
 		<ManagePage
@@ -59,6 +63,7 @@ export default async function NewIncidentPage({
 						<StatusSelect kind={kind} />
 						{isIncident && <ImpactSelect />}
 					</div>
+					<RegionSelect regions={regions} />
 					{!isIncident && <WindowFields />}
 					<Field
 						label="Message"

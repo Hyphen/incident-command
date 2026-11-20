@@ -9,7 +9,9 @@ import {
 } from "@/app/manage/actions";
 import { ConfirmButton } from "@/components/manage/confirm-button";
 import {
+	AddServices,
 	ImpactSelect,
+	RegionSelect,
 	ServicePicker,
 	ServiceStatusList,
 	ServiceStatusSelect,
@@ -21,6 +23,7 @@ import { buttonClass, Card, Field, inputClass } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
+import { regionNameFor } from "@/lib/domain/regions";
 import {
 	DRAFT_LABELS,
 	DRAFT_STATE_LABELS,
@@ -33,6 +36,7 @@ import type {
 	AuthorRef,
 	Incident,
 	NotificationDraft,
+	Region,
 	Service,
 } from "@/lib/domain/types";
 import { draftPath } from "@/lib/services/drafts";
@@ -71,10 +75,12 @@ function ReviewForm({
 	draft,
 	incident,
 	catalog,
+	regions,
 }: {
 	draft: NotificationDraft;
 	incident?: Incident;
 	catalog: Service[];
+	regions: readonly Region[];
 }) {
 	const { content } = draft;
 	const isCreate = draft.action === "create";
@@ -110,6 +116,9 @@ function ReviewForm({
 					/>
 					{isCreate && isIncident && <ImpactSelect value={content.impact} />}
 				</div>
+				{isCreate && (
+					<RegionSelect regions={regions} value={content.regionId} />
+				)}
 				{isCreate && !isIncident && (
 					<WindowFields
 						start={content.scheduledStart}
@@ -143,12 +152,20 @@ function ReviewForm({
 					hint="Automatic follows the impact and the status. It restores services on resolution and starts maintenance mode when maintenance is in progress."
 				/>
 				{!isCreate && (
-					<ServiceStatusList
-						services={catalog.filter((service) =>
-							(incident as Incident).serviceIds.includes(service.id),
-						)}
-						values={content.serviceStatuses}
-					/>
+					<>
+						<ServiceStatusList
+							services={catalog.filter((service) =>
+								(incident as Incident).serviceIds.includes(service.id),
+							)}
+							values={content.serviceStatuses}
+						/>
+						<AddServices
+							catalog={catalog}
+							affectedIds={(incident as Incident).serviceIds}
+							selected={content.serviceIds}
+							statuses={content.serviceStatuses}
+						/>
+					</>
 				)}
 				<div className="flex flex-wrap gap-2">
 					<SubmitButton
@@ -181,9 +198,11 @@ function Item({ label, children }: { label: string; children: ReactNode }) {
 function DraftSummary({
 	draft,
 	catalog,
+	regions,
 }: {
 	draft: NotificationDraft;
 	catalog: Service[];
+	regions: readonly Region[];
 }) {
 	const { content } = draft;
 	const affected = catalog.filter((service) =>
@@ -204,6 +223,12 @@ function DraftSummary({
 				{content.impact && (
 					<Item label="Impact">{IMPACT_LABELS[content.impact]}</Item>
 				)}
+				{regionNameFor({ regionId: content.regionId }, regions) &&
+					content.regionId && (
+						<Item label="Region">
+							{regionNameFor({ regionId: content.regionId }, regions)}
+						</Item>
+					)}
 				{content.scheduledStart && content.scheduledEnd && (
 					<Item label="Window">
 						<LocalTime iso={content.scheduledStart} /> to{" "}
@@ -211,7 +236,13 @@ function DraftSummary({
 					</Item>
 				)}
 				{affected.length > 0 && (
-					<Item label="Affected services">
+					<Item
+						label={
+							draft.action === "update"
+								? "Services to add"
+								: "Affected services"
+						}
+					>
 						{affected.map((service) => service.name).join(", ")}
 					</Item>
 				)}
@@ -249,9 +280,10 @@ export default async function DraftPage({ params, searchParams }: Props) {
 	if (!draft) {
 		notFound();
 	}
-	const [catalog, incident] = await Promise.all([
+	const [catalog, incident, regions] = await Promise.all([
 		services.catalog.list(),
 		draft.incidentId ? services.incidents.find(draft.incidentId) : undefined,
+		services.regions.list(),
 	]);
 	const pending = draft.state === "pending";
 	const canReview = pending && hasRole(member.role, "editor");
@@ -284,9 +316,14 @@ export default async function DraftPage({ params, searchParams }: Props) {
 				</p>
 			)}
 			{canReview && !missing ? (
-				<ReviewForm draft={draft} incident={incident} catalog={catalog} />
+				<ReviewForm
+					draft={draft}
+					incident={incident}
+					catalog={catalog}
+					regions={regions}
+				/>
 			) : (
-				<DraftSummary draft={draft} catalog={catalog} />
+				<DraftSummary draft={draft} catalog={catalog} regions={regions} />
 			)}
 			{canReview && (
 				<form action={discardDraftAction}>

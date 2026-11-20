@@ -14,9 +14,10 @@ import RootLayout, {
 	viewport,
 } from "@/app/layout";
 import NotFound from "@/app/not-found";
-import StatusPage, { metadata as statusMetadata } from "@/app/page";
+import StatusPage, { generateMetadata as statusMetadata } from "@/app/page";
 import ConfirmPage from "@/app/subscribe/confirm/page";
 import SubscribePage from "@/app/subscribe/page";
+import ServicesPage from "@/app/subscribe/services/page";
 import UnsubscribePage from "@/app/subscribe/unsubscribe/page";
 import { setApp } from "@/lib/app";
 import { DESIGN_SELECTORS, NO_DATA_STATUS } from "@/lib/design";
@@ -117,7 +118,18 @@ describe("status page", () => {
 			"href",
 			"/llms.txt",
 		);
-		expect(statusMetadata.alternates).toEqual({
+		expect(
+			(await statusMetadata({ searchParams: params({}) })).alternates,
+		).toEqual({
+			types: {
+				"application/rss+xml": "/feed.xml",
+				"text/markdown": "/llms.txt",
+			},
+		});
+		expect(
+			(await statusMetadata({ searchParams: params({ region: "" }) }))
+				.alternates,
+		).toEqual({
 			types: {
 				"application/rss+xml": "/feed.xml",
 				"text/markdown": "/llms.txt",
@@ -240,6 +252,7 @@ describe("status page", () => {
 			impact: "major",
 			serviceIds: [api.id],
 		});
+		await services.regions.create(SYSTEM_ACTOR, { name: "United States" });
 		// The header shows the site name, then the logo.
 		render(await StatusPage());
 		await services.settings.updateBranding(
@@ -267,6 +280,73 @@ describe("status page", () => {
 		]) {
 			expect(document.querySelector(selector), selector).not.toBeNull();
 		}
+	});
+
+	it("shows Global and one tab for each region", async () => {
+		const { services } = await setupApp();
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		const united = await services.regions.create(SYSTEM_ACTOR, {
+			name: "United States",
+		});
+		const europe = await services.regions.create(SYSTEM_ACTOR, {
+			name: "Europe",
+		});
+		await services.incidents.create(SYSTEM_ACTOR, {
+			title: "US only",
+			message: "Down",
+			impact: "critical",
+			serviceIds: [api.id],
+			regionId: united.id,
+		});
+		await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Everywhere",
+			message: "Wide",
+			impact: "major",
+			serviceIds: [api.id],
+		});
+		const global = render(await StatusPage());
+		const tabs = within(screen.getByRole("navigation", { name: "Regions" }));
+		expect(tabs.getByRole("link", { name: "Global" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		expect(tabs.getByRole("link", { name: "United States" })).toHaveAttribute(
+			"href",
+			`/?region=${united.id}`,
+		);
+		expect(screen.getAllByText("US only").length).toBeGreaterThan(0);
+		expect(screen.getAllByText("Everywhere").length).toBeGreaterThan(0);
+		expect(screen.getAllByText("Global").length).toBeGreaterThan(1);
+		global.unmount();
+
+		render(
+			await StatusPage({
+				searchParams: params({ region: europe.id }),
+			}),
+		);
+		expect(screen.getByRole("link", { name: "Europe" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		expect(screen.queryAllByText("US only")).toEqual([]);
+		expect(screen.getAllByText("Everywhere").length).toBeGreaterThan(0);
+		expect(screen.getAllByText("Partial outage").length).toBeGreaterThan(0);
+		expect(screen.queryAllByText("Major outage")).toEqual([]);
+		expect(
+			(
+				await statusMetadata({
+					searchParams: params({ region: europe.id }),
+				})
+			).alternates,
+		).toEqual({
+			types: {
+				"application/rss+xml": "/feed.xml",
+				"text/markdown": `/llms.txt?region=${europe.id}`,
+			},
+		});
+		await expectNotFound(
+			StatusPage({ searchParams: params({ region: "reg_missing" }) }),
+		);
 	});
 });
 
@@ -298,6 +378,9 @@ describe("incident page", () => {
 		expect(screen.getByText("API", { selector: "dd" })).toBeInTheDocument();
 		expect(screen.queryByText(/Secret/)).not.toBeInTheDocument();
 		expect(
+			screen.getByRole("link", { name: "← Back to status" }),
+		).toHaveAttribute("href", "/");
+		expect(
 			screen.getByRole("heading", { name: "Status of the affected services" }),
 		).toBeInTheDocument();
 		expect(
@@ -318,6 +401,37 @@ describe("incident page", () => {
 				},
 			},
 		});
+	});
+
+	it("names the region and links back to that tab", async () => {
+		const { app, services } = await setupApp();
+		const united = await services.regions.create(SYSTEM_ACTOR, {
+			name: "United States",
+		});
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "US down",
+			message: "Down",
+			regionId: united.id,
+		});
+		const page = render(
+			await IncidentPage({ params: params({ id: incident.id }) }),
+		);
+		expect(screen.getByText("Region", { selector: "dt" })).toBeInTheDocument();
+		expect(
+			screen.getByText("United States", { selector: "dd" }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "← Back to status" }),
+		).toHaveAttribute("href", `/?region=${united.id}`);
+		page.unmount();
+		await app.store.delete("regions", united.id);
+		render(await IncidentPage({ params: params({ id: incident.id }) }));
+		expect(
+			screen.queryByText("Region", { selector: "dt" }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "← Back to status" }),
+		).toHaveAttribute("href", "/");
 	});
 
 	it("renders maintenance windows", async () => {
@@ -432,6 +546,47 @@ describe("history page", () => {
 		expect(
 			screen.queryByRole("navigation", { name: "History pagination" }),
 		).not.toBeInTheDocument();
+	});
+
+	it("keeps the region on history links", async () => {
+		const { services, clock } = await setupApp();
+		const united = await services.regions.create(SYSTEM_ACTOR, {
+			name: "United States",
+		});
+		clock.set("2026-05-05T00:00:00.000Z");
+		await services.incidents.create(SYSTEM_ACTOR, {
+			title: "May blip",
+			message: "x",
+			status: "resolved",
+			regionId: united.id,
+		});
+		clock.set("2026-11-02T12:00:00.000Z");
+		render(
+			await HistoryPage({
+				searchParams: params({ month: "2026-05", region: united.id }),
+			}),
+		);
+		expect(screen.getAllByText("United States").length).toBeGreaterThan(0);
+		expect(screen.getByRole("link", { name: "Newer →" })).toHaveAttribute(
+			"href",
+			`/history?month=2026-08&region=${united.id}`,
+		);
+		expect(
+			await historyMetadata({
+				searchParams: params({ month: "2026-05", region: united.id }),
+			}),
+		).toEqual({
+			title: "Incident history",
+			alternates: {
+				types: {
+					"application/rss+xml": "/feed.xml",
+					"text/markdown": `/history.md?month=2026-05&region=${united.id}`,
+				},
+			},
+		});
+		await expectNotFound(
+			HistoryPage({ searchParams: params({ region: "reg_missing" }) }),
+		);
 	});
 });
 
@@ -647,9 +802,91 @@ describe("subscription pages", () => {
 		expect(
 			screen.getByText(/jane@example.com will now receive/),
 		).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", {
+				name: "Choose the services that send a notification.",
+			}),
+		).toHaveAttribute(
+			"href",
+			`/subscribe/services?token=${encodeURIComponent(token ?? "")}`,
+		);
 		ok.unmount();
 		render(await ConfirmPage({ searchParams: params({}) }));
 		expect(screen.getByText("This link is invalid")).toBeInTheDocument();
+	});
+
+	it("lets a subscriber choose services", async () => {
+		const { services, notifier } = await setupApp();
+		const hidden = render(await ServicesPage({ searchParams: params({}) }));
+		expect(screen.getByText("This link is invalid")).toBeInTheDocument();
+		hidden.unmount();
+
+		await services.subscribers.subscribe({
+			type: "email",
+			target: "jane@example.com",
+		});
+		const token = notifier.confirmations[0]?.subscriber.token ?? "";
+		const empty = render(
+			await ServicesPage({ searchParams: params({ token }) }),
+		);
+		expect(
+			screen.getByText(
+				"There are no services to choose yet. You get every notice.",
+			),
+		).toBeInTheDocument();
+		empty.unmount();
+
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		await services.catalog.create(SYSTEM_ACTOR, {
+			name: "Billing",
+			hidden: true,
+		});
+		await services.subscribers.setServices(
+			SYSTEM_ACTOR,
+			(await services.subscribers.list(SYSTEM_ACTOR))[0]?.id ?? "",
+			{ serviceIds: [api.id] },
+		);
+		const page = render(
+			await ServicesPage({
+				searchParams: params({
+					token,
+					...flashQueryParams({ notice: "services_saved" }),
+				}),
+			}),
+		);
+		expect(screen.getByRole("status")).toHaveTextContent("Services saved");
+		expect(screen.getByRole("checkbox", { name: "API" })).toBeChecked();
+		expect(screen.queryByRole("checkbox", { name: "Billing" })).toBeNull();
+		page.unmount();
+
+		render(
+			await ServicesPage({
+				searchParams: params({
+					token,
+					...flashQueryParams({ error: "validation_failed" }),
+				}),
+			}),
+		);
+		expect(screen.getByRole("alert")).toHaveTextContent(
+			"Check the form and try again.",
+		);
+	});
+
+	it("shows service tags on the subscribe form", async () => {
+		const { services } = await setupApp();
+		await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		await services.catalog.create(SYSTEM_ACTOR, {
+			name: "Billing",
+			hidden: true,
+		});
+		render(await SubscribePage({ searchParams: params({}) }));
+		expect(screen.getByRole("checkbox", { name: "API" })).not.toBeChecked();
+		expect(screen.queryByRole("checkbox", { name: "Billing" })).toBeNull();
+		expect(
+			screen.getByText(
+				"Select no service to get a notification for every service.",
+			),
+		).toBeInTheDocument();
 	});
 
 	it("renders the unsubscribe confirmation and result", async () => {

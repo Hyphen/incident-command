@@ -60,6 +60,10 @@ export const DESIGN_SELECTORS: readonly DesignSelector[] = [
 	{ selector: ".ic-main", element: "The content column." },
 	{ selector: ".ic-footer", element: "The footer of the page." },
 	{
+		selector: ".ic-regions",
+		element: "The region tabs. The page shows them when a region exists.",
+	},
+	{
 		selector: ".ic-banner",
 		element: "The banner that shows the overall status.",
 		attributes: { "data-status": STATUS_VALUES },

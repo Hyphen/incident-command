@@ -137,6 +137,7 @@ describe("MCP handler", () => {
 			"whoami",
 			"get_status",
 			"list_services",
+			"list_regions",
 			"list_incidents",
 			"get_incident",
 			"get_notification_draft",
@@ -145,19 +146,60 @@ describe("MCP handler", () => {
 		expect(editor).toContain("create_incident");
 		expect(editor).toContain("draft_notification");
 		expect(editor).not.toContain("create_agent_token");
+		expect(editor).not.toContain("set_subscriber_services");
 		const admin = await names("admin");
 		expect(admin).toContain("create_agent_token");
 		expect(admin).toContain("get_notification_settings");
 		expect(admin).toContain("update_notification_channel");
-		expect(admin).toHaveLength(40);
+		expect(admin).toHaveLength(45);
+		expect(admin).toContain("create_region");
 		expect(admin).toEqual(
 			expect.arrayContaining([
 				"create_agent",
 				"update_agent",
 				"delete_agent",
 				"list_agent_activity",
+				"set_subscriber_services",
 			]),
 		);
+	});
+
+	it("reads and updates one region", async () => {
+		const { client, call } = await connect(
+			t,
+			await tokenFor(t, permissionsForRole("editor"), "editor bot"),
+		);
+		const region = (await call("create_region", { name: "United States" }))
+			.data;
+		expect(region.name).toBe("United States");
+		expect((await call("list_regions")).data).toEqual([region]);
+		const incident = (
+			await call("create_incident", {
+				title: "API errors",
+				message: "Investigating",
+				regionId: region.id,
+				impact: "major",
+			})
+		).data;
+		expect(incident.regionId).toBe(region.id);
+		const status = (await call("get_status", { regionId: region.id })).data;
+		expect(status.region).toBe("United States");
+		expect(status.activeIncidents[0].regionId).toBe(region.id);
+		const missing = await call("get_status", { regionId: "reg_missing" });
+		expect(missing.isError).toBe(true);
+		expect(missing.text).toMatch(/not_found/);
+		const renamed = (
+			await call("update_region", { id: region.id, name: "US East" })
+		).data;
+		expect(renamed.name).toBe("US East");
+		expect((await call("delete_region", { id: region.id })).data).toEqual({
+			deleted: region.id,
+		});
+		expect((await call("list_regions")).data).toEqual([]);
+		expect(
+			(await call("get_incident", { id: incident.id })).data.regionId,
+		).toBe(undefined);
+		await client.close();
 	});
 
 	it("lets an editor agent run an incident end to end", async () => {
@@ -243,6 +285,21 @@ describe("MCP handler", () => {
 		expect((await t.services.catalog.get(web.id)).status).toBe(
 			"partial_outage",
 		);
+		const db = await t.services.catalog.create(ADMIN, { name: "DB" });
+		await call("post_incident_update", {
+			id: incident.id,
+			message: "The database is affected too",
+			serviceIds: [db.id],
+		});
+		expect((await t.services.incidents.get(incident.id)).serviceIds).toEqual([
+			api.id,
+			web.id,
+			db.id,
+		]);
+		expect((await t.services.catalog.get(db.id)).status).toBe("major_outage");
+		expect((await t.services.catalog.get(api.id)).status).toBe(
+			"degraded_performance",
+		);
 		await call("edit_incident", {
 			id: incident.id,
 			title: "API errors after deploy",
@@ -257,10 +314,10 @@ describe("MCP handler", () => {
 			status: "resolved",
 			title: "API errors after deploy",
 		});
-		expect(resolved.updates).toHaveLength(3);
+		expect(resolved.updates).toHaveLength(4);
 		expect(
 			(await call("get_incident", { id: incident.id })).data.updates,
-		).toHaveLength(3);
+		).toHaveLength(4);
 
 		const maintenance = (
 			await call("schedule_maintenance", {
@@ -358,13 +415,16 @@ describe("MCP handler", () => {
 			state: "approved",
 			incidentId: incident.id,
 		});
+		const web = await t.services.catalog.create(ADMIN, { name: "Web" });
 		const update = (
 			await call("draft_notification", {
 				incidentId: incident.id,
 				message: "A fix is ready.",
 				status: "monitoring",
+				serviceIds: [web.id],
 				serviceStatuses: [
 					{ serviceId: api.id, status: "degraded_performance" },
+					{ serviceId: web.id, status: "partial_outage" },
 				],
 			})
 		).data;
@@ -373,8 +433,10 @@ describe("MCP handler", () => {
 			kind: "incident",
 			incidentId: incident.id,
 			content: {
+				serviceIds: [web.id],
 				serviceStatuses: [
 					{ serviceId: api.id, status: "degraded_performance" },
+					{ serviceId: web.id, status: "partial_outage" },
 				],
 			},
 		});
@@ -516,6 +578,34 @@ describe("MCP handler", () => {
 			"sms",
 		]);
 		expect((await call("list_subscribers")).data).toHaveLength(3);
+		const api = (await call("create_service", { name: "API" })).data;
+		const tagged = (
+			await call("add_subscriber", {
+				type: "email",
+				target: "api@acme.dev",
+				serviceIds: [api.id],
+			})
+		).data;
+		expect(tagged.serviceIds).toEqual([api.id]);
+		expect(
+			(await call("list_subscribers")).data.find(
+				(subscriber: { id: string }) => subscriber.id === tagged.id,
+			).serviceIds,
+		).toEqual([api.id]);
+		const cleared = (
+			await call("set_subscriber_services", {
+				id: tagged.id,
+				serviceIds: [],
+			})
+		).data;
+		expect(cleared.serviceIds).toBeUndefined();
+		expect(cleared).not.toHaveProperty("token");
+		const unknown = await call("set_subscriber_services", {
+			id: tagged.id,
+			serviceIds: ["svc_missing"],
+		});
+		expect(unknown.isError).toBe(true);
+		expect(unknown.text).toMatch(/svc_missing/);
 
 		const channel = (
 			await call("update_notification_channel", {

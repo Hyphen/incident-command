@@ -11,6 +11,7 @@ import type {
 	OAuthClient,
 	OAuthCode,
 	OAuthGrant,
+	Region,
 	Service,
 	ServiceStatusChange,
 	Session,
@@ -23,6 +24,7 @@ export interface CollectionMap {
 	settings: Settings;
 	brand_assets: BrandAsset;
 	services: Service;
+	regions: Region;
 	service_status_changes: ServiceStatusChange;
 	incidents: Incident;
 	members: Member;
@@ -46,6 +48,7 @@ export const COLLECTIONS: readonly CollectionName[] = [
 	"settings",
 	"brand_assets",
 	"services",
+	"regions",
 	"service_status_changes",
 	"incidents",
 	"members",
@@ -75,6 +78,7 @@ export const INDEXES: Record<CollectionName, readonly IndexDefinition[]> = {
 	settings: [],
 	brand_assets: [],
 	services: [{ field: "order" }],
+	regions: [{ field: "order" }],
 	service_status_changes: [{ field: "serviceId" }, { field: "createdAt" }],
 	incidents: [{ field: "status" }, { field: "createdAt" }],
 	members: [{ field: "email", unique: true }],
@@ -99,7 +103,11 @@ export const INDEXES: Record<CollectionName, readonly IndexDefinition[]> = {
 		{ field: "token", unique: true },
 		{ field: "target", unique: true },
 	],
-	notification_drafts: [{ field: "state" }, { field: "createdAt" }],
+	notification_drafts: [
+		{ field: "state" },
+		{ field: "createdAt" },
+		{ field: "incidentId" },
+	],
 	notification_channels: [],
 };
 

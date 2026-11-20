@@ -1,0 +1,247 @@
+import type { Incident } from "@/lib/domain/types";
+import {
+	ConflictError,
+	ForbiddenError,
+	NotFoundError,
+	ValidationError,
+} from "@/lib/errors";
+import type { DocumentStore } from "@/lib/store/types";
+import {
+	createTestContext,
+	EDITOR,
+	type TestContext,
+	VIEWER,
+} from "../helpers";
+
+describe("RegionService", () => {
+	let t: TestContext;
+	beforeEach(() => {
+		t = createTestContext();
+	});
+
+	it("creates, lists, renames and deletes regions", async () => {
+		const first = await t.services.regions.create(EDITOR, {
+			name: "United States",
+		});
+		t.clock.advance(1000);
+		const second = await t.services.regions.create(EDITOR, {
+			name: "Europe",
+			order: 0,
+		});
+		expect(first.order).toBe(0);
+		expect(second.order).toBe(0);
+		expect(
+			(await t.services.regions.list()).map((region) => region.id),
+		).toEqual([first.id, second.id]);
+
+		const renamed = await t.services.regions.update(EDITOR, first.id, {
+			name: "united states",
+		});
+		expect(renamed.name).toBe("united states");
+		const moved = await t.services.regions.update(EDITOR, first.id, {
+			order: 5,
+		});
+		expect(moved).toMatchObject({ name: "united states", order: 5 });
+		const same = await t.services.regions.update(EDITOR, first.id, {
+			name: "united states",
+		});
+		expect(same.order).toBe(5);
+		expect(await t.services.regions.get(first.id)).toMatchObject({
+			name: "united states",
+		});
+
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Down",
+			message: "Looking",
+			regionId: first.id,
+		});
+		await t.store.insert("incidents", {
+			...incident,
+			id: "inc_legacy",
+			revision: undefined,
+		});
+		await t.services.regions.delete(EDITOR, first.id);
+		expect(await t.services.regions.list()).toEqual([second]);
+		expect(
+			(await t.services.incidents.get(incident.id)).regionId,
+		).toBeUndefined();
+		expect((await t.store.get("incidents", "inc_legacy"))?.revision).toBe(1);
+		expect(
+			(await t.store.get("incidents", "inc_legacy"))?.regionId,
+		).toBeUndefined();
+		await t.services.regions.delete(EDITOR, second.id);
+		expect(await t.services.regions.list()).toEqual([]);
+	});
+
+	it("rejects a reserved name, a duplicate name and a missing region", async () => {
+		await expect(
+			t.services.regions.create(EDITOR, { name: " global " }),
+		).rejects.toThrow("Global is the default region. Choose another name.");
+		const region = await t.services.regions.create(EDITOR, {
+			name: "United States",
+		});
+		await expect(
+			t.services.regions.create(EDITOR, { name: "united states" }),
+		).rejects.toBeInstanceOf(ValidationError);
+		await expect(
+			t.services.regions.update(EDITOR, region.id, { name: "Global" }),
+		).rejects.toThrow("Global is the default region. Choose another name.");
+		const other = await t.services.regions.create(EDITOR, { name: "Europe" });
+		await expect(
+			t.services.regions.update(EDITOR, other.id, { name: "UNITED STATES" }),
+		).rejects.toThrow("A region with that name already exists");
+		await expect(
+			t.services.regions.create(EDITOR, { name: "" }),
+		).rejects.toBeInstanceOf(ValidationError);
+		await expect(t.services.regions.get("reg_missing")).rejects.toBeInstanceOf(
+			NotFoundError,
+		);
+		await expect(
+			t.services.regions.update(EDITOR, "reg_missing", { name: "Asia" }),
+		).rejects.toBeInstanceOf(NotFoundError);
+		await expect(
+			t.services.regions.delete(EDITOR, "reg_missing"),
+		).rejects.toBeInstanceOf(NotFoundError);
+	});
+
+	function replaceUpdate(change: (current: Incident) => Promise<void>): void {
+		const update = t.store.update.bind(t.store);
+		let raced = false;
+		t.store.update = (async (collection, doc, options) => {
+			if (!raced && collection === "incidents" && options?.where) {
+				raced = true;
+				const current = await t.store.get("incidents", doc.id, {
+					consistent: true,
+				});
+				if (current) {
+					await change(current);
+				}
+			}
+			return update(collection, doc, options);
+		}) as DocumentStore["update"];
+	}
+
+	it("keeps a newer incident update when a region is deleted", async () => {
+		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Down",
+			message: "Looking",
+			regionId: region.id,
+		});
+		replaceUpdate(async (current) => {
+			await t.store.update("incidents", {
+				...current,
+				updates: [
+					...current.updates,
+					{
+						id: "upd_race",
+						status: current.status,
+						message: "Posted during the delete",
+						author: current.createdBy,
+						createdAt: current.updatedAt,
+					},
+				],
+				revision: (current.revision ?? 0) + 1,
+			});
+		});
+		await t.services.regions.delete(EDITOR, region.id);
+		const saved = await t.services.incidents.get(incident.id);
+		expect(saved.regionId).toBeUndefined();
+		expect(saved.updates.map((update) => update.message)).toContain(
+			"Posted during the delete",
+		);
+	});
+
+	it("stops when the incident keeps changing", async () => {
+		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Down",
+			message: "Looking",
+			regionId: region.id,
+		});
+		const update = t.store.update.bind(t.store);
+		t.store.update = (async (collection, doc, options) => {
+			if (collection === "incidents" && options?.where) {
+				const current = await t.store.get("incidents", doc.id, {
+					consistent: true,
+				});
+				if (current) {
+					await update("incidents", {
+						...current,
+						revision: (current.revision ?? 0) + 1,
+					});
+				}
+			}
+			return update(collection, doc, options);
+		}) as DocumentStore["update"];
+		await expect(
+			t.services.regions.delete(EDITOR, region.id),
+		).rejects.toBeInstanceOf(ConflictError);
+		expect(await t.services.regions.list()).toEqual([region]);
+		expect((await t.services.incidents.get(incident.id)).regionId).toBe(
+			region.id,
+		);
+	});
+
+	it("deletes a region when the incident is already gone", async () => {
+		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Down",
+			message: "Looking",
+			regionId: region.id,
+		});
+		replaceUpdate(async (current) => {
+			await t.store.delete("incidents", current.id);
+		});
+		await t.services.regions.delete(EDITOR, region.id);
+		expect(await t.store.get("incidents", incident.id)).toBeUndefined();
+		expect(await t.services.regions.list()).toEqual([]);
+	});
+
+	it("keeps a clear that another delete already saved", async () => {
+		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Down",
+			message: "Looking",
+			regionId: region.id,
+		});
+		replaceUpdate(async (current) => {
+			const next: Incident = {
+				...current,
+				updates: [
+					...current.updates,
+					{
+						id: "upd_race",
+						status: current.status,
+						message: "Cleared first",
+						author: current.createdBy,
+						createdAt: current.updatedAt,
+					},
+				],
+				revision: (current.revision ?? 0) + 1,
+			};
+			delete next.regionId;
+			await t.store.update("incidents", next);
+		});
+		await t.services.regions.delete(EDITOR, region.id);
+		const saved = await t.services.incidents.get(incident.id);
+		expect(saved.regionId).toBeUndefined();
+		expect(saved.updates.map((update) => update.message)).toContain(
+			"Cleared first",
+		);
+	});
+
+	it("requires the service permissions", async () => {
+		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		await expect(t.services.regions.list()).resolves.toEqual([region]);
+		await expect(
+			t.services.regions.create(VIEWER, { name: "Asia" }),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		await expect(
+			t.services.regions.update(VIEWER, region.id, { name: "Asia" }),
+		).rejects.toBeInstanceOf(ForbiddenError);
+		await expect(
+			t.services.regions.delete(VIEWER, region.id),
+		).rejects.toBeInstanceOf(ForbiddenError);
+	});
+});

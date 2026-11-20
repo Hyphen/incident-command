@@ -9,10 +9,12 @@ import {
 	createAgentAction,
 	createAgentTokenAction,
 	createIncidentAction,
+	createRegionAction,
 	createServiceAction,
 	deleteAgentAction,
 	deleteIncidentAction,
 	deleteMemberAction,
+	deleteRegionAction,
 	deleteServiceAction,
 	deleteSubscriberAction,
 	denyAgentAction,
@@ -38,12 +40,15 @@ import {
 	updateMemberAction,
 	updateNotificationChannelAction,
 	updateNotificationProviderAction,
+	updateRegionAction,
 	updateServiceAction,
+	updateSubscriberServicesAction,
 } from "@/app/manage/actions";
 import {
 	subscribeAction,
 	unsubscribeAction,
 	unsubscribeAddressAction,
+	updateServicesAction,
 } from "@/app/subscribe/actions";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { BRAND_ASSET_MESSAGES } from "@/lib/domain/brand-asset";
@@ -342,9 +347,10 @@ describe("incident actions", () => {
 			),
 			`/manage/incidents/${incident?.id}?notice=Incident saved`,
 		);
-		expect((await services.incidents.get(incident?.id ?? "")).title).toBe(
-			"API outage",
-		);
+		expect(await services.incidents.get(incident?.id ?? "")).toMatchObject({
+			title: "API outage",
+			serviceIds: [api.id],
+		});
 
 		expectSameFlash(
 			await redirectOf(deleteIncidentAction(form({ id: incident?.id ?? "" }))),
@@ -391,7 +397,7 @@ describe("incident actions", () => {
 		expect(await statusOf(web?.id)).toBe("major_outage");
 		expect(await statusOf(db?.id)).toBe("operational");
 
-		// The update form has no picker. Each status with a value counts.
+		// The update form has no full picker. Each status with a value counts.
 		await redirectOf(
 			postIncidentUpdateAction(
 				form({
@@ -406,6 +412,28 @@ describe("incident actions", () => {
 		);
 		expect(await statusOf(api?.id)).toBe("partial_outage");
 		expect(await statusOf(web?.id)).toBe("degraded_performance");
+
+		// The update form can add a service. A status for a service that is not selected has no effect.
+		const added = await redirectOf(
+			postIncidentUpdateAction(
+				form({
+					id: incident?.id ?? "",
+					message: "DB is down",
+					addServiceIds: ["", db?.id ?? ""],
+					addServiceCandidate: [db?.id ?? "", "left-out"],
+					[`serviceStatus:${api?.id}`]: "degraded_performance",
+					[`serviceStatus:${db?.id}`]: "major_outage",
+					"serviceStatus:left-out": "partial_outage",
+				}),
+			),
+		);
+		expect(flashMessage(added, "notice")).toBe("Update posted");
+		expect(
+			(await services.incidents.get(incident?.id ?? "")).serviceIds,
+		).toEqual([api?.id, web?.id, db?.id]);
+		expect(await statusOf(api?.id)).toBe("degraded_performance");
+		expect(await statusOf(web?.id)).toBe("degraded_performance");
+		expect(await statusOf(db?.id)).toBe("major_outage");
 	});
 
 	it("schedules maintenance from datetime-local inputs", async () => {
@@ -457,6 +485,9 @@ describe("incident actions", () => {
 		expect(new URL(missingUpdate, "http://localhost").pathname).toBe(
 			"/manage/incidents/nope",
 		);
+		expect(
+			new URL(missingUpdate, "http://localhost").searchParams.get("post"),
+		).toBe("1");
 		expect(flashMessage(missingUpdate, "error")).toBeTruthy();
 		const missingEdit = await redirectOf(
 			editIncidentAction(form({ id: "nope", title: "x" })),
@@ -523,11 +554,12 @@ describe("notification draft actions", () => {
 			`/manage/drafts/${draft.id}?error=This draft was already approved`,
 		);
 
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		const update = await services.drafts.create(AGENT, {
 			incidentId: incident?.id ?? "",
 			message: "y",
 		});
-		// The form of an update has no title, impact, services or window.
+		// The form of an update has no title, impact or window. It can add a service.
 		expectSameFlash(
 			await redirectOf(
 				saveDraftAction(
@@ -535,7 +567,10 @@ describe("notification draft actions", () => {
 						id: update.id,
 						status: "monitoring",
 						message: "Edited",
+						addServiceIds: ["", web.id],
+						addServiceCandidate: [web.id],
 						[`serviceStatus:${api.id}`]: "degraded_performance",
+						[`serviceStatus:${web.id}`]: "major_outage",
 					}),
 				),
 			),
@@ -544,15 +579,41 @@ describe("notification draft actions", () => {
 		expect((await services.drafts.get(update.id)).content).toMatchObject({
 			status: "monitoring",
 			message: "Edited",
-			serviceStatuses: [{ serviceId: api.id, status: "degraded_performance" }],
+			serviceIds: [web.id],
+			serviceStatuses: [
+				{ serviceId: api.id, status: "degraded_performance" },
+				{ serviceId: web.id, status: "major_outage" },
+			],
+		});
+		const approvedUpdate = await redirectOf(
+			approveDraftAction(
+				form({
+					id: update.id,
+					status: "monitoring",
+					message: "Edited",
+					addServiceIds: [web.id],
+					addServiceCandidate: [web.id],
+					[`serviceStatus:${api.id}`]: "degraded_performance",
+					[`serviceStatus:${web.id}`]: "major_outage",
+				}),
+			),
+		);
+		expect(flashMessage(approvedUpdate, "notice")).toContain("Draft approved");
+		expect(await services.incidents.get(incident?.id ?? "")).toMatchObject({
+			serviceIds: [api.id, web.id],
+		});
+		expect((await services.catalog.get(web.id)).status).toBe("major_outage");
+		const later = await services.drafts.create(AGENT, {
+			incidentId: incident?.id ?? "",
+			message: "y",
 		});
 		expectSameFlash(
-			await redirectOf(discardDraftAction(form({ id: update.id }))),
-			"/manage/drafts?notice=Draft discarded",
+			await redirectOf(discardDraftAction(form({ id: later.id }))),
+			"/manage/incidents?notice=Draft discarded",
 		);
 		expectSameFlash(
-			await redirectOf(discardDraftAction(form({ id: update.id }))),
-			`/manage/drafts/${update.id}?error=This draft was already discarded`,
+			await redirectOf(discardDraftAction(form({ id: later.id }))),
+			`/manage/drafts/${later.id}?error=This draft was already discarded`,
 		);
 	});
 
@@ -1060,6 +1121,44 @@ describe("subscriber and settings actions", () => {
 			),
 			"/manage/subscribers?notice=Subscriber added",
 		);
+		const api = await services.catalog.create(actor, { name: "API" });
+		expectSameFlash(
+			await redirectOf(
+				addSubscriberAction(
+					form({
+						type: "email",
+						target: "api@acme.dev",
+						serviceIds: [api.id],
+					}),
+				),
+			),
+			"/manage/subscribers?notice=Subscriber added",
+		);
+		const chosen = (await services.subscribers.list(actor)).find(
+			(item) => item.target === "api@acme.dev",
+		);
+		expect(chosen?.serviceIds).toEqual([api.id]);
+		expectSameFlash(
+			await redirectOf(
+				updateSubscriberServicesAction(
+					form({ id: chosen?.id ?? "", serviceIds: [] }),
+				),
+			),
+			"/manage/subscribers?notice=Services saved",
+		);
+		expect(
+			(await services.subscribers.list(actor)).find(
+				(item) => item.id === chosen?.id,
+			)?.serviceIds,
+		).toBeUndefined();
+		expect(
+			flashMessage(
+				await redirectOf(
+					updateSubscriberServicesAction(form({ id: "sub_missing" })),
+				),
+				"error",
+			),
+		).toBe("That item was not found.");
 		expect(
 			(await services.subscribers.list(actor)).map((item) => item.target),
 		).toContain("+15551234567");
@@ -1558,6 +1657,70 @@ describe("public subscribe actions", () => {
 		);
 	});
 
+	it("saves the services a subscriber chooses", async () => {
+		const { services, notifier } = await setupApp();
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		await services.subscribers.subscribe({
+			type: "email",
+			target: "jane@example.com",
+			serviceIds: [api.id],
+		});
+		const token = notifier.confirmations[0]?.subscriber.token ?? "";
+		expect(
+			await redirectOf(
+				subscribeAction(
+					form({
+						type: "email",
+						target: "sam@example.com",
+						serviceIds: [api.id],
+					}),
+				),
+			),
+		).toBe("/subscribe?channel=email&status=confirmation_sent");
+		expect(notifier.confirmations.at(-1)?.subscriber.serviceIds).toEqual([
+			api.id,
+		]);
+		expect(
+			flashMessage(
+				await redirectOf(updateServicesAction(form({ token, serviceIds: [] }))),
+				"notice",
+			),
+		).toBe("Services saved");
+		expect(
+			(await services.subscribers.list(SYSTEM_ACTOR)).find(
+				(subscriber) => subscriber.target === "jane@example.com",
+			)?.serviceIds,
+		).toBeUndefined();
+		expect(
+			flashMessage(
+				await redirectOf(
+					updateServicesAction(form({ token, serviceIds: [api.id] })),
+				),
+				"notice",
+			),
+		).toBe("Services saved");
+		expect(await redirectOf(updateServicesAction(new FormData()))).toBe(
+			"/subscribe/services",
+		);
+		expect(
+			await redirectOf(updateServicesAction(form({ token: "nope" }))),
+		).toBe("/subscribe/services");
+		expect(
+			flashMessage(
+				await redirectOf(
+					updateServicesAction(form({ token, serviceIds: ["svc_missing"] })),
+				),
+				"error",
+			),
+		).toBe("Check the form and try again.");
+		vi.spyOn(services.subscribers, "updateOwnServices").mockRejectedValueOnce(
+			new Error("db down"),
+		);
+		await expect(
+			updateServicesAction(form({ token, serviceIds: [api.id] })),
+		).rejects.toThrow("db down");
+	});
+
 	it("unsubscribes an address that the visitor enters", async () => {
 		const { services } = await setupApp();
 		await services.subscribers.addWebhook(SYSTEM_ACTOR, {
@@ -1597,5 +1760,96 @@ describe("public subscribe actions", () => {
 		await expect(
 			subscribeAction(form({ type: "email", target: "a@b.co" })),
 		).rejects.toThrow("db down");
+	});
+});
+
+describe("region actions", () => {
+	it("creates a region and selects it on an incident", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "editor");
+		expectSameFlash(
+			await redirectOf(createRegionAction(form({ name: "United States" }))),
+			"/manage/regions?notice=Region created",
+		);
+		const [region] = await services.regions.list();
+		expectSameFlash(
+			await redirectOf(
+				updateRegionAction(
+					form({ id: region?.id ?? "", name: "US East", order: "2" }),
+				),
+			),
+			"/manage/regions?notice=Region saved",
+		);
+		const created = await redirectOf(
+			createIncidentAction(
+				form({
+					title: "API down",
+					message: "Investigating",
+					regionId: region?.id ?? "",
+				}),
+			),
+		);
+		const [incident] = await services.incidents.list();
+		expect(incident?.regionId).toBe(region?.id);
+		expectSameFlash(
+			created,
+			`/manage/incidents/${incident?.id}?notice=Incident declared`,
+		);
+		expectSameFlash(
+			await redirectOf(
+				editIncidentAction(
+					form({ id: incident?.id ?? "", title: "API outage" }),
+				),
+			),
+			`/manage/incidents/${incident?.id}?notice=Incident saved`,
+		);
+		expect((await services.incidents.get(incident?.id ?? "")).regionId).toBe(
+			region?.id,
+		);
+		expectSameFlash(
+			await redirectOf(
+				editIncidentAction(
+					form({ id: incident?.id ?? "", title: "API outage", regionId: "" }),
+				),
+			),
+			`/manage/incidents/${incident?.id}?notice=Incident saved`,
+		);
+		expect(
+			(await services.incidents.get(incident?.id ?? "")).regionId,
+		).toBeUndefined();
+		const draft = await services.drafts.create(agentActor(), {
+			title: "Next",
+			message: "x",
+		});
+		expectSameFlash(
+			await redirectOf(
+				saveDraftAction(
+					form({
+						id: draft.id,
+						title: "Next",
+						message: "Edited",
+						regionId: region?.id ?? "",
+					}),
+				),
+			),
+			`/manage/drafts/${draft.id}?notice=Draft saved`,
+		);
+		expect((await services.drafts.get(draft.id)).content.regionId).toBe(
+			region?.id,
+		);
+		expectSameFlash(
+			await redirectOf(deleteRegionAction(form({ id: region?.id ?? "" }))),
+			"/manage/regions?notice=Region deleted",
+		);
+		expect(await services.regions.list()).toEqual([]);
+	});
+
+	it("rejects the reserved region name", async () => {
+		const { app } = await setupApp();
+		await signIn(app, "editor");
+		expectSameFlash(
+			await redirectOf(createRegionAction(form({ name: "Global" }))),
+			"/manage/regions?error=Global is the default region. Choose another name.",
+		);
 	});
 });

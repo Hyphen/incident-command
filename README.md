@@ -10,16 +10,18 @@
 ## Features
 
 - **Status page:** overall status banner, active incidents, upcoming maintenance, grouped services with 90-day uptime bars, incident history, incident pages with the status of each affected service for each minute of the incident and the 2 hours before and after it, an RSS feed with one item for each incident update, and a public JSON API. Light and dark mode, mobile friendly.
+- **Regions:** Name a region when you need one. An incident uses Global unless you select a region. With no regions, the status page is one page. With regions, the page shows Global and a tab for each region.
 - **Pages for agents:** `/llms.txt` gives the status page in Markdown ([llms.txt](https://llmstxt.org)). The history and each incident page also have a Markdown version at `/history.md` and `/incidents/{id}.md`. An agent can read them without credentials.
 - **MCP server:** a Streamable HTTP endpoint at `/api/mcp`. Each agent has its own permissions. A new agent can read the status page and write drafts. It cannot publish or notify subscribers until an admin grants those permissions. See [docs/mcp.md](docs/mcp.md).
 - **Human review of notifications:** an agent can save a notification as a draft. The MCP server returns a review link. A person opens the link, changes the draft if necessary, and approves it. Nothing is published or sent before approval. See [docs/mcp.md](docs/mcp.md#notification-drafts).
-- **Manage portal** at `/manage`: declare incidents, post updates, review notification drafts, manage services, members (viewer/editor/admin, added with one-time invite links), connected agents and API tokens, subscribers, and settings in three sections: General, Branding and Notifications.
+- **Manage portal** at `/manage`: declare incidents, post updates, review notification drafts on the incidents page, manage services, members (viewer/editor/admin, added with one-time invite links), connected agents and API tokens, subscribers, and settings in three sections: General, Branding and Notifications.
 - **Two-factor authentication:** A member can turn on an authenticator app and can save recovery codes. The setup page shows a QR code for a password manager. An admin can require it from Settings, General. The requirement starts on.
 - **Skinnable:** Tailwind CSS v4 on top of CSS design tokens. Pick a theme preset, upload a logo and a favicon, and add custom CSS from the portal, or add your own preset. An agent can do the same design with the MCP server. See [docs/theming.md](docs/theming.md).
 - **Runs anywhere:** Docker image for any container host, plus guides for Cloudflare, DigitalOcean, Google Cloud, AWS and Azure. See [docs/deployment.md](docs/deployment.md).
 - **Pluggable storage:** PostgreSQL, MongoDB or in-memory, chosen from `DATABASE_URI`. Adding an adapter means implementing one small interface.
 - **Keeps working when the database doesn't:** reads go through a [cacheable](https://cacheable.org) layer that never expires entries while the database is offline, so the status page keeps serving the last known state during an outage.
 - **Notifications with [airhorn](https://airhorn.org):** signed webhooks (Slack and Discord compatible), email through SendGrid or Amazon SES, and text messages through Twilio or Amazon SNS. Visitors subscribe through each channel that can send, with double opt-in. Email and text messaging can have more than one provider, active/passive or load balanced. Provider credentials are encrypted in the database with `ENCRYPTION_KEY`.
+- **Service choice:** a subscriber can choose the services that send a notification. Set the choice on the status page, in the portal, with the API, or with MCP. No choice sends a notification for every service.
 
 <table>
 <tr>
@@ -83,6 +85,16 @@ claude mcp add --transport http incident-command https://status.example.com/api/
 The agent opens the portal in your browser. Sign in and select **Allow**. A new agent can read the status page and write drafts. For a script that cannot sign in, an admin can add an API token on the agent page.
 
 Ask your agent something like _"We're seeing API errors in us-east, declare a major incident on the REST API and keep the status page updated"_. An agent only sees the tools that its permissions allow. Details in [docs/mcp.md](docs/mcp.md).
+
+## Subscriber API
+
+The API uses the same bearer token as the MCP server.
+
+| Method  | Path                       | What it does                                                                               |
+| ------- | -------------------------- | ------------------------------------------------------------------------------------------ |
+| `GET`   | `/api/v1/subscribers`      | List subscribers. The response has no token.                                               |
+| `POST`  | `/api/v1/subscribers`      | Add a subscriber. Send `type`, `target`, and `serviceIds` when you want a limit.           |
+| `PATCH` | `/api/v1/subscribers/{id}` | Set `serviceIds`. An empty list clears the choice. The create response includes the token. |
 
 ## Architecture
 

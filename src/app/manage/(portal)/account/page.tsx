@@ -19,7 +19,7 @@ import { ROLE_LABELS } from "@/lib/domain/status";
 import { otpQrSvg } from "@/lib/otp-qr";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Account" };
+export const metadata: Metadata = { title: "My Profile" };
 
 export default async function AccountPage({
 	searchParams,
@@ -38,7 +38,7 @@ export default async function AccountPage({
 	const next = query.next ? returnPath(query.next) : undefined;
 	return (
 		<ManagePage
-			title="Account"
+			title="My Profile"
 			flash={query}
 			health={app.store.health}
 			actions={

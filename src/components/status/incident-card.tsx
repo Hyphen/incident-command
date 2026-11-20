@@ -12,9 +12,11 @@ import { EventStatusBadge, eventColorStatus, STATUS_BG } from "./badges";
 export function IncidentCard({
 	incident,
 	services,
+	regionName,
 }: {
 	incident: Incident;
 	services: Service[];
+	regionName?: string;
 }) {
 	const latest = incident.updates.at(-1);
 	const names = affectedNames(incident, services);
@@ -54,6 +56,7 @@ export function IncidentCard({
 							<LocalTime iso={incident.scheduledEnd} />
 						</p>
 					)}
+				{regionName && <p className="mt-1 text-sm text-muted">{regionName}</p>}
 				{names.length > 0 && (
 					<p className="mt-1 text-sm text-muted">Affects {names.join(", ")}</p>
 				)}

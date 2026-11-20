@@ -26,6 +26,10 @@ describe("IncidentService", () => {
 		(await t.services.catalog.get(id)).status;
 
 	it("creates an incident, sets service status and notifies", async () => {
+		await t.services.subscribers.addWebhook(ADMIN, {
+			url: "https://hooks.example.com/web-only",
+			serviceIds: [web],
+		});
 		const incident = await t.services.incidents.create(EDITOR, {
 			title: "API errors",
 			message: "Investigating elevated errors",
@@ -43,6 +47,7 @@ describe("IncidentService", () => {
 		expect(incident.id).toMatch(/^inc_/);
 		expect(incident.updates).toHaveLength(1);
 		expect(incident.updates[0]?.message).toBe("Investigating elevated errors");
+		expect(incident.updates[0]?.notified).toBe(true);
 		expect(await statusOf(api)).toBe("major_outage");
 		expect(await statusOf(web)).toBe("operational");
 		expect(t.notifier.incidents).toHaveLength(1);
@@ -52,6 +57,11 @@ describe("IncidentService", () => {
 		expect(
 			t.notifier.incidents[0]?.notification.services.map((c) => c.id),
 		).toEqual([api]);
+		expect(
+			t.notifier.incidents[0]?.subscribers.map(
+				(subscriber) => subscriber.target,
+			),
+		).toEqual(["https://hooks.example.com/x"]);
 		// The notifier gets the delivery settings that apply at send time.
 		expect(t.notifier.incidents[0]?.channels.email).toMatchObject({
 			channel: "email",
@@ -71,6 +81,7 @@ describe("IncidentService", () => {
 			notify: false,
 		});
 		expect(incident.impact).toBe("minor");
+		expect(incident.updates[0]?.notified).toBe(false);
 		expect(await statusOf(web)).toBe("partial_outage");
 		expect(t.notifier.incidents).toHaveLength(0);
 	});
@@ -113,7 +124,14 @@ describe("IncidentService", () => {
 			notify: false,
 		});
 		expect(t.notifier.incidents).toHaveLength(0);
-		await t.services.incidents.resolve(publisher, quiet.id, "Done", false);
+		expect(quiet.updates[0]?.notified).toBe(false);
+		const resolved = await t.services.incidents.resolve(
+			publisher,
+			quiet.id,
+			"Done",
+			false,
+		);
+		expect(resolved.updates.at(-1)?.notified).toBe(false);
 		expect(t.notifier.incidents).toHaveLength(0);
 		await expect(
 			t.services.incidents.resolve(publisher, quiet.id, "Again"),
@@ -315,6 +333,206 @@ describe("IncidentService", () => {
 			1,
 		);
 		expect(await statusOf(web)).toBe("operational");
+	});
+
+	it("adds services on an update and sets their status", async () => {
+		const db = (await t.services.catalog.create(ADMIN, { name: "DB" })).id;
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Errors",
+			message: "Looking",
+			impact: "critical",
+			serviceIds: [api],
+			notify: false,
+		});
+		await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			message: "API is better",
+			serviceStatuses: [{ serviceId: api, status: "degraded_performance" }],
+			notify: false,
+		});
+
+		const added = await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			message: "Web is affected too",
+			serviceIds: [api, web, web],
+		});
+		expect(added.serviceIds).toEqual([api, web]);
+		// The existing service keeps its status. The new service follows the impact.
+		expect(await statusOf(api)).toBe("degraded_performance");
+		expect(await statusOf(web)).toBe("major_outage");
+		expect(
+			t.notifier.incidents
+				.at(-1)
+				?.notification.services.map((service) => service.name),
+		).toEqual(["API", "Web"]);
+
+		await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			message: "DB is down",
+			serviceIds: [db],
+			serviceStatus: "partial_outage",
+			serviceStatuses: [{ serviceId: web, status: "operational" }],
+			notify: false,
+		});
+		expect((await t.services.incidents.get(incident.id)).serviceIds).toEqual([
+			api,
+			web,
+			db,
+		]);
+		expect(await statusOf(api)).toBe("partial_outage");
+		expect(await statusOf(web)).toBe("operational");
+		expect(await statusOf(db)).toBe("partial_outage");
+
+		await expect(
+			t.services.incidents.postUpdate(EDITOR, incident.id, {
+				message: "Missing",
+				serviceIds: ["svc_missing"],
+				notify: false,
+			}),
+		).rejects.toBeInstanceOf(NotFoundError);
+		expect((await t.services.incidents.get(incident.id)).updates).toHaveLength(
+			4,
+		);
+	});
+
+	it("leaves a new service as it is when the update sets no status", async () => {
+		const quiet = await t.services.incidents.create(EDITOR, {
+			title: "Note",
+			message: "Note",
+			impact: "none",
+			serviceIds: [api],
+			notify: false,
+		});
+		await t.services.incidents.postUpdate(EDITOR, quiet.id, {
+			message: "Web is listed",
+			serviceIds: [web],
+			notify: false,
+		});
+		expect((await t.services.incidents.get(quiet.id)).serviceIds).toEqual([
+			api,
+			web,
+		]);
+		expect(await statusOf(api)).toBe("operational");
+		expect(await statusOf(web)).toBe("operational");
+
+		const resolved = await t.services.incidents.create(EDITOR, {
+			title: "Done",
+			message: "Done",
+			status: "resolved",
+			serviceIds: [api],
+			notify: false,
+		});
+		await t.services.catalog.setStatus(EDITOR, web, "degraded_performance");
+		await t.services.incidents.postUpdate(EDITOR, resolved.id, {
+			message: "Add web",
+			serviceIds: [web],
+			notify: false,
+		});
+		expect(await statusOf(web)).toBe("degraded_performance");
+	});
+
+	it("sets the status of a service added during maintenance", async () => {
+		const maintenance = await t.services.incidents.create(EDITOR, {
+			kind: "maintenance",
+			title: "Upgrade",
+			message: "Planned",
+			serviceIds: [api],
+			scheduledStart: "2026-11-03T02:00:00.000Z",
+			scheduledEnd: "2026-11-03T04:00:00.000Z",
+			notify: false,
+		});
+		await t.services.incidents.postUpdate(EDITOR, maintenance.id, {
+			message: "Web is included",
+			serviceIds: [web],
+			notify: false,
+		});
+		expect(await statusOf(web)).toBe("operational");
+
+		await t.services.incidents.postUpdate(EDITOR, maintenance.id, {
+			status: "in_progress",
+			message: "Started",
+			notify: false,
+		});
+		const db = (await t.services.catalog.create(ADMIN, { name: "DB" })).id;
+		await t.services.incidents.postUpdate(EDITOR, maintenance.id, {
+			message: "DB is included",
+			serviceIds: [db],
+			notify: false,
+		});
+		expect(await statusOf(db)).toBe("under_maintenance");
+		expect(await statusOf(web)).toBe("under_maintenance");
+
+		await t.services.incidents.postUpdate(EDITOR, maintenance.id, {
+			status: "verifying",
+			message: "Verifying",
+			notify: false,
+		});
+		const extra = (await t.services.catalog.create(ADMIN, { name: "Extra" }))
+			.id;
+		await t.services.incidents.postUpdate(EDITOR, maintenance.id, {
+			message: "Extra is included",
+			serviceIds: [extra],
+			notify: false,
+		});
+		expect(await statusOf(extra)).toBe("under_maintenance");
+		expect(await statusOf(api)).toBe("under_maintenance");
+	});
+
+	it("does not restore a service that another open incident affects", async () => {
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "A",
+			message: "A",
+			impact: "critical",
+			serviceIds: [api],
+			notify: false,
+		});
+		const other = await t.services.incidents.create(EDITOR, {
+			title: "B",
+			message: "B",
+			impact: "major",
+			serviceIds: [web],
+			notify: false,
+		});
+		await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			status: "resolved",
+			message: "Fixed",
+			serviceIds: [web],
+			notify: false,
+		});
+		expect((await t.services.incidents.get(incident.id)).serviceIds).toEqual([
+			api,
+			web,
+		]);
+		expect(await statusOf(api)).toBe("operational");
+		expect(await statusOf(web)).toBe("partial_outage");
+		expect(other.serviceIds).toEqual([web]);
+	});
+
+	it("rejects an update that affects more than 100 services", async () => {
+		const extra = await Promise.all(
+			Array.from({ length: 99 }, (_, index) =>
+				t.services.catalog.create(ADMIN, { name: `S${index}` }),
+			),
+		);
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Full",
+			message: "Full",
+			serviceIds: [api, ...extra.map((service) => service.id)],
+			notify: false,
+		});
+		await expect(
+			t.services.incidents.postUpdate(EDITOR, incident.id, {
+				message: "One more",
+				serviceIds: [web],
+				notify: false,
+			}),
+		).rejects.toThrow("An incident can affect at most 100 services.");
+		expect(
+			(await t.services.incidents.get(incident.id)).serviceIds,
+		).toHaveLength(100);
+		const same = await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			message: "Already listed",
+			serviceIds: [api],
+			notify: false,
+		});
+		expect(same.serviceIds).toHaveLength(100);
 	});
 
 	it("skips services that were deleted", async () => {
@@ -538,5 +756,41 @@ describe("IncidentService", () => {
 		await t.services.incidents.create(EDITOR, { title: "B", message: "B" });
 		expect(spy).toHaveBeenCalledWith(expect.stringContaining("odd failure"));
 		spy.mockRestore();
+	});
+
+	it("sets, keeps and clears the region of an incident", async () => {
+		const region = await t.services.regions.create(EDITOR, {
+			name: "United States",
+		});
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Down",
+			message: "Looking",
+			regionId: region.id,
+		});
+		expect(incident.regionId).toBe(region.id);
+		const kept = await t.services.incidents.edit(EDITOR, incident.id, {
+			title: "Still down",
+		});
+		expect(kept.regionId).toBe(region.id);
+		const cleared = await t.services.incidents.edit(EDITOR, incident.id, {
+			regionId: null,
+		});
+		expect(cleared.regionId).toBeUndefined();
+		const moved = await t.services.incidents.edit(EDITOR, incident.id, {
+			regionId: region.id,
+		});
+		expect(moved.regionId).toBe(region.id);
+		await expect(
+			t.services.incidents.create(EDITOR, {
+				title: "Missing",
+				message: "x",
+				regionId: "reg_missing",
+			}),
+		).rejects.toBeInstanceOf(NotFoundError);
+		await expect(
+			t.services.incidents.edit(EDITOR, incident.id, {
+				regionId: "reg_missing",
+			}),
+		).rejects.toBeInstanceOf(NotFoundError);
 	});
 });

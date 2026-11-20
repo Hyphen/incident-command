@@ -7,16 +7,25 @@ import {
 	postIncidentUpdateAction,
 } from "@/app/manage/actions";
 import { ConfirmButton } from "@/components/manage/confirm-button";
+import { DraftList } from "@/components/manage/draft-list";
 import {
+	AddServices,
 	ImpactSelect,
-	ServicePicker,
+	RegionSelect,
 	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
 	WindowFields,
 } from "@/components/manage/incident-fields";
+import {
+	type IncidentTab,
+	IncidentTabs,
+	incidentTab,
+} from "@/components/manage/incident-tabs";
+import { PostList } from "@/components/manage/post-list";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import {
+	ButtonLink,
 	buttonClass,
 	Card,
 	Checkbox,
@@ -24,39 +33,172 @@ import {
 	inputClass,
 } from "@/components/manage/ui";
 import { EventStatusBadge, ImpactBadge } from "@/components/status/badges";
+import { StatusTimeline } from "@/components/status/status-timeline";
 import { Timeline } from "@/components/status/timeline";
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
+import { regionNameFor } from "@/lib/domain/regions";
 import { hasRole } from "@/lib/domain/status";
+import type { Incident, NotificationDraft, Service } from "@/lib/domain/types";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Incident" };
 
+interface IncidentQuery extends FlashParams {
+	tab?: string;
+	post?: string;
+}
+
 interface Props {
 	params: Promise<{ id: string }>;
-	searchParams: Promise<FlashParams>;
+	searchParams: Promise<IncidentQuery>;
+}
+
+/** The number of posts on the dashboard. The posts tab shows every post. */
+const LATEST_POSTS = 5;
+
+function PostForm({
+	incident,
+	affected,
+	catalog,
+}: {
+	incident: Incident;
+	affected: Service[];
+	catalog: Service[];
+}) {
+	return (
+		<form
+			action={postIncidentUpdateAction}
+			className="mb-6 space-y-4 border-b border-border pb-6"
+		>
+			<input type="hidden" name="id" value={incident.id} />
+			<StatusSelect kind={incident.kind} value={incident.status} />
+			<Field label="Message" htmlFor="message">
+				<textarea
+					id="message"
+					name="message"
+					required
+					rows={4}
+					className={inputClass}
+				/>
+			</Field>
+			<ServiceStatusSelect hint="Automatic restores services when resolving and starts maintenance mode when in progress." />
+			<ServiceStatusList services={affected} />
+			<AddServices catalog={catalog} affectedIds={incident.serviceIds} />
+			<Checkbox name="notify" label="Notify subscribers" defaultChecked />
+			<div className="flex flex-wrap gap-2">
+				<SubmitButton className={buttonClass.primary}>Post update</SubmitButton>
+				<Link
+					href={`/manage/incidents/${incident.id}`}
+					className={buttonClass.secondary}
+				>
+					Cancel
+				</Link>
+			</div>
+		</form>
+	);
+}
+
+function IncidentBody({
+	tab,
+	incident,
+	affected,
+	catalog,
+	canEdit,
+	showForm,
+	pending,
+	reviewed,
+}: {
+	tab: IncidentTab;
+	incident: Incident;
+	affected: Service[];
+	catalog: Service[];
+	canEdit: boolean;
+	showForm: boolean;
+	pending: NotificationDraft[];
+	reviewed: NotificationDraft[];
+}) {
+	return (
+		<div className="space-y-6">
+			{tab === "dashboard" && (
+				<Card
+					title="Posts"
+					actions={
+						canEdit &&
+						!showForm && (
+							<ButtonLink href={`/manage/incidents/${incident.id}?post=1`}>
+								Create a post
+							</ButtonLink>
+						)
+					}
+				>
+					{showForm && (
+						<PostForm
+							incident={incident}
+							affected={affected}
+							catalog={catalog}
+						/>
+					)}
+					<PostList
+						incident={incident}
+						drafts={reviewed}
+						limit={LATEST_POSTS}
+					/>
+				</Card>
+			)}
+			{tab === "dashboard" && pending.length > 0 && (
+				<Card title="Drafts" description="These drafts wait for review.">
+					<DraftList
+						items={pending.map((draft) => ({
+							draft,
+							title: draft.content.message,
+						}))}
+					/>
+				</Card>
+			)}
+			{tab === "timeline" && (
+				<Card title="Timeline">
+					<Timeline incident={incident} showAuthors />
+				</Card>
+			)}
+			{tab === "posts" && (
+				<Card title="Posts">
+					<PostList incident={incident} drafts={reviewed} />
+				</Card>
+			)}
+		</div>
+	);
 }
 
 export default async function ManageIncidentPage({
 	params,
 	searchParams,
 }: Props) {
-	const [{ id }, flash] = await Promise.all([params, searchParams]);
+	const [{ id }, query] = await Promise.all([params, searchParams]);
 	const { member, services, app } = await requireMember();
 	const incident = await services.incidents.find(id);
 	if (!incident) {
 		notFound();
 	}
-	const catalog = await services.catalog.list();
+	const tab = incidentTab(query.tab);
+	const canEdit = hasRole(member.role, "editor");
+	const [catalog, regions, timeline, pending, reviewed] = await Promise.all([
+		services.catalog.list(),
+		services.regions.list(),
+		services.status.incidentTimeline(incident),
+		services.drafts.list({ pending: true, incidentId: incident.id }),
+		services.drafts.list({ pending: false, incidentId: incident.id }),
+	]);
 	const affected = catalog.filter((service) =>
 		incident.serviceIds.includes(service.id),
 	);
-	const canEdit = hasRole(member.role, "editor");
 	const isIncident = incident.kind === "incident";
+	const regionName = regionNameFor(incident, regions);
+	const showForm = tab === "dashboard" && query.post === "1" && canEdit;
 	return (
 		<ManagePage
 			title={incident.title}
-			flash={flash}
+			flash={query}
 			health={app.store.health}
 			actions={
 				<Link
@@ -74,40 +216,25 @@ export default async function ManageIncidentPage({
 					status={incident.status}
 				/>
 				{isIncident && <ImpactBadge impact={incident.impact} />}
+				{regionName && <span className="text-sm text-muted">{regionName}</span>}
 			</div>
-			<div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-				<div className="space-y-6">
-					{canEdit && (
-						<Card title="Post an update">
-							<form action={postIncidentUpdateAction} className="space-y-4">
-								<input type="hidden" name="id" value={incident.id} />
-								<StatusSelect kind={incident.kind} value={incident.status} />
-								<Field label="Message" htmlFor="message">
-									<textarea
-										id="message"
-										name="message"
-										required
-										rows={4}
-										className={inputClass}
-									/>
-								</Field>
-								<ServiceStatusSelect hint="Automatic restores services when resolving and starts maintenance mode when in progress." />
-								<ServiceStatusList services={affected} />
-								<Checkbox
-									name="notify"
-									label="Notify subscribers"
-									defaultChecked
-								/>
-								<SubmitButton className={buttonClass.primary}>
-									Post update
-								</SubmitButton>
-							</form>
-						</Card>
-					)}
-					<Card title="Timeline">
-						<Timeline incident={incident} showAuthors />
-					</Card>
-				</div>
+			<IncidentTabs id={incident.id} active={tab} />
+			{tab === "dashboard" && timeline.services.length > 0 && (
+				<StatusTimeline {...timeline} />
+			)}
+			<div
+				className={canEdit ? "grid gap-6 lg:grid-cols-[1fr_320px]" : undefined}
+			>
+				<IncidentBody
+					tab={tab}
+					incident={incident}
+					affected={affected}
+					catalog={catalog}
+					canEdit={canEdit}
+					showForm={showForm}
+					pending={pending}
+					reviewed={reviewed}
+				/>
 				{canEdit && (
 					<div className="space-y-6">
 						<Card title="Details">
@@ -130,10 +257,7 @@ export default async function ManageIncidentPage({
 										end={incident.scheduledEnd}
 									/>
 								)}
-								<ServicePicker
-									services={catalog}
-									selected={incident.serviceIds}
-								/>
+								<RegionSelect regions={regions} value={incident.regionId} />
 								<SubmitButton className={buttonClass.secondary}>
 									Save details
 								</SubmitButton>

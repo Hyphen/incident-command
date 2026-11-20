@@ -42,7 +42,14 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
   serviceStatus and the automatic status for that service only. An entry applies even when a different
   open incident affects the service. When you resolve, do not list a service that must go back to
   operational: resolution restores it, but keeps it as it is while a different open incident affects it.
+- To add a service on an update, pass serviceIds to post_incident_update or draft_notification.
+  The update adds those services. A service that is already affected stays. The new service gets
+  the status of that update. edit_incident replaces the service list and does not set a status.
 - Schedule planned work with schedule_maintenance (statuses: scheduled -> in_progress -> verifying -> completed).
+- By default an incident uses Global. Call list_regions before you set a region.
+  Pass regionId to create_incident, schedule_maintenance, draft_notification, or edit_incident.
+  Pass null to edit_incident to move an incident to Global.
+  Pass regionId to get_status to read one region. With no regions, the status page is one page.
 - When a person must review a notification first, use draft_notification and give that person the reviewUrl.
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
 - Everything you post is public on the status page and may notify subscribers. Write for customers.`;
@@ -138,6 +145,7 @@ function incidentSummary(incident: Incident) {
 		scheduledStart: incident.scheduledStart,
 		scheduledEnd: incident.scheduledEnd,
 		latestUpdate: latest?.message,
+		regionId: incident.regionId ?? null,
 		updatedAt: incident.updatedAt,
 	};
 }
@@ -282,14 +290,27 @@ export function createMcpServer(
 		{
 			title: "Get status",
 			description:
-				"Current overall status, every visible service with its status and uptime, open incidents and maintenance.",
-			inputSchema: {},
+				"Current overall status, every visible service with its status and uptime, open incidents and maintenance. Pass regionId to read one region.",
+			inputSchema: {
+				regionId: z
+					.string()
+					.min(1)
+					.optional()
+					.describe("A region id. Omit this field to read Global."),
+			},
 			readOnly: true,
 		},
-		async () => {
-			const summary = await services.status.summary();
+		async ({ regionId }) => {
+			const summary = await services.status.summary(
+				regionId ? { regionId } : {},
+			);
 			return {
 				page: summary.settings.siteName,
+				region: summary.region?.name ?? null,
+				regions: summary.regions.map((region) => ({
+					id: region.id,
+					name: region.name,
+				})),
 				overall: summary.overall,
 				services: summary.services.map((service) => ({
 					id: service.id,
@@ -316,6 +337,19 @@ export function createMcpServer(
 			readOnly: true,
 		},
 		async () => services.catalog.list(),
+	);
+
+	tool(
+		"status.read",
+		"list_regions",
+		{
+			title: "List regions",
+			description:
+				"Named regions in display order. An empty list means the status page is one page. Global is the default and is not in this list.",
+			inputSchema: {},
+			readOnly: true,
+		},
+		async () => services.regions.list(),
 	);
 
 	tool(
@@ -428,6 +462,57 @@ export function createMcpServer(
 		},
 	);
 
+	// ---- regions --------------------------------------------------------------
+
+	const regionName = z
+		.string()
+		.describe("The region name. Do not use Global. That name is reserved.");
+
+	tool(
+		"services.write",
+		"create_region",
+		{
+			title: "Create region",
+			description:
+				"Adds a named region. The status page then shows Global and a tab for each region.",
+			inputSchema: {
+				name: regionName,
+				order: z.number().int().optional().describe("Display order"),
+			},
+		},
+		async (args) => services.regions.create(actor, args),
+	);
+
+	tool(
+		"services.write",
+		"update_region",
+		{
+			title: "Update region",
+			description: "Renames a region or changes its display order.",
+			inputSchema: {
+				id,
+				name: regionName.optional(),
+				order: z.number().int().optional(),
+			},
+		},
+		async ({ id: regionId, ...patch }) =>
+			services.regions.update(actor, regionId, patch),
+	);
+
+	tool(
+		"services.delete",
+		"delete_region",
+		{
+			title: "Delete region",
+			description: "Deletes a region. Incidents in that region move to Global.",
+			inputSchema: { id },
+		},
+		async (args) => {
+			await services.regions.delete(actor, args.id);
+			return { deleted: args.id };
+		},
+	);
+
 	// ---- incidents ------------------------------------------------------------
 
 	tool(
@@ -451,6 +536,13 @@ export function createMcpServer(
 					.describe(
 						"investigating (default) | identified | monitoring | resolved",
 					),
+				regionId: z
+					.string()
+					.min(1)
+					.optional()
+					.describe(
+						"A region id from list_regions. Omit this field for Global.",
+					),
 				notify,
 			},
 		},
@@ -464,11 +556,17 @@ export function createMcpServer(
 		{
 			title: "Post incident update",
 			description:
-				"Adds a timeline update to an incident or maintenance. It can also change the status and the status of each affected service.",
+				"Adds a timeline update to an incident or maintenance. It can change the status, add services, and set the status of each service.",
 			inputSchema: {
 				id,
 				message: z.string(),
 				status: eventStatusSchema.optional(),
+				serviceIds: z
+					.array(z.string())
+					.optional()
+					.describe(
+						"Services to add. This does not remove a service. A new service gets the status of this update.",
+					),
 				serviceStatus,
 				serviceStatuses,
 				notify,
@@ -505,6 +603,14 @@ export function createMcpServer(
 				serviceIds: z.array(z.string()).optional(),
 				scheduledStart: isoDate.optional(),
 				scheduledEnd: isoDate.optional(),
+				regionId: z
+					.string()
+					.min(1)
+					.nullable()
+					.optional()
+					.describe(
+						"A region id. Pass null to move the incident to Global. Omit this field to keep the region.",
+					),
 			},
 		},
 		async ({ id: incidentId, ...patch }) =>
@@ -538,6 +644,13 @@ export function createMcpServer(
 				scheduledStart: isoDate,
 				scheduledEnd: isoDate,
 				serviceIds: z.array(z.string()).optional(),
+				regionId: z
+					.string()
+					.min(1)
+					.optional()
+					.describe(
+						"A region id from list_regions. Omit this field for Global.",
+					),
 				notify,
 			},
 		},
@@ -591,7 +704,9 @@ export function createMcpServer(
 				serviceIds: z
 					.array(z.string())
 					.optional()
-					.describe("New events only: affected services"),
+					.describe(
+						"Affected services of a new incident or maintenance. On an update, the services to add. An update keeps the other services.",
+					),
 				serviceStatus,
 				serviceStatuses,
 				scheduledStart: isoDate
@@ -600,6 +715,13 @@ export function createMcpServer(
 				scheduledEnd: isoDate
 					.optional()
 					.describe("New maintenance only: end of the window (ISO 8601)"),
+				regionId: z
+					.string()
+					.min(1)
+					.optional()
+					.describe(
+						"New events only: a region id from list_regions. Omit this field for Global.",
+					),
 			},
 		},
 		async (args) => {
@@ -981,12 +1103,19 @@ export function createMcpServer(
 			services.notificationSettings.updateChannel(actor, channel, input),
 	);
 
+	const subscriberServices = z
+		.array(z.string())
+		.describe(
+			"Services that send a notification to this subscriber. An empty list means every service.",
+		);
+
 	tool(
 		"subscribers.read",
 		"list_subscribers",
 		{
 			title: "List subscribers",
-			description: "Webhook, email and text message subscribers.",
+			description:
+				"Webhook, email and text message subscribers. serviceIds is the service choice. No serviceIds means every service.",
 			inputSchema: {},
 			readOnly: true,
 		},
@@ -999,24 +1128,31 @@ export function createMcpServer(
 		{
 			title: "Add subscriber",
 			description:
-				"Adds a confirmed email subscriber, a webhook (Slack, Discord or any JSON endpoint) or a phone number for text messages.",
+				"Adds a confirmed email subscriber, a webhook (Slack, Discord or any JSON endpoint) or a phone number for text messages. Pass serviceIds to limit notifications.",
 			inputSchema: {
 				type: z.enum(SUBSCRIBER_TYPES),
 				target: z
 					.string()
 					.describe("Email address, https URL or E.164 phone number"),
+				serviceIds: subscriberServices.optional(),
 			},
 		},
-		async (args) => {
-			switch (args.type) {
-				case "email":
-					return services.subscribers.addEmail(actor, { email: args.target });
-				case "sms":
-					return services.subscribers.addSms(actor, { phone: args.target });
-				default:
-					return services.subscribers.addWebhook(actor, { url: args.target });
-			}
+		async (args) => services.subscribers.add(actor, args),
+	);
+
+	tool(
+		"subscribers.manage",
+		"set_subscriber_services",
+		{
+			title: "Set subscriber services",
+			description:
+				"Sets the services that notify one subscriber. An empty list sends a notification for every service.",
+			inputSchema: {
+				id,
+				serviceIds: subscriberServices,
+			},
 		},
+		async (args) => services.subscribers.setServices(actor, args.id, args),
 	);
 
 	tool(

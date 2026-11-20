@@ -179,6 +179,7 @@ describe("MongoStore", () => {
 			"oauth_clients",
 			"oauth_codes",
 			"oauth_grants",
+			"regions",
 			"service_status_changes",
 			"services",
 			"sessions",

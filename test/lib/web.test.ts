@@ -4,6 +4,11 @@ import { GET as resourceMetadataForPath } from "@/app/.well-known/oauth-protecte
 import { GET as resourceMetadata } from "@/app/.well-known/oauth-protected-resource/route";
 import { POST as mcp } from "@/app/api/mcp/route";
 import { GET as status } from "@/app/api/v1/status/route";
+import { PATCH as setSubscriberServices } from "@/app/api/v1/subscribers/[id]/route";
+import {
+	POST as addSubscriber,
+	GET as listSubscribers,
+} from "@/app/api/v1/subscribers/route";
 import { GET as favicon } from "@/app/brand/favicon/route";
 import { GET as logo } from "@/app/brand/logo/route";
 import { GET as feed } from "@/app/feed.xml/route";
@@ -236,7 +241,9 @@ describe("API routes", () => {
 			scheduledStart: "2026-11-05T00:00:00.000Z",
 			scheduledEnd: "2026-11-05T01:00:00.000Z",
 		});
-		const response = await status();
+		const response = await status(
+			new Request("http://localhost/api/v1/status"),
+		);
 		expect(response.headers.get("access-control-allow-origin")).toBe("*");
 		const body = await response.json();
 		expect(body.status).toEqual({
@@ -275,6 +282,53 @@ describe("API routes", () => {
 			scheduledStart: "2026-11-05T00:00:00.000Z",
 		});
 		expect(body.page).toEqual({ name: "Status", url: null });
+		expect(body.region).toBeNull();
+		expect(body.regions).toEqual([]);
+		expect(body.incidents[0].region).toBeNull();
+	});
+
+	it("serves one region and 404 for an unknown region", async () => {
+		const { app, services } = await setup();
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		const region = await services.regions.create(SYSTEM_ACTOR, {
+			name: "United States",
+		});
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Down",
+			message: "Looking",
+			impact: "critical",
+			serviceIds: [api.id],
+			regionId: region.id,
+		});
+		const response = await status(
+			new Request(`http://localhost/api/v1/status?region=${region.id}`),
+		);
+		const body = await response.json();
+		expect(body.region).toEqual({ id: region.id, name: "United States" });
+		expect(body.regions).toEqual([{ id: region.id, name: "United States" }]);
+		expect(body.incidents[0].region).toEqual({
+			id: region.id,
+			name: "United States",
+		});
+		const global = await status(
+			new Request("http://localhost/api/v1/status?region="),
+		);
+		expect((await global.json()).region).toBeNull();
+		const missing = await status(
+			new Request("http://localhost/api/v1/status?region=reg_missing"),
+		);
+		expect(missing.status).toBe(404);
+		expect(missing.headers.get("access-control-allow-origin")).toBe("*");
+		expect(await missing.json()).toEqual({
+			error: "That region was not found.",
+		});
+		await app.store.delete("regions", region.id);
+		const dangling = await (
+			await status(new Request("http://localhost/api/v1/status"))
+		).json();
+		expect(dangling.incidents[0].id).toBe(incident.id);
+		expect(dangling.incidents[0].region).toBeNull();
+		expect(dangling.regions).toEqual([]);
 	});
 
 	it("serves an rss feed with one item for each update", async () => {
@@ -430,6 +484,164 @@ describe("API routes", () => {
 		expect(await tokens.json()).toMatchObject({
 			error: "unsupported_grant_type",
 		});
+	});
+
+	it("sets subscriber services with the agent token", async () => {
+		const { services } = await setup();
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		const agent = await services.agents.create(SYSTEM_ACTOR, {
+			name: "API",
+			permissions: ["subscribers.read", "subscribers.manage"],
+		});
+		const { token } = await services.agents.createToken(
+			SYSTEM_ACTOR,
+			agent.id,
+			{},
+		);
+		const headers = {
+			authorization: `Bearer ${token}`,
+			"content-type": "application/json",
+		};
+		const call = (
+			path: string,
+			method: string,
+			body?: unknown,
+			authorization = headers.authorization,
+		) =>
+			new Request(`http://localhost${path}`, {
+				method,
+				headers: { ...headers, authorization },
+				...(body === undefined ? {} : { body: JSON.stringify(body) }),
+			});
+
+		expect(
+			(
+				await listSubscribers(
+					new Request("http://localhost/api/v1/subscribers"),
+				)
+			).status,
+		).toBe(401);
+		expect(
+			(
+				await addSubscriber(
+					new Request("http://localhost/api/v1/subscribers", {
+						method: "POST",
+						body: "{}",
+					}),
+				)
+			).status,
+		).toBe(401);
+		expect(
+			(
+				await setSubscriberServices(
+					new Request("http://localhost/api/v1/subscribers/sub_x", {
+						method: "PATCH",
+						body: "{}",
+					}),
+					{ params: Promise.resolve({ id: "sub_x" }) },
+				)
+			).status,
+		).toBe(401);
+		expect(
+			(
+				await listSubscribers(
+					call("/api/v1/subscribers", "GET", undefined, "Bearer nope"),
+				)
+			).status,
+		).toBe(401);
+
+		const reader = await services.agents.create(SYSTEM_ACTOR, {
+			name: "Reader",
+			permissions: ["subscribers.read"],
+		});
+		const readerToken = (
+			await services.agents.createToken(SYSTEM_ACTOR, reader.id, {})
+		).token;
+		const denied = await addSubscriber(
+			call(
+				"/api/v1/subscribers",
+				"POST",
+				{ type: "email", target: "ops@acme.dev" },
+				`Bearer ${readerToken}`,
+			),
+		);
+		expect(denied.status).toBe(403);
+
+		const created = await addSubscriber(
+			call("/api/v1/subscribers", "POST", {
+				type: "email",
+				target: "ops@acme.dev",
+				serviceIds: [api.id],
+			}),
+		);
+		expect(created.status).toBe(201);
+		const { subscriber } = await created.json();
+		expect(subscriber).toMatchObject({
+			target: "ops@acme.dev",
+			type: "email",
+			serviceIds: [api.id],
+		});
+		expect(subscriber.token).toEqual(expect.any(String));
+
+		const listed = await listSubscribers(call("/api/v1/subscribers", "GET"));
+		expect(listed.status).toBe(200);
+		const { subscribers } = await listed.json();
+		expect(subscribers).toHaveLength(1);
+		expect(subscribers[0]).not.toHaveProperty("token");
+		expect(subscribers[0].serviceIds).toEqual([api.id]);
+
+		const context = {
+			params: Promise.resolve({ id: subscriber.id as string }),
+		};
+		const patched = await setSubscriberServices(
+			call(`/api/v1/subscribers/${subscriber.id}`, "PATCH", { serviceIds: [] }),
+			context,
+		);
+		expect(patched.status).toBe(200);
+		expect((await patched.json()).subscriber.serviceIds).toBeUndefined();
+
+		const omitted = await setSubscriberServices(
+			call(`/api/v1/subscribers/${subscriber.id}`, "PATCH", {}),
+			context,
+		);
+		expect(omitted.status).toBe(400);
+
+		const missing = await setSubscriberServices(
+			call("/api/v1/subscribers/sub_missing", "PATCH", { serviceIds: [] }),
+			{ params: Promise.resolve({ id: "sub_missing" }) },
+		);
+		expect(missing.status).toBe(404);
+
+		const duplicate = await addSubscriber(
+			call("/api/v1/subscribers", "POST", {
+				type: "email",
+				target: "ops@acme.dev",
+			}),
+		);
+		expect(duplicate.status).toBe(409);
+
+		const badJson = await addSubscriber(
+			new Request("http://localhost/api/v1/subscribers", {
+				method: "POST",
+				headers,
+				body: "{",
+			}),
+		);
+		expect(badJson.status).toBe(400);
+		expect((await badJson.json()).error.message).toBe("Send a JSON body");
+
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(services.subscribers, "list").mockRejectedValueOnce(
+			new Error("secret db"),
+		);
+		const failed = await listSubscribers(call("/api/v1/subscribers", "GET"));
+		expect(failed.status).toBe(500);
+		const payload = await failed.json();
+		expect(payload).toEqual({
+			error: { code: "internal_error", message: "Something went wrong" },
+		});
+		expect(JSON.stringify(payload)).not.toContain("secret");
+		spy.mockRestore();
 	});
 });
 

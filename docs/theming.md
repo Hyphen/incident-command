@@ -83,6 +83,7 @@ Each element of the public pages has a class name that starts with `ic-`. Use th
 | `.ic-subscribe`     | The subscribe button.                                         |                            |
 | `.ic-main`          | The content column.                                           |                            |
 | `.ic-footer`        | The footer of the page.                                       |                            |
+| `.ic-regions`       | The region tabs. The page shows them when a region exists.    |                            |
 | `.ic-banner`        | The banner that shows the overall status.                     | `data-status`              |
 | `.ic-description`   | The description below the banner.                             |                            |
 | `.ic-incident`      | The card of an open incident or of maintenance.               | `data-kind`, `data-status` |

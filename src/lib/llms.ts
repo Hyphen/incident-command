@@ -1,3 +1,4 @@
+import { GLOBAL_REGION_NAME, regionNameFor } from "./domain/regions";
 import {
 	affectedNames,
 	EVENT_STATUS_LABELS,
@@ -5,7 +6,7 @@ import {
 	OVERALL_STATUS_COPY,
 	SERVICE_STATUS_LABELS,
 } from "./domain/status";
-import type { Incident, Service, Settings } from "./domain/types";
+import type { Incident, Region, Service, Settings } from "./domain/types";
 import { formatUptime } from "./domain/uptime";
 import { FEED_PATH } from "./feed";
 import { formatDateTime, formatDuration, formatMonth } from "./format";
@@ -85,7 +86,11 @@ function when(incident: Incident): string {
 }
 
 /** The facts of an incident page as a list. */
-function details(incident: Incident, services: readonly Service[]): string {
+function details(
+	incident: Incident,
+	services: readonly Service[],
+	regions: readonly Region[] = [],
+): string {
 	const lines = [
 		`- Type: ${incident.kind === "maintenance" ? "Scheduled maintenance" : "Incident"}`,
 		`- Status: ${EVENT_STATUS_LABELS[incident.status]}`,
@@ -108,6 +113,10 @@ function details(incident: Incident, services: readonly Service[]): string {
 	if (names.length > 0) {
 		lines.push(`- Affected services: ${text(names.join(", "))}`);
 	}
+	const regionName = regionNameFor(incident, regions);
+	if (regionName) {
+		lines.push(`- Region: ${text(regionName)}`);
+	}
 	return lines.join("\n");
 }
 
@@ -116,11 +125,12 @@ function eventBlock(
 	incident: Incident,
 	services: readonly Service[],
 	origin: string,
+	regions: readonly Region[],
 ): string {
 	const latest = incident.updates.at(-1);
 	return blocks([
 		`### ${link(incident.title, `${origin}${incidentMarkdownPath(incident.id)}`)}`,
-		details(incident, services),
+		details(incident, services, regions),
 		latest &&
 			`Latest update (${EVENT_STATUS_LABELS[latest.status]}, ${formatDateTime(latest.createdAt)}):\n\n${quote(latest.message)}`,
 	]);
@@ -132,12 +142,15 @@ function eventSection(
 	empty: string,
 	services: readonly Service[],
 	origin: string,
+	regions: readonly Region[],
 ): string {
 	return blocks([
 		`## ${heading}`,
 		...(incidents.length === 0
 			? [empty]
-			: incidents.map((incident) => eventBlock(incident, services, origin))),
+			: incidents.map((incident) =>
+					eventBlock(incident, services, origin, regions),
+				)),
 	]);
 }
 
@@ -146,6 +159,7 @@ function incidentList(
 	incidents: readonly Incident[],
 	empty: string,
 	origin: string,
+	regions: readonly Region[] = [],
 ): string {
 	if (incidents.length === 0) {
 		return empty;
@@ -160,6 +174,10 @@ function incidentList(
 				`Status: ${EVENT_STATUS_LABELS[incident.status]}`,
 				when(incident),
 			);
+			const regionName = regionNameFor(incident, regions);
+			if (regionName) {
+				facts.push(`Region: ${regionName}`);
+			}
 			return `- ${link(incident.title, `${origin}${incidentMarkdownPath(incident.id)}`)}: ${facts.join(". ")}.`;
 		})
 		.join("\n");
@@ -192,6 +210,8 @@ export function statusMarkdown(summary: StatusSummary, origin: string): string {
 		`# ${name}`,
 		`> Overall status: ${SERVICE_STATUS_LABELS[summary.overall]}. ${OVERALL_STATUS_COPY[summary.overall].description}`,
 		text(settings.description),
+		summary.regions.length > 0 &&
+			`Region: ${text(summary.region?.name ?? GLOBAL_REGION_NAME)}.`,
 		`This file is the public status page of ${name} in Markdown, for agents and other automated readers. It shows the status at ${formatDateTime(summary.generatedAt)}.`,
 		eventSection(
 			"Active incidents",
@@ -199,6 +219,7 @@ export function statusMarkdown(summary: StatusSummary, origin: string): string {
 			"No active incidents.",
 			services,
 			origin,
+			summary.regions,
 		),
 		eventSection(
 			"Maintenance in progress",
@@ -206,6 +227,7 @@ export function statusMarkdown(summary: StatusSummary, origin: string): string {
 			"No maintenance in progress.",
 			services,
 			origin,
+			summary.regions,
 		),
 		eventSection(
 			"Upcoming maintenance",
@@ -213,6 +235,7 @@ export function statusMarkdown(summary: StatusSummary, origin: string): string {
 			"No upcoming maintenance.",
 			services,
 			origin,
+			summary.regions,
 		),
 		servicesSection(summary),
 		blocks([
@@ -222,6 +245,7 @@ export function statusMarkdown(summary: StatusSummary, origin: string): string {
 				summary.recentIncidents,
 				`No incidents reported in the last ${RECENT_DAYS} days.`,
 				origin,
+				summary.regions,
 			),
 		]),
 		pages([
@@ -240,16 +264,25 @@ export function historyMarkdown(
 	settings: Settings,
 	history: HistoryPage,
 	origin: string,
+	region?: Region,
+	regions: readonly Region[] = [],
 ): string {
 	const name = text(settings.siteName);
-	const page = (month: string) =>
-		`${origin}${HISTORY_MARKDOWN_PATH}?month=${month}`;
+	const page = (month: string) => {
+		const params = new URLSearchParams({ month });
+		if (region) {
+			params.set("region", region.id);
+		}
+		return `${origin}${HISTORY_MARKDOWN_PATH}?${params}`;
+	};
 	return doc([
 		`# ${name} incident history`,
-		`> The incidents and maintenance of ${name} for each month, newest first.`,
+		region
+			? `> Incidents for ${text(region.name)}, newest month first.`
+			: `> The incidents and maintenance of ${name} for each month, newest first.`,
 		...history.months.map(
 			(month) =>
-				`## ${formatMonth(month.key)}\n\n${incidentList(month.incidents, "No incidents reported.", origin)}`,
+				`## ${formatMonth(month.key)}\n\n${incidentList(month.incidents, "No incidents reported.", origin, regions)}`,
 		),
 		pages([
 			history.older && `- ${link("Older months", page(history.older))}`,
@@ -265,12 +298,13 @@ export function incidentMarkdown(
 	incident: Incident,
 	services: readonly Service[],
 	origin: string,
+	regions: readonly Region[] = [],
 ): string {
 	const updates = [...incident.updates].reverse();
 	return doc([
 		`# ${text(incident.title)}`,
 		`> ${incident.kind === "maintenance" ? "Scheduled maintenance" : "An incident"} on the status page of ${text(settings.siteName)}.`,
-		details(incident, services),
+		details(incident, services, regions),
 		"## Updates\n\nNewest first.",
 		...updates.map(
 			(update) =>

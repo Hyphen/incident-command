@@ -117,6 +117,7 @@ describe("DraftService", () => {
 		expect(approved).toMatchObject({
 			state: "approved",
 			incidentId: incident.id,
+			updateId: incident.updates[0]?.id,
 			content: { title: "Elevated API errors", impact: "major" },
 			reviewedBy: { type: "member", id: EDITOR.id, name: EDITOR.name },
 			reviewedAt: "2026-11-02T12:01:00.000Z",
@@ -157,8 +158,10 @@ describe("DraftService", () => {
 			status: "identified",
 			message: "A fix is ready to deploy.",
 			author: { id: EDITOR.id },
+			notified: true,
 		});
 		expect(approved.incidentId).toBe(incident.id);
+		expect(approved.updateId).toBe(updated.updates.at(-1)?.id);
 		expect(t.notifier.incidents.map((n) => n.notification.event)).toEqual([
 			"incident.updated",
 		]);
@@ -270,11 +273,10 @@ describe("DraftService", () => {
 				incidentId: incident.id,
 				kind: "incident",
 				title: "New title",
-				serviceIds: [api],
 				message: "x",
 			}),
 		).rejects.toThrow(
-			"kind, title, serviceIds: only a new incident or maintenance uses these fields",
+			"kind, title: only a new incident or maintenance uses these fields",
 		);
 		await expect(
 			t.services.drafts.create(VIEWER, { title: "Errors", message: "x" }),
@@ -403,6 +405,45 @@ describe("DraftService", () => {
 		).rejects.toThrow(/only an affected service can have its own status/);
 	});
 
+	it("adds a service when an update draft is approved", async () => {
+		const web = (await t.services.catalog.create(ADMIN, { name: "Web" })).id;
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "API errors",
+			message: "x",
+			impact: "major",
+			serviceIds: [api],
+			notify: false,
+		});
+		const draft = await t.services.drafts.create(AGENT, {
+			incidentId: incident.id,
+			message: "Web is down",
+			serviceIds: [web, web],
+			serviceStatuses: [{ serviceId: web, status: "major_outage" }],
+		});
+		expect(draft.content.serviceIds).toEqual([web]);
+		expect(await statusOf(web)).toBe("operational");
+		expect(await statusOf(api)).toBe("partial_outage");
+
+		const cleared = await t.services.drafts.update(EDITOR, draft.id, {
+			message: "Web is down",
+		});
+		expect(cleared.content.serviceIds).toBeUndefined();
+
+		const saved = await t.services.drafts.update(EDITOR, draft.id, {
+			message: "Web is down",
+			serviceIds: [web],
+			serviceStatuses: [{ serviceId: web, status: "major_outage" }],
+		});
+		const { incident: published } = await t.services.drafts.approve(
+			EDITOR,
+			draft.id,
+			saved.content,
+		);
+		expect(published.serviceIds).toEqual([api, web]);
+		expect(await statusOf(web)).toBe("major_outage");
+		expect(await statusOf(api)).toBe("partial_outage");
+	});
+
 	it("saves edits while the draft waits for review", async () => {
 		const draft = await t.services.drafts.create(AGENT, {
 			title: "API errors",
@@ -508,6 +549,7 @@ describe("DraftService", () => {
 		expect(await t.services.drafts.get(draft.id)).toMatchObject({
 			state: "approved",
 			incidentId: incident?.id,
+			updateId: incident?.updates[0]?.id,
 		});
 		await expect(
 			t.services.drafts.approve(EDITOR, draft.id, draft.content),
@@ -525,9 +567,13 @@ describe("DraftService", () => {
 		await expect(
 			t.services.drafts.approve(EDITOR, update.id, update.content),
 		).rejects.toThrow("database offline");
-		expect((await t.services.drafts.get(update.id)).state).toBe("approved");
+		const storedUpdate = await t.services.drafts.get(update.id);
 		const updates = (await t.services.incidents.get(incident?.id as string))
 			.updates;
+		expect(storedUpdate).toMatchObject({
+			state: "approved",
+			updateId: updates.at(-1)?.id,
+		});
 		expect(updates.map((entry) => entry.message)).toEqual(["x", "Resolved"]);
 	});
 
@@ -612,11 +658,65 @@ describe("DraftService", () => {
 			third.id,
 			second.id,
 		]);
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Listed",
+			message: "x",
+			notify: false,
+		});
+		const update = await t.services.drafts.create(AGENT, {
+			incidentId: incident.id,
+			message: "y",
+		});
+		expect(
+			ids(
+				await t.services.drafts.list({
+					incidentId: incident.id,
+					pending: true,
+				}),
+			),
+		).toEqual([update.id]);
+		expect(
+			await t.services.drafts.list({
+				incidentId: incident.id,
+				pending: false,
+			}),
+		).toEqual([]);
+		expect(await t.services.drafts.list({ incidentId: "inc_missing" })).toEqual(
+			[],
+		);
 		await expect(t.services.drafts.find("drf_missing")).resolves.toBe(
 			undefined,
 		);
 		await expect(t.services.drafts.get("drf_missing")).rejects.toBeInstanceOf(
 			NotFoundError,
 		);
+	});
+
+	it("keeps a region on a new draft and rejects it on an update", async () => {
+		const region = await t.services.regions.create(ADMIN, {
+			name: "United States",
+		});
+		const draft = await t.services.drafts.create(AGENT, {
+			title: "API errors",
+			message: "Looking",
+			regionId: region.id,
+		});
+		expect(draft.content.regionId).toBe(region.id);
+		const approved = await t.services.drafts.approve(
+			EDITOR,
+			draft.id,
+			draft.content,
+		);
+		expect(approved.incident.regionId).toBe(region.id);
+		const update = await t.services.drafts.create(AGENT, {
+			incidentId: approved.incident.id,
+			message: "Next",
+		});
+		await expect(
+			t.services.drafts.update(EDITOR, update.id, {
+				message: "Next",
+				regionId: region.id,
+			}),
+		).rejects.toThrow(/regionId/);
 	});
 });

@@ -5,9 +5,11 @@ import type {
 } from "../domain/schemas";
 import type {
 	Actor,
+	DraftAction,
 	DraftContent,
 	Incident,
 	IncidentKind,
+	IncidentUpdate,
 	NotificationDraft,
 } from "../domain/types";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
@@ -29,7 +31,21 @@ export function draftPath(id: string): string {
 export interface DraftListOptions {
 	/** `true` for drafts that wait for review, `false` for reviewed drafts. */
 	pending?: boolean;
+	/** Only the drafts for this incident. */
+	incidentId?: string;
 	limit?: number;
+}
+
+/** The id of the post that a draft published. */
+function publishedUpdateId(
+	action: DraftAction,
+	incident: Incident,
+	recordId: string,
+): string {
+	if (action === "update") {
+		return recordId;
+	}
+	return (incident.updates[0] as IncidentUpdate).id;
 }
 
 /** What a draft publishes: a new event of a kind, or an update to an incident. */
@@ -42,9 +58,9 @@ const CREATE_ONLY_FIELDS = [
 	"kind",
 	"title",
 	"impact",
-	"serviceIds",
 	"scheduledStart",
 	"scheduledEnd",
+	"regionId",
 ] as const;
 
 function targetOf(draft: NotificationDraft): Target {
@@ -79,6 +95,13 @@ export class DraftService {
 				field: "state",
 				op: options.pending ? "eq" : "ne",
 				value: "pending",
+			});
+		}
+		if (options.incidentId !== undefined) {
+			where.push({
+				field: "incidentId",
+				op: "eq",
+				value: options.incidentId,
 			});
 		}
 		return this.ctx.store.find("notification_drafts", {
@@ -189,13 +212,14 @@ export class DraftService {
 			// When the record was saved, a later step failed. The draft stays
 			// approved, so a second approval cannot publish it again. When
 			// nothing was saved, the draft waits for review again, with the edits.
-			const saved = await this.published(reviewed, recordId);
+			const saved = await this.publishedIncident(reviewed, recordId);
 			await this.ctx.store.update(
 				"notification_drafts",
 				saved
 					? {
 							...reviewed,
 							incidentId: reviewed.incidentId ?? recordId,
+							updateId: publishedUpdateId(reviewed.action, saved, recordId),
 							publishedAt: iso(this.ctx.now()),
 						}
 					: { ...current, content, updatedAt: now },
@@ -205,6 +229,7 @@ export class DraftService {
 		const draft: NotificationDraft = {
 			...reviewed,
 			incidentId: incident.id,
+			updateId: publishedUpdateId(reviewed.action, incident, recordId),
 			publishedAt: iso(this.ctx.now()),
 		};
 		await this.ctx.store.update("notification_drafts", draft);
@@ -260,10 +285,8 @@ export class DraftService {
 		input: DraftContentInput & { kind?: IncidentKind },
 	): Promise<{ kind: IncidentKind; content: DraftContent }> {
 		if (target.action === "update") {
-			const extra = CREATE_ONLY_FIELDS.filter((field) =>
-				field === "serviceIds"
-					? (input.serviceIds?.length ?? 0) > 0
-					: input[field] !== undefined,
+			const extra = CREATE_ONLY_FIELDS.filter(
+				(field) => input[field] !== undefined,
 			);
 			if (extra.length > 0) {
 				throw new ValidationError(
@@ -277,6 +300,7 @@ export class DraftService {
 					message: input.message,
 					serviceStatus: input.serviceStatus,
 					serviceStatuses: input.serviceStatuses,
+					serviceIds: input.serviceIds,
 				},
 			);
 			return {
@@ -286,6 +310,7 @@ export class DraftService {
 					message: data.message,
 					serviceStatus: data.serviceStatus,
 					serviceStatuses: data.serviceStatuses,
+					serviceIds: data.serviceIds,
 				},
 			};
 		}
@@ -303,6 +328,9 @@ export class DraftService {
 			serviceStatus: data.serviceStatus,
 			serviceStatuses: data.serviceStatuses,
 		};
+		if (data.regionId) {
+			content.regionId = data.regionId;
+		}
 		if (target.kind === "maintenance") {
 			content.scheduledStart = data.scheduledStart;
 			content.scheduledEnd = data.scheduledEnd;
@@ -325,6 +353,7 @@ export class DraftService {
 					message: content.message,
 					serviceStatus: content.serviceStatus,
 					serviceStatuses: content.serviceStatuses,
+					serviceIds: content.serviceIds,
 				},
 				{ id },
 			);
@@ -336,18 +365,20 @@ export class DraftService {
 		);
 	}
 
-	/** Whether the publication of a draft saved the record with this id. */
-	private async published(
+	/** The incident when publication saved the record with this id. */
+	private async publishedIncident(
 		draft: NotificationDraft,
 		id: string,
-	): Promise<boolean> {
+	): Promise<Incident | undefined> {
 		const incident = await this.incidents.find(
 			draft.action === "update" ? (draft.incidentId as string) : id,
 			{ consistent: true },
 		);
-		return draft.action === "update"
-			? Boolean(incident?.updates.some((update) => update.id === id))
-			: incident !== undefined;
+		const saved =
+			draft.action === "update"
+				? Boolean(incident?.updates.some((update) => update.id === id))
+				: incident !== undefined;
+		return saved ? incident : undefined;
 	}
 
 	/** The draft, read from the store, when it still waits for review. */

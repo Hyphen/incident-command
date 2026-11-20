@@ -68,6 +68,21 @@ const serviceStatusesSchema = z
 	.optional()
 	.transform((entries) => (entries?.length ? entries : undefined));
 
+export const createRegionSchema = z.object({
+	name: z.string().trim().min(1).max(80),
+	order: z.number().int().optional(),
+});
+export type CreateRegionInput = z.input<typeof createRegionSchema>;
+
+export const updateRegionSchema = z.object({
+	name: z.string().trim().min(1).max(80).optional(),
+	order: z.number().int().optional(),
+});
+export type UpdateRegionInput = z.input<typeof updateRegionSchema>;
+
+/** A region id. Null clears the region and the incident becomes global. */
+const regionIdSchema = z.union([z.string().trim().min(1), z.null()]).optional();
+
 export const createServiceSchema = z.object({
 	name: z.string().trim().min(1).max(120),
 	description: text(500),
@@ -99,6 +114,7 @@ export const createIncidentSchema = z.object({
 	serviceStatuses: serviceStatusesSchema,
 	scheduledStart: isoDate.optional(),
 	scheduledEnd: isoDate.optional(),
+	regionId: z.string().trim().min(1).optional(),
 	notify: z.boolean().optional(),
 });
 export type CreateIncidentInput = z.input<typeof createIncidentSchema>;
@@ -106,6 +122,8 @@ export type CreateIncidentInput = z.input<typeof createIncidentSchema>;
 export const incidentUpdateSchema = z.object({
 	status: eventStatusSchema.optional(),
 	message: z.string().trim().min(1).max(10_000),
+	/** Services to add. This does not remove a service. */
+	serviceIds: z.array(z.string().min(1)).max(100).optional(),
 	serviceStatus: serviceStatusSchema.optional(),
 	serviceStatuses: serviceStatusesSchema,
 	notify: z.boolean().optional(),
@@ -118,6 +136,7 @@ export const editIncidentSchema = z.object({
 	serviceIds: z.array(z.string().min(1)).max(100).optional(),
 	scheduledStart: isoDate.optional(),
 	scheduledEnd: isoDate.optional(),
+	regionId: regionIdSchema,
 });
 export type EditIncidentInput = z.input<typeof editIncidentSchema>;
 
@@ -244,19 +263,42 @@ const phone = z
 	.transform((value) => value.replace(/[\s().-]/g, ""))
 	.pipe(z.string().regex(PHONE, PHONE_MESSAGE));
 
-export const smsSubscriberSchema = z.object({ phone });
-
 const webhookUrl = z.url({ protocol: /^https?$/ }).max(2000);
 
-export const webhookSubscriberSchema = z.object({ url: webhookUrl });
+/**
+ * Services that send a notification to one subscriber.
+ * An empty list means every service. Give each service only once.
+ */
+export const subscriberServiceIdsSchema = z
+	.array(z.string().trim().min(1))
+	.max(100)
+	.refine(
+		(ids) => new Set(ids).size === ids.length,
+		"Give each service only once",
+	);
 
-export const emailSubscriberSchema = z.object({ email });
+/** Replaces the service choice of one subscriber. */
+export const subscriberServicesSchema = z.object({
+	serviceIds: subscriberServiceIdsSchema,
+});
 
 /** A public subscription. The format of `target` follows `type`. */
 export const subscribeSchema = z.discriminatedUnion("type", [
-	z.object({ type: z.literal("email"), target: email }),
-	z.object({ type: z.literal("sms"), target: phone }),
-	z.object({ type: z.literal("webhook"), target: webhookUrl }),
+	z.object({
+		type: z.literal("email"),
+		target: email,
+		serviceIds: subscriberServiceIdsSchema.optional(),
+	}),
+	z.object({
+		type: z.literal("sms"),
+		target: phone,
+		serviceIds: subscriberServiceIdsSchema.optional(),
+	}),
+	z.object({
+		type: z.literal("webhook"),
+		target: webhookUrl,
+		serviceIds: subscriberServiceIdsSchema.optional(),
+	}),
 ]);
 
 export const notificationChannelSchema = z.enum(SUBSCRIBER_TYPES);
