@@ -1137,7 +1137,7 @@ describe("incident pages", () => {
 			screen.getByRole("checkbox", { name: "United States" }),
 		).not.toBeChecked();
 		created.unmount();
-		render(
+		const incidentPage = render(
 			await IncidentPage({
 				params: params({ id: incident.id }),
 				searchParams: params({}),
@@ -1150,6 +1150,18 @@ describe("incident pages", () => {
 		expect(
 			screen.getByRole("button", { name: "Save regions" }),
 		).toBeInTheDocument();
+		incidentPage.unmount();
+		await services.catalog.delete(SYSTEM_ACTOR, api.id);
+		render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({}),
+			}),
+		);
+		expect(screen.getByText(api.id)).toBeInTheDocument();
+		expect(
+			screen.getByRole("checkbox", { name: "United States" }),
+		).toBeChecked();
 	});
 
 	it("404s for unknown incidents", async () => {
@@ -1511,10 +1523,11 @@ describe("notification draft pages", () => {
 			name: "United States",
 		});
 		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		const withRegion = await services.drafts.create(AGENT, {
 			title: "US errors",
 			message: "Looking",
-			serviceIds: [api.id],
+			serviceIds: [api.id, web.id],
 			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
 		const global = await services.drafts.create(AGENT, {
@@ -1523,14 +1536,53 @@ describe("notification draft pages", () => {
 		});
 		await signIn(app, "editor");
 		const editor = render(await draftPage(withRegion.id));
-		expect(
-			screen.getByRole("checkbox", { name: "United States" }),
-		).toBeChecked();
+		const checked = screen
+			.getAllByRole("checkbox", { name: "United States" })
+			.filter((box) => (box as HTMLInputElement).checked);
+		expect(checked).toHaveLength(1);
 		editor.unmount();
 		await signIn(app, "viewer");
 		const named = render(await draftPage(withRegion.id));
-		expect(screen.getByText("United States")).toBeInTheDocument();
+		expect(screen.getByText("Global, United States")).toBeInTheDocument();
 		named.unmount();
+		const stored = await services.drafts.get(withRegion.id);
+		const { serviceRegions: _regions, ...rest } = stored.content;
+		await app.store.update("notification_drafts", {
+			...stored,
+			content: {
+				...rest,
+				serviceIds: [api.id],
+				regionId: region.id,
+			} as typeof stored.content,
+		});
+		await signIn(app, "editor");
+		const legacy = render(await draftPage(withRegion.id));
+		const legacyChecked = screen
+			.getAllByRole("checkbox", { name: "United States" })
+			.filter((box) => (box as HTMLInputElement).checked);
+		expect(legacyChecked).toHaveLength(1);
+		legacy.unmount();
+		const live = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Live",
+			message: "x",
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
+		});
+		const update = await services.drafts.create(AGENT, {
+			incidentId: live.id,
+			message: "Now in the US",
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
+		});
+		const review = render(await draftPage(update.id));
+		const reviewChecked = screen
+			.getAllByRole("checkbox", { name: "United States" })
+			.filter((box) => (box as HTMLInputElement).checked);
+		expect(reviewChecked).toHaveLength(1);
+		expect(reviewChecked[0]).toHaveAttribute("name", `regionIds:${api.id}`);
+		expect(document.querySelector(`input[name="boundServiceIds"]`)).toHaveValue(
+			api.id,
+		);
+		review.unmount();
 		render(await draftPage(global.id));
 		expect(
 			screen.queryByText("Region", { selector: "dt" }),

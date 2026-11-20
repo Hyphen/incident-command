@@ -11,6 +11,7 @@ import type {
 	IncidentKind,
 	IncidentUpdate,
 	NotificationDraft,
+	ServiceRegions,
 } from "../domain/types";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import type { Condition } from "../store/types";
@@ -26,6 +27,29 @@ import { type IncidentService, newIncidentId } from "./incidents";
 /** The portal path where a person reviews a notification draft. */
 export function draftPath(id: string): string {
 	return `/manage/drafts/${encodeURIComponent(id)}`;
+}
+
+/**
+ * Regions stored on a draft.
+ * An old draft can still have `regionId`. That region applies to each service.
+ */
+export function regionsInDraft(
+	content: DraftContent & { regionId?: string },
+): ServiceRegions[] | undefined {
+	if (content.serviceRegions && content.serviceRegions.length > 0) {
+		return content.serviceRegions;
+	}
+	if (
+		!content.regionId ||
+		!content.serviceIds ||
+		content.serviceIds.length === 0
+	) {
+		return undefined;
+	}
+	return content.serviceIds.map((serviceId) => ({
+		serviceId,
+		regionIds: [content.regionId as string],
+	}));
 }
 
 export interface DraftListOptions {
@@ -347,6 +371,7 @@ export class DraftService {
 		id: string,
 	): Promise<Incident> {
 		const { content } = draft;
+		const serviceRegions = regionsInDraft(content);
 		if (draft.action === "update") {
 			return this.incidents.postUpdate(
 				actor,
@@ -359,14 +384,22 @@ export class DraftService {
 					serviceStatus: content.serviceStatus,
 					serviceStatuses: content.serviceStatuses,
 					serviceIds: content.serviceIds,
-					serviceRegions: content.serviceRegions,
+					serviceRegions,
 				},
 				{ id },
 			);
 		}
+		const { regionId: _legacy, ...rest } = content as DraftContent & {
+			regionId?: string;
+		};
 		return this.incidents.create(
 			actor,
-			{ ...content, kind: draft.kind, title: content.title as string },
+			{
+				...rest,
+				kind: draft.kind,
+				title: content.title as string,
+				serviceRegions,
+			},
 			{ id },
 		);
 	}

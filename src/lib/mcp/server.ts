@@ -112,6 +112,21 @@ const serviceStatuses = z
 	.describe(
 		"Statuses for single affected services. Each entry replaces serviceStatus and the automatic status for its service. Other affected services keep the automatic status or serviceStatus.",
 	);
+const legacyRegionId = z
+	.any()
+	.optional()
+	.superRefine((value, ctx) => {
+		if (value !== undefined) {
+			ctx.addIssue({
+				code: "custom",
+				message:
+					"regionId: set serviceRegions for each service. No regions means Global.",
+			});
+		}
+	})
+	.describe(
+		"Removed. Set serviceRegions for each service. No regions means Global.",
+	);
 const serviceRegions = z
 	.array(
 		z.object({
@@ -561,6 +576,7 @@ export function createMcpServer(
 				serviceStatus,
 				serviceStatuses,
 				serviceRegions,
+				regionId: legacyRegionId,
 				status: eventStatusSchema
 					.optional()
 					.describe(
@@ -606,6 +622,7 @@ export function createMcpServer(
 				serviceRegions: serviceRegions.describe(
 					"Regions for services in this update. A service that is not in this list keeps its regions. An empty regionIds list makes that service Global.",
 				),
+				regionId: legacyRegionId,
 				notify,
 			},
 		},
@@ -643,6 +660,7 @@ export function createMcpServer(
 					.describe(
 						"Replaces the regions of every affected service. Pass an empty list or null to make every service Global. Omit this field to keep the current regions.",
 					),
+				regionId: legacyRegionId,
 			},
 		},
 		async ({ id: incidentId, ...patch }) =>
@@ -677,6 +695,7 @@ export function createMcpServer(
 				scheduledEnd: isoDate,
 				serviceIds: z.array(z.string()).optional(),
 				serviceRegions,
+				regionId: legacyRegionId,
 				notify,
 			},
 		},
@@ -740,6 +759,7 @@ export function createMcpServer(
 				serviceRegions: serviceRegions.describe(
 					"Regions for each service in serviceIds. On an update, a service that is not in this list keeps its regions.",
 				),
+				regionId: legacyRegionId,
 				scheduledStart: isoDate
 					.optional()
 					.describe("New maintenance only: start of the window (ISO 8601)"),

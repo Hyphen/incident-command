@@ -437,7 +437,10 @@ export async function deleteIncidentAction(form: FormData): Promise<void> {
 function draftContent(form: FormData) {
 	const serviceIds = list(form, "serviceIds");
 	const addServiceIds = list(form, "addServiceIds");
-	const ids = serviceIds.length > 0 ? serviceIds : addServiceIds;
+	const boundServiceIds = list(form, "boundServiceIds");
+	const ids = [
+		...new Set([...serviceIds, ...addServiceIds, ...boundServiceIds]),
+	];
 	return {
 		title: nonEmpty(form, "title"),
 		impact: nonEmpty(form, "impact") as IncidentImpact | undefined,

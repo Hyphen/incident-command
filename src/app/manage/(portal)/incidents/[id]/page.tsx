@@ -268,9 +268,20 @@ export default async function ManageIncidentPage({
 		services.drafts.list({ pending: true, incidentId: incident.id }),
 		services.drafts.list({ pending: false, incidentId: incident.id }),
 	]);
-	const affected = catalog.filter((service) =>
-		incident.serviceIds.includes(service.id),
-	);
+	const affected = incident.serviceIds.map((id) => {
+		const service = catalog.find((item) => item.id === id);
+		return (
+			service ?? {
+				id,
+				name: id,
+				status: "operational" as const,
+				order: 0,
+				hidden: true,
+				createdAt: incident.createdAt,
+				updatedAt: incident.updatedAt,
+			}
+		);
+	});
 	const isIncident = incident.kind === "incident";
 	const regionName = regionNameFor(incident, regions);
 	const showForm =

@@ -298,11 +298,22 @@ describe("status page", () => {
 			serviceIds: [api.id],
 			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
 		});
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		await services.incidents.create(SYSTEM_ACTOR, {
 			title: "Everywhere",
 			message: "Wide",
 			impact: "major",
 			serviceIds: [api.id],
+		});
+		await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Split",
+			message: "Down",
+			impact: "major",
+			serviceIds: [api.id, web.id],
+			serviceRegions: [
+				{ serviceId: api.id, regionIds: [united.id] },
+				{ serviceId: web.id, regionIds: [europe.id] },
+			],
 		});
 		const global = render(await StatusPage());
 		const tabs = within(screen.getByRole("navigation", { name: "Regions" }));
@@ -329,6 +340,11 @@ describe("status page", () => {
 			"page",
 		);
 		expect(screen.queryAllByText("US only")).toEqual([]);
+		const split = screen
+			.getByRole("heading", { name: "Split" })
+			.closest("article");
+		expect(split).toHaveTextContent("Affects Web");
+		expect(split).not.toHaveTextContent("API");
 		expect(screen.getAllByText("Everywhere").length).toBeGreaterThan(0);
 		expect(screen.getAllByText("Partial outage").length).toBeGreaterThan(0);
 		expect(screen.queryAllByText("Major outage")).toEqual([]);

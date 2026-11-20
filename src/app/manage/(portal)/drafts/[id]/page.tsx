@@ -12,6 +12,7 @@ import {
 	AddServices,
 	ImpactSelect,
 	ServicePicker,
+	ServiceRegionEditor,
 	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
@@ -23,7 +24,7 @@ import { buttonClass, Card, Field, inputClass } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
-import { regionNameFor } from "@/lib/domain/regions";
+import { boundServiceRegions, regionNameFor } from "@/lib/domain/regions";
 import {
 	DRAFT_LABELS,
 	DRAFT_STATE_LABELS,
@@ -38,8 +39,9 @@ import type {
 	NotificationDraft,
 	Region,
 	Service,
+	ServiceRegions,
 } from "@/lib/domain/types";
-import { draftPath } from "@/lib/services/drafts";
+import { draftPath, regionsInDraft } from "@/lib/services/drafts";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Notification draft" };
@@ -69,6 +71,26 @@ function ReviewState({ draft }: { draft: NotificationDraft }) {
 			{draft.state === "discarded" && ". Nothing was published or sent."}
 		</p>
 	);
+}
+
+/** Regions to show for services that the incident already affects. */
+function reviewRegions(
+	incident: Incident,
+	content: NotificationDraft["content"],
+): ServiceRegions[] {
+	const map = new Map(
+		boundServiceRegions(incident).map((entry) => [
+			entry.serviceId,
+			entry.regionIds,
+		]),
+	);
+	for (const entry of regionsInDraft(content) ?? []) {
+		map.set(entry.serviceId, entry.regionIds);
+	}
+	return [...map.entries()].map(([serviceId, regionIds]) => ({
+		serviceId,
+		regionIds,
+	}));
 }
 
 function ReviewForm({
@@ -150,7 +172,7 @@ function ReviewForm({
 						withStatus
 						statuses={content.serviceStatuses}
 						regions={regions}
-						serviceRegions={content.serviceRegions}
+						serviceRegions={regionsInDraft(content)}
 					/>
 				)}
 				<ServiceStatusSelect
@@ -165,13 +187,28 @@ function ReviewForm({
 							)}
 							values={content.serviceStatuses}
 						/>
+						{(incident as Incident).serviceIds.map((serviceId) => (
+							<input
+								key={serviceId}
+								type="hidden"
+								name="boundServiceIds"
+								value={serviceId}
+							/>
+						))}
+						<ServiceRegionEditor
+							services={catalog.filter((service) =>
+								(incident as Incident).serviceIds.includes(service.id),
+							)}
+							regions={regions}
+							values={reviewRegions(incident as Incident, content)}
+						/>
 						<AddServices
 							catalog={catalog}
 							affectedIds={(incident as Incident).serviceIds}
 							selected={content.serviceIds}
 							statuses={content.serviceStatuses}
 							regions={regions}
-							serviceRegions={content.serviceRegions}
+							serviceRegions={regionsInDraft(content)}
 						/>
 					</>
 				)}
@@ -222,12 +259,19 @@ function DraftSummary({
 		);
 		return entry ? [{ service, status: entry.status }] : [];
 	});
+	const draftRegions = regionsInDraft(content);
+	const regionServiceIds = [
+		...new Set([
+			...(content.serviceIds ?? []),
+			...(draftRegions ?? []).map((entry) => entry.serviceId),
+		]),
+	];
 	const regionLabel =
-		content.serviceRegions && content.serviceRegions.length > 0
+		draftRegions && regionServiceIds.length > 0
 			? regionNameFor(
 					{
-						serviceIds: content.serviceRegions.map((entry) => entry.serviceId),
-						serviceRegions: content.serviceRegions,
+						serviceIds: regionServiceIds,
+						serviceRegions: draftRegions,
 					},
 					regions,
 				)

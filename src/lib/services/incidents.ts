@@ -143,6 +143,18 @@ function assertAffected(
 	}
 }
 
+/** Rejects the old single `regionId`. Regions belong to each service. */
+function rejectLegacyRegion(input: object): void {
+	if (
+		"regionId" in input &&
+		(input as { regionId?: unknown }).regionId !== undefined
+	) {
+		throw new ValidationError(
+			"regionId: set serviceRegions for each service. No regions means Global.",
+		);
+	}
+}
+
 /** Checks that each region list belongs to an affected service. */
 function assertRegionServices(
 	serviceIds: readonly string[],
@@ -160,10 +172,13 @@ function assertRegionServices(
 
 /**
  * Writes `serviceRegions` and drops the old `regionId`.
+ * Call this before you change `incident.serviceIds`.
+ * `serviceIds` is the list after the write.
  * `replace` uses `patch` as the full list. `null` or `[]` makes every service Global.
  * Omit `patch` to keep the current regions of the services that remain.
  * `merge` sets only the services in `patch`. Other services keep their regions.
  * An empty `regionIds` list makes that service Global.
+ * An old incident with no services keeps `regionId` until a service can hold it.
  */
 function assignRegions(
 	incident: Incident,
@@ -174,7 +189,9 @@ function assignRegions(
 	const map = new Map<string, string[]>();
 	if (patch === undefined || mode === "merge") {
 		for (const entry of boundServiceRegions(incident)) {
-			map.set(entry.serviceId, entry.regionIds);
+			if (serviceIds.includes(entry.serviceId)) {
+				map.set(entry.serviceId, entry.regionIds);
+			}
 		}
 	}
 	if (patch) {
@@ -189,15 +206,23 @@ function assignRegions(
 			map.set(entry.serviceId, entry.regionIds);
 		}
 	}
-	delete incident.regionId;
 	const serviceRegions = [...map.entries()].map(([serviceId, regionIds]) => ({
 		serviceId,
 		regionIds,
 	}));
+	// An old incident with no services keeps regionId until a service can hold it.
+	const keepLegacy =
+		serviceRegions.length === 0 &&
+		patch === undefined &&
+		incident.regionId !== undefined &&
+		incident.serviceIds.length === 0 &&
+		serviceIds.length === 0;
 	if (serviceRegions.length > 0) {
 		incident.serviceRegions = serviceRegions;
-	} else {
+		delete incident.regionId;
+	} else if (!keepLegacy) {
 		delete incident.serviceRegions;
+		delete incident.regionId;
 	}
 }
 
@@ -298,6 +323,7 @@ export class IncidentService {
 	 * nothing. Returns the parsed input without duplicate service ids.
 	 */
 	async check(input: CreateIncidentInput) {
+		rejectLegacyRegion(input);
 		const data = parse(createIncidentSchema, input);
 		const kind = data.kind ?? "incident";
 		assertStatusForKind(kind, data.status ?? initialStatus(kind));
@@ -324,6 +350,7 @@ export class IncidentService {
 	 * nothing. Returns the incident and the parsed input.
 	 */
 	async checkUpdate(id: string, input: IncidentUpdateInput) {
+		rejectLegacyRegion(input);
 		const data = parse(incidentUpdateSchema, input);
 		const incident = await this.get(id);
 		if (data.status) {
@@ -415,9 +442,15 @@ export class IncidentService {
 		options: PublishOptions = {},
 	): Promise<Incident> {
 		requirePermission(actor, "incidents.publish");
+		rejectLegacyRegion(input);
 		const data = parse(incidentUpdateSchema, input);
 		this.assertCanNotify(actor, data.notify);
 		const addIds = await this.validateServices(data.serviceIds ?? []);
+		const existing = await this.load(id);
+		const serviceRegions = await this.validateRegions(
+			mergeServiceIds(existing.serviceIds, addIds),
+			data.serviceRegions,
+		);
 		const author = authorRef(actor);
 		const updateId = options.id ?? createId("upd");
 		const { current, next } = await this.mutate(id, (current) => {
@@ -433,7 +466,6 @@ export class IncidentService {
 				title,
 				impact,
 				status,
-				serviceIds,
 				updates: [
 					...current.updates,
 					{
@@ -454,7 +486,8 @@ export class IncidentService {
 			} else {
 				delete next.resolvedAt;
 			}
-			assignRegions(next, serviceIds, data.serviceRegions, "merge");
+			assignRegions(next, serviceIds, serviceRegions, "merge");
+			next.serviceIds = serviceIds;
 			return next;
 		});
 		const update = next.updates.at(-1) as IncidentUpdate;
@@ -508,6 +541,7 @@ export class IncidentService {
 		input: EditIncidentInput,
 	): Promise<Incident> {
 		requirePermission(actor, "incidents.edit");
+		rejectLegacyRegion(input);
 		const patch = parse(editIncidentSchema, input);
 		const current = await this.get(id);
 		const serviceIds = patch.serviceIds
@@ -520,10 +554,12 @@ export class IncidentService {
 		const { next } = await this.mutate(id, (current) => {
 			const next: Incident = {
 				...current,
-				serviceIds: patch.serviceIds ? serviceIds : current.serviceIds,
 				updatedAt: iso(this.ctx.now()),
 			};
-			assignRegions(next, next.serviceIds, serviceRegions, "replace");
+			assignRegions(next, serviceIds, serviceRegions, "replace");
+			if (patch.serviceIds) {
+				next.serviceIds = serviceIds;
+			}
 			if (current.kind === "maintenance") {
 				const scheduledStart =
 					patch.scheduledStart ?? (current.scheduledStart as string);

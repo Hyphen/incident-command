@@ -968,5 +968,72 @@ describe("IncidentService", () => {
 		expect(onlyApi.serviceRegions).toEqual([
 			{ serviceId: api.id, regionIds: [europe.id] },
 		]);
+		await expect(
+			t.services.incidents.postUpdate(EDITOR, incident.id, {
+				message: "Unknown region",
+				serviceRegions: [{ serviceId: api.id, regionIds: ["reg_missing"] }],
+				notify: false,
+			}),
+		).rejects.toBeInstanceOf(NotFoundError);
+		await expect(
+			t.services.incidents.postUpdate(EDITOR, incident.id, {
+				message: "Extra service",
+				serviceRegions: [{ serviceId: web.id, regionIds: [united.id] }],
+				notify: false,
+			}),
+		).rejects.toThrow(/serviceRegions/);
+		await expect(
+			t.services.incidents.create(EDITOR, {
+				title: "Old field",
+				message: "x",
+				serviceIds: [api.id],
+				regionId: united.id,
+			} as never),
+		).rejects.toThrow(/regionId/);
+
+		const bare = await t.services.incidents.create(EDITOR, {
+			title: "No services",
+			message: "x",
+		});
+		const bareDoc = await t.store.get("incidents", bare.id);
+		if (!bareDoc) {
+			throw new Error("missing incident");
+		}
+		bareDoc.regionId = united.id;
+		await t.store.update("incidents", bareDoc);
+		const keptRegion = await t.services.incidents.postUpdate(EDITOR, bare.id, {
+			message: "Still regional",
+			notify: false,
+		});
+		expect(keptRegion.regionId).toBe(united.id);
+		expect(keptRegion.serviceRegions).toBeUndefined();
+
+		const inherited = await t.services.incidents.create(EDITOR, {
+			title: "Legacy",
+			message: "x",
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
+		});
+		const inheritedDoc = await t.store.get("incidents", inherited.id);
+		if (!inheritedDoc) {
+			throw new Error("missing incident");
+		}
+		inheritedDoc.regionId = united.id;
+		delete inheritedDoc.serviceRegions;
+		await t.store.update("incidents", inheritedDoc);
+		const withWeb = await t.services.incidents.postUpdate(
+			EDITOR,
+			inherited.id,
+			{
+				message: "Add Web",
+				serviceIds: [web.id],
+				notify: false,
+			},
+		);
+		expect(withWeb.regionId).toBeUndefined();
+		expect(withWeb.serviceIds).toEqual([api.id, web.id]);
+		expect(withWeb.serviceRegions).toEqual([
+			{ serviceId: api.id, regionIds: [united.id] },
+		]);
 	});
 });

@@ -1847,6 +1847,21 @@ describe("region actions", () => {
 		);
 		expectSameFlash(
 			await redirectOf(
+				postIncidentUpdateAction(
+					form({
+						id: incident?.id ?? "",
+						message: "Web too",
+						addServiceIds: web.id,
+						serviceRegions: "",
+						[`regionIds:${web.id}`]: europe.id,
+						[`regionIds:${api.id}`]: region?.id ?? "",
+					}),
+				),
+			),
+			`/manage/incidents/${incident?.id}?notice=Update posted`,
+		);
+		expectSameFlash(
+			await redirectOf(
 				editIncidentAction(
 					form({ id: incident?.id ?? "", title: "API outage" }),
 				),
@@ -1855,7 +1870,10 @@ describe("region actions", () => {
 		);
 		expect(
 			(await services.incidents.get(incident?.id ?? "")).serviceRegions,
-		).toEqual([{ serviceId: api.id, regionIds: [region?.id, europe.id] }]);
+		).toEqual([
+			{ serviceId: api.id, regionIds: [region?.id, europe.id] },
+			{ serviceId: web.id, regionIds: [europe.id] },
+		]);
 		expectSameFlash(
 			await redirectOf(
 				editIncidentAction(
@@ -1893,6 +1911,28 @@ describe("region actions", () => {
 		);
 		expect(
 			(await services.drafts.get(draft.id)).content.serviceRegions,
+		).toEqual([{ serviceId: api.id, regionIds: [region?.id] }]);
+		const updateDraft = await services.drafts.create(agentActor(), {
+			incidentId: incident?.id,
+			message: "Bind API",
+			serviceRegions: [{ serviceId: api.id, regionIds: [region?.id ?? ""] }],
+		});
+		expectSameFlash(
+			await redirectOf(
+				approveDraftAction(
+					form({
+						id: updateDraft.id,
+						message: "Bind API",
+						serviceRegions: "",
+						boundServiceIds: api.id,
+						[`regionIds:${api.id}`]: region?.id ?? "",
+					}),
+				),
+			),
+			`/manage/incidents/${incident?.id}?notice=Draft approved. The update is published and subscribers are notified.`,
+		);
+		expect(
+			(await services.incidents.get(incident?.id ?? "")).serviceRegions,
 		).toEqual([{ serviceId: api.id, regionIds: [region?.id] }]);
 		expectSameFlash(
 			await redirectOf(deleteRegionAction(form({ id: region?.id ?? "" }))),
