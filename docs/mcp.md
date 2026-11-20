@@ -117,48 +117,48 @@ A person reviews drafts. An agent cannot approve a draft. An agent cannot change
 
 ## Tools
 
-| Tool                          | Permission            | What it does                                                                        |
-| ----------------------------- | --------------------- | ----------------------------------------------------------------------------------- |
-| `whoami`                      | none                  | The identity, permissions and credential type of the agent.                         |
-| `get_status`                  | `status.read`         | Overall status, services with status and uptime, open incidents and maintenance.    |
-| `list_services`               | `status.read`         | All services (including hidden) in display order.                                   |
-| `list_incidents`              | `status.read`         | Incidents and maintenance, newest first. Filter by `kind` and `open`.               |
-| `get_incident`                | `status.read`         | One incident with its full timeline.                                                |
-| `create_service`              | `services.write`      | Add a service.                                                                      |
-| `update_service`              | `services.write`      | Edit a service (`null` clears description or group).                                |
-| `set_service_status`          | `services.set_status` | Change a service's status without an incident. Feeds uptime history.                |
-| `delete_service`              | `services.delete`     | Delete a service and its status history.                                            |
-| `create_incident`             | `incidents.publish`   | Declare an incident. Affected services move to a status derived from the impact.    |
-| `post_incident_update`        | `incidents.publish`   | Add a timeline update. Optionally change the status and the status of each service. |
-| `resolve_incident`            | `incidents.publish`   | Resolve an incident or complete maintenance; restores affected services.            |
-| `edit_incident`               | `incidents.edit`      | Change title, impact, services or the maintenance window without posting an update. |
-| `delete_incident`             | `incidents.delete`    | Delete an incident or maintenance.                                                  |
-| `schedule_maintenance`        | `incidents.publish`   | Announce planned maintenance with a window.                                         |
-| `draft_notification`          | `drafts.write`        | Save a notification for review by a person. Returns the `reviewUrl`.                |
-| `get_notification_draft`      | `drafts.read`         | One notification draft and its review state.                                        |
-| `list_members`                | `members.read`        | Portal members.                                                                     |
-| `invite_member`               | `members.manage`      | Create a one-time `inviteUrl` (valid for 7 days). The person creates their account. |
-| `list_invites`                | `members.read`        | Invites that nobody used yet.                                                       |
-| `revoke_invite`               | `members.manage`      | Remove an invite. Its link stops working.                                           |
-| `update_member`               | `members.manage`      | Change name, email, role or password.                                               |
-| `remove_member`               | `members.manage`      | Remove a member (the last admin cannot be removed).                                 |
-| `list_agents`                 | `agents.read`         | Agents, their permissions and their credentials.                                    |
-| `create_agent_token`          | `agents.manage`       | Create a token for an agent. The token is returned once.                            |
-| `revoke_agent_token`          | `agents.manage`       | Revoke a token immediately.                                                         |
-| `create_agent`                | `agents.manage`       | Create an agent.                                                                    |
-| `update_agent`                | `agents.manage`       | Change the name, description or permissions.                                        |
-| `delete_agent`                | `agents.manage`       | Delete an agent and its credentials.                                                |
-| `list_agent_activity`         | `agents.read`         | Recent activity for one agent.                                                      |
-| `get_settings`                | `settings.read`       | Status page settings and branding, with `logoUrl` and `faviconUrl`.                 |
-| `get_design_guide`            | `settings.write`      | The theme presets, design tokens, CSS selectors, rules and limits for a design.     |
-| `update_settings`             | `settings.write`      | Change name, URLs, theme, CSS, uptime and the "Powered by" line.                    |
-| `upload_brand_asset`          | `settings.write`      | Store the logo or the favicon. It replaces the stored file.                         |
-| `remove_brand_asset`          | `settings.write`      | Remove the stored logo or favicon.                                                  |
-| `get_notification_settings`   | `channels.read`       | The webhook, email and text messaging channels and their providers. No credentials. |
-| `update_notification_channel` | `channels.write`      | Turn a channel on or off, or set its strategy or sender. Webhooks have neither.     |
-| `list_subscribers`            | `subscribers.read`    | Webhook, email and text message subscribers.                                        |
-| `add_subscriber`              | `subscribers.manage`  | Add a confirmed email subscriber, a webhook or an E.164 phone number.               |
-| `remove_subscriber`           | `subscribers.manage`  | Remove a subscriber.                                                                |
+| Tool                          | Permission            | What it does                                                                                 |
+| ----------------------------- | --------------------- | -------------------------------------------------------------------------------------------- |
+| `whoami`                      | none                  | The identity, permissions and credential type of the agent.                                  |
+| `get_status`                  | `status.read`         | Overall status, services with status and uptime, open incidents and maintenance.             |
+| `list_services`               | `status.read`         | All services (including hidden) in display order.                                            |
+| `list_incidents`              | `status.read`         | Incidents and maintenance, newest first. Filter by `kind` and `open`.                        |
+| `get_incident`                | `status.read`         | One incident with its full timeline.                                                         |
+| `create_service`              | `services.write`      | Add a service.                                                                               |
+| `update_service`              | `services.write`      | Edit a service (`null` clears description or group).                                         |
+| `set_service_status`          | `services.set_status` | Change a service's status without an incident. Feeds uptime history.                         |
+| `delete_service`              | `services.delete`     | Delete a service and its status history.                                                     |
+| `create_incident`             | `incidents.publish`   | Declare an incident. Affected services move to a status derived from the impact.             |
+| `post_incident_update`        | `incidents.publish`   | Add a timeline update. Optionally change the status and the status of each service.          |
+| `resolve_incident`            | `incidents.publish`   | Resolve an incident or complete maintenance; restores affected services.                     |
+| `edit_incident`               | `incidents.edit`      | Change title, impact, services or the maintenance window without posting an update.          |
+| `delete_incident`             | `incidents.delete`    | Delete an incident or maintenance.                                                           |
+| `schedule_maintenance`        | `incidents.publish`   | Announce planned maintenance with a window.                                                  |
+| `draft_notification`          | `drafts.write`        | Save a notification for review by a person. Returns the `reviewUrl`.                         |
+| `get_notification_draft`      | `drafts.read`         | One notification draft and its review state.                                                 |
+| `list_members`                | `members.read`        | Portal members.                                                                              |
+| `invite_member`               | `members.manage`      | Create a one-time `inviteUrl` (valid for 7 days). The person creates their account.          |
+| `list_invites`                | `members.read`        | Invites that nobody used yet.                                                                |
+| `revoke_invite`               | `members.manage`      | Remove an invite. Its link stops working.                                                    |
+| `update_member`               | `members.manage`      | Change name, email, role or password.                                                        |
+| `remove_member`               | `members.manage`      | Remove a member (the last admin cannot be removed).                                          |
+| `list_agents`                 | `agents.read`         | Agents, their permissions and their credentials.                                             |
+| `create_agent_token`          | `agents.manage`       | Create a token for an agent. The token is returned once.                                     |
+| `revoke_agent_token`          | `agents.manage`       | Revoke a token immediately.                                                                  |
+| `create_agent`                | `agents.manage`       | Create an agent.                                                                             |
+| `update_agent`                | `agents.manage`       | Change the name, description or permissions.                                                 |
+| `delete_agent`                | `agents.manage`       | Delete an agent and its credentials.                                                         |
+| `list_agent_activity`         | `agents.read`         | Recent activity for one agent.                                                               |
+| `get_settings`                | `settings.read`       | Status page settings and branding, with `logoUrl` and `faviconUrl`.                          |
+| `get_design_guide`            | `settings.write`      | The theme presets, design tokens, CSS selectors, rules and limits for a design.              |
+| `update_settings`             | `settings.write`      | Change name, URLs, theme, CSS, uptime, the "Powered by" line and the two-factor requirement. |
+| `upload_brand_asset`          | `settings.write`      | Store the logo or the favicon. It replaces the stored file.                                  |
+| `remove_brand_asset`          | `settings.write`      | Remove the stored logo or favicon.                                                           |
+| `get_notification_settings`   | `channels.read`       | The webhook, email and text messaging channels and their providers. No credentials.          |
+| `update_notification_channel` | `channels.write`      | Turn a channel on or off, or set its strategy or sender. Webhooks have neither.              |
+| `list_subscribers`            | `subscribers.read`    | Webhook, email and text message subscribers.                                                 |
+| `add_subscriber`              | `subscribers.manage`  | Add a confirmed email subscriber, a webhook or an E.164 phone number.                        |
+| `remove_subscriber`           | `subscribers.manage`  | Remove a subscriber.                                                                         |
 
 Agents cannot add notification providers or read their credentials. An admin adds providers and credentials in the portal.
 

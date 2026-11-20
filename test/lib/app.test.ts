@@ -90,6 +90,7 @@ describe("app container", () => {
 		});
 		expect(app.store).toBe(store);
 		expect(app.notifier).toBe(notifier);
+		expect(app.now().toISOString()).toBe("2020-01-01T00:00:00.000Z");
 		expect((await app.services.status.summary()).generatedAt).toBe(
 			"2020-01-01T00:00:00.000Z",
 		);

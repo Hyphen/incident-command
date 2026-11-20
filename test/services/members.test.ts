@@ -435,10 +435,26 @@ describe("MemberService and SessionService", () => {
 			name: "n",
 			role: "editor" as const,
 			passwordHash: "secret",
+			twoFactor: {
+				secret: "plain:SECRET",
+				recoveryCodeHashes: ["hash"],
+				recoveryReveal: ["abcd-efgh"],
+				enabledAt: "2026-11-02T12:00:00.000Z",
+			},
 			createdAt: "",
 			updatedAt: "",
 		};
+		expect(toPublicMember(member)).toEqual({
+			id: "m",
+			email: "e",
+			name: "n",
+			role: "editor",
+			twoFactorEnabled: true,
+			createdAt: "",
+			updatedAt: "",
+		});
 		expect(toPublicMember(member)).not.toHaveProperty("passwordHash");
+		expect(toPublicMember(member)).not.toHaveProperty("twoFactor");
 		expect(memberActor(member)).toEqual({
 			type: "member",
 			id: "m",

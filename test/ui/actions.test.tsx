@@ -31,6 +31,7 @@ import {
 	saveDraftAction,
 	setServiceStatusAction,
 	setupAction,
+	submitTwoFactorAction,
 	updateAgentAction,
 	updateBrandingAction,
 	updateGeneralSettingsAction,
@@ -46,6 +47,7 @@ import {
 } from "@/app/subscribe/actions";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { BRAND_ASSET_MESSAGES } from "@/lib/domain/brand-asset";
+import { totpAt } from "@/lib/domain/totp";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import { ICO_FAVICON, JPEG_LOGO, PNG_LOGO } from "../brand-asset-bytes";
 import { agentActor } from "../helpers";
@@ -65,7 +67,7 @@ import { cookieJar } from "./next-state";
 
 describe("session actions", () => {
 	it("sets up the first admin and signs them in", async () => {
-		const { services } = await setupApp();
+		const { services, clock } = await setupApp();
 		const url = await redirectOf(
 			setupAction(
 				form({ name: "Ada", email: "ada@acme.dev", password: "password123" }),
@@ -73,8 +75,35 @@ describe("session actions", () => {
 		);
 		expectSameFlash(
 			url,
-			"/manage?notice=Welcome! Your admin account is ready.",
+			"/manage/login/two-factor?notice=Welcome! Your admin account is ready.",
 		);
+		expect(
+			await services.sessions.resolve(cookieJar.get(SESSION_COOKIE)?.value),
+		).toBeUndefined();
+		await expect(
+			services.sessions.resolvePending(cookieJar.get(SESSION_COOKIE)?.value),
+		).resolves.toBeDefined();
+		const pending = await services.sessions.resolvePending(
+			cookieJar.get(SESSION_COOKIE)?.value,
+		);
+		const settings = await services.settings.get();
+		const started = await services.twoFactor.status(
+			pending?.member.id ?? "",
+			settings.siteName,
+		);
+		expectSameFlash(
+			await redirectOf(
+				submitTwoFactorAction(
+					form({
+						code: totpAt(started.setup?.secret ?? "", clock.now().getTime()),
+					}),
+				),
+			),
+			"/manage/account?notice=Two-factor authentication is on. Save your recovery codes.",
+		);
+		await expect(
+			services.sessions.resolve(cookieJar.get(SESSION_COOKIE)?.value),
+		).resolves.toBeDefined();
 		expect(cookieJar.get(SESSION_COOKIE)?.value).toBeTruthy();
 		expect(cookieJar.get(SESSION_COOKIE)).toMatchObject({
 			httpOnly: true,
@@ -90,6 +119,22 @@ describe("session actions", () => {
 			),
 			"/manage/setup?error=Setup has already been completed",
 		);
+	});
+
+	it("opens the portal when two-factor authentication is optional", async () => {
+		const { services } = await setupApp();
+		await services.settings.update(SYSTEM_ACTOR, { requireTwoFactor: false });
+		expectSameFlash(
+			await redirectOf(
+				setupAction(
+					form({ name: "Ada", email: "ada@acme.dev", password: "password123" }),
+				),
+			),
+			"/manage?notice=Welcome! Your admin account is ready.",
+		);
+		await expect(
+			services.sessions.resolve(cookieJar.get(SESSION_COOKIE)?.value),
+		).resolves.toBeDefined();
 	});
 
 	it("checks the setup token", async () => {
@@ -126,9 +171,12 @@ describe("session actions", () => {
 			await redirectOf(
 				loginAction(form({ email: "ADA@acme.dev", password: "password123" })),
 			),
-		).toBe("/manage");
+		).toBe("/manage/login/two-factor");
 		const token = cookieJar.get(SESSION_COOKIE)?.value;
-		await expect(services.sessions.resolve(token)).resolves.toBeDefined();
+		await expect(services.sessions.resolve(token)).resolves.toBeUndefined();
+		await expect(
+			services.sessions.resolvePending(token),
+		).resolves.toBeDefined();
 		expect(await redirectOf(logoutAction())).toBe("/manage/login");
 		expect(cookieJar.get(SESSION_COOKIE)).toBeUndefined();
 		await expect(services.sessions.resolve(token)).resolves.toBeUndefined();
@@ -136,6 +184,7 @@ describe("session actions", () => {
 
 	it("returns to the portal path of the sign-in link", async () => {
 		const { services } = await setupApp();
+		await services.settings.update(SYSTEM_ACTOR, { requireTwoFactor: false });
 		await services.members.setup({
 			name: "Ada",
 			email: "ada@acme.dev",
@@ -716,9 +765,9 @@ describe("member actions", () => {
 					form({ token, name: "Ed", password: "password123" }),
 				),
 			),
-			"/manage?notice=Welcome! Your account is ready.",
+			"/manage/login/two-factor?notice=Welcome! Your account is ready.",
 		);
-		const session = await services.sessions.resolve(
+		const session = await services.sessions.resolvePending(
 			cookieJar.get(SESSION_COOKIE)?.value,
 		);
 		expect(session?.member).toMatchObject({
@@ -1059,7 +1108,18 @@ describe("subscriber and settings actions", () => {
 			siteUrl: "https://status.acme.dev",
 			theme: "ocean",
 			uptimeDays: 30,
+			requireTwoFactor: false,
 		});
+		await redirectOf(
+			updateGeneralSettingsAction(
+				form({
+					siteName: "Acme Status",
+					uptimeDays: "30",
+					requireTwoFactor: "on",
+				}),
+			),
+		);
+		expect((await services.settings.get()).requireTwoFactor).toBe(true);
 		expectFlashRedirect(
 			await redirectOf(
 				updateGeneralSettingsAction(form({ siteName: "", uptimeDays: "1" })),
@@ -1087,6 +1147,7 @@ describe("subscriber and settings actions", () => {
 			customCss: ":root{}",
 			showPoweredBy: false,
 			uptimeDays: 30,
+			requireTwoFactor: true,
 		});
 		await redirectOf(
 			updateBrandingAction(form({ theme: "midnight", showPoweredBy: "on" })),

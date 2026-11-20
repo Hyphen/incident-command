@@ -1,4 +1,12 @@
 import { BRAND_ASSET_MESSAGES } from "./domain/brand-asset";
+import {
+	INVALID_TWO_FACTOR_CODE,
+	TWO_FACTOR_ALREADY_OFF,
+	TWO_FACTOR_ALREADY_ON,
+	TWO_FACTOR_NOT_READY,
+	TWO_FACTOR_REQUIRED_BY_ADMIN,
+	TWO_FACTOR_SECRET_UNREADABLE,
+} from "./domain/totp";
 import type { Role } from "./domain/types";
 import type { AppError, ErrorCode } from "./errors";
 import catalog from "./flash-messages.json";
@@ -20,6 +28,12 @@ const MESSAGE_CODES: Record<string, FlashCode> = {
 	"Invalid setup token": "invalid_setup_token",
 	"Setup has already been completed": "setup_completed",
 	"Current password is incorrect": "current_password_incorrect",
+	[INVALID_TWO_FACTOR_CODE]: "invalid_two_factor",
+	[TWO_FACTOR_ALREADY_ON]: "two_factor_already_on",
+	[TWO_FACTOR_ALREADY_OFF]: "two_factor_already_off",
+	[TWO_FACTOR_REQUIRED_BY_ADMIN]: "two_factor_required_by_admin",
+	[TWO_FACTOR_SECRET_UNREADABLE]: "two_factor_secret_unreadable",
+	[TWO_FACTOR_NOT_READY]: "two_factor_not_ready",
 	"Maintenance requires scheduledStart and scheduledEnd":
 		"maintenance_window_required",
 	"This invite link is not valid. Ask an admin for a new invite.":

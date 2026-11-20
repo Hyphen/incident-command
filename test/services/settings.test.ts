@@ -28,6 +28,7 @@ describe("SettingsService", () => {
 			siteUrl: "https://status.acme.dev",
 			theme: "default",
 			showPoweredBy: true,
+			requireTwoFactor: true,
 			uptimeDays: 90,
 			updatedAt: "1970-01-01T00:00:00.000Z",
 		});
@@ -40,6 +41,7 @@ describe("SettingsService", () => {
 			allowSubscriptions: false,
 			brandColor: "#4f46e5",
 		};
+		delete (legacy as { requireTwoFactor?: boolean }).requireTwoFactor;
 		await t.store.insert("settings", legacy);
 		// An update must not write a removed setting back or return it.
 		for (const settings of [
@@ -48,6 +50,7 @@ describe("SettingsService", () => {
 		]) {
 			expect(settings).not.toHaveProperty("allowSubscriptions");
 			expect(settings).not.toHaveProperty("brandColor");
+			expect(settings.requireTwoFactor).toBe(true);
 		}
 	});
 

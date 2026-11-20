@@ -9,6 +9,8 @@ export interface App {
 	store: CachedStore;
 	notifier: Notifier;
 	services: Services;
+	/** The clock the services use. Tests move this clock. */
+	now: () => Date;
 }
 
 export interface CreateAppOptions {
@@ -24,14 +26,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
 	const store = options.store ?? (await createStore(config));
 	const notifier = options.notifier ?? createNotifier(config);
 	await store.connect();
+	const now = options.now ?? (() => new Date());
 	const services = createServices({
 		store,
 		notifier,
 		config,
-		now: options.now ?? (() => new Date()),
+		now,
 	});
 	await services.bootstrap();
-	return { config, store, notifier, services };
+	return { config, store, notifier, services, now };
 }
 
 const globalForApp = globalThis as typeof globalThis & {

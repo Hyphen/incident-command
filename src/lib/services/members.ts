@@ -45,8 +45,15 @@ export const INVITE_TTL_DAYS = 7;
 const INVITE_TTL_MS = INVITE_TTL_DAYS * 86_400_000;
 
 export function toPublicMember(member: Member): PublicMember {
-	const { passwordHash: _passwordHash, ...rest } = member;
-	return rest;
+	const {
+		passwordHash: _passwordHash,
+		twoFactor: _twoFactor,
+		...rest
+	} = member;
+	return {
+		...rest,
+		twoFactorEnabled: member.twoFactor?.enabledAt !== undefined,
+	};
 }
 
 export function toPublicInvite(invite: Invite): PublicInvite {

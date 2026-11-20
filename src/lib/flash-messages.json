@@ -14,6 +14,26 @@
 		"kind": "notice",
 		"text": "Password updated"
 	},
+	"two_factor_enabled": {
+		"id": "fls_2fa_enabled001",
+		"kind": "notice",
+		"text": "Two-factor authentication is on. Save your recovery codes."
+	},
+	"two_factor_disabled": {
+		"id": "fls_2fa_disabled01",
+		"kind": "notice",
+		"text": "Two-factor authentication is off."
+	},
+	"recovery_codes_updated": {
+		"id": "fls_2fa_codes_new1",
+		"kind": "notice",
+		"text": "New recovery codes are ready. Save them now."
+	},
+	"recovery_codes_saved": {
+		"id": "fls_2fa_codes_hide",
+		"kind": "notice",
+		"text": "The recovery codes are hidden."
+	},
 	"incident_declared": {
 		"id": "fls_8pojxvd9d9t07gsz",
 		"kind": "notice",
@@ -188,6 +208,46 @@
 		"id": "fls_eiszpt63g5fmdjf4",
 		"kind": "error",
 		"text": "Current password is incorrect"
+	},
+	"two_factor_required": {
+		"id": "fls_2fa_required01",
+		"kind": "error",
+		"text": "Set up two-factor authentication to continue."
+	},
+	"invalid_two_factor": {
+		"id": "fls_2fa_invalid001",
+		"kind": "error",
+		"text": "That code is not valid."
+	},
+	"too_many_two_factor": {
+		"id": "fls_2fa_too_many01",
+		"kind": "error",
+		"text": "Too many attempts. Sign in again."
+	},
+	"two_factor_already_on": {
+		"id": "fls_2fa_already_on",
+		"kind": "error",
+		"text": "Two-factor authentication is already on."
+	},
+	"two_factor_already_off": {
+		"id": "fls_2fa_alreadyoff",
+		"kind": "error",
+		"text": "Two-factor authentication is already off."
+	},
+	"two_factor_required_by_admin": {
+		"id": "fls_2fa_admin_req1",
+		"kind": "error",
+		"text": "An admin requires two-factor authentication."
+	},
+	"two_factor_secret_unreadable": {
+		"id": "fls_2fa_secret_bad",
+		"kind": "error",
+		"text": "The server cannot read the authenticator secret. Check ENCRYPTION_KEY."
+	},
+	"two_factor_not_ready": {
+		"id": "fls_2fa_not_ready1",
+		"kind": "error",
+		"text": "Set up an authenticator first."
 	},
 	"role_required_viewer": {
 		"id": "fls_jbnlvpmfnkruulfz",

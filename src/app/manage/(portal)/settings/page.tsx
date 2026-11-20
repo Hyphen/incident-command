@@ -2,7 +2,13 @@ import type { Metadata } from "next";
 import { updateGeneralSettingsAction } from "@/app/manage/actions";
 import { SettingsTabs } from "@/components/manage/settings-tabs";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
-import { buttonClass, Card, Field, inputClass } from "@/components/manage/ui";
+import {
+	buttonClass,
+	Card,
+	Checkbox,
+	Field,
+	inputClass,
+} from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
 
@@ -82,6 +88,20 @@ export default async function SettingsPage({
 							/>
 						</Field>
 					</div>
+				</Card>
+				<Card
+					title="Two-factor authentication"
+					description="Members sign in with an authenticator app."
+				>
+					<Checkbox
+						name="requireTwoFactor"
+						label="Require two-factor authentication"
+						defaultChecked={settings.requireTwoFactor}
+					/>
+					<p className="mt-2 text-xs text-muted">
+						This option starts on. A member sets up an authenticator before the
+						member opens the portal.
+					</p>
 				</Card>
 				<SubmitButton className={buttonClass.primary}>
 					Save settings
