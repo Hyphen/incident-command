@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AccountPage from "@/app/manage/(portal)/account/page";
 import AgentPage from "@/app/manage/(portal)/agents/[id]/page";
@@ -1775,6 +1781,32 @@ describe("admin pages", () => {
 		expect(smsDialog.querySelector('input[name="type"]')).toHaveValue("sns");
 		await user.click(within(smsDialog).getByRole("button", { name: "Close" }));
 		expect(sms.queryByRole("dialog")).not.toBeInTheDocument();
+	});
+
+	it("closes the add dialog after submit", async () => {
+		const { app } = await setupApp();
+		await signIn(app, "admin");
+		render(await NotificationsSettingsPage(flash()));
+		const user = userEvent.setup();
+		const email = within(
+			screen
+				.getByRole("heading", { name: "Email" })
+				.closest("section") as HTMLElement,
+		);
+		await user.click(
+			email.getByRole("button", { name: "Add provider for Email" }),
+		);
+		const dialog = email.getByRole("dialog", { name: "Add a provider" });
+		expect(dialog).toBeInTheDocument();
+		const close = vi.spyOn(HTMLDialogElement.prototype, "close");
+		// This server has no encryption key. The action returns an error.
+		// The dialog must close. The error is on the page.
+		await user.click(email.getByRole("button", { name: "Add SendGrid" }));
+		await waitFor(() => {
+			expect(close).toHaveBeenCalled();
+		});
+		expect(dialog).not.toHaveAttribute("open");
+		close.mockRestore();
 	});
 
 	it("renders providers in order with their roles and saved credentials", async () => {

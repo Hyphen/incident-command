@@ -43,6 +43,18 @@ export function AddProviderDialog({
 		setType(initial);
 		setFormKey((key) => key + 1);
 	};
+	// The action redirects to this same page, and the dialog state stays.
+	// Close the dialog when the action ends. The page then shows the result.
+	const submit =
+		dialog === null
+			? addNotificationProviderAction
+			: async (formData: FormData) => {
+					try {
+						await addNotificationProviderAction(formData);
+					} finally {
+						dialog.close();
+					}
+				};
 
 	return (
 		<>
@@ -62,11 +74,7 @@ export function AddProviderDialog({
 				className="ic-dialog"
 				onClose={reset}
 			>
-				<form
-					key={formKey}
-					action={addNotificationProviderAction}
-					className="space-y-4 p-5"
-				>
+				<form key={formKey} action={submit} className="space-y-4 p-5">
 					<div className="flex items-start justify-between gap-3">
 						<h4 id={titleId} className="text-base font-semibold">
 							Add a provider
