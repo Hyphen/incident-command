@@ -57,14 +57,25 @@ interface Props {
 /** The number of posts on the dashboard. The posts tab shows every post. */
 const LATEST_POSTS = 5;
 
+/** The path of an incident page. Set formOpen to open the post form. */
+function incidentHref(id: string, tab: IncidentTab, formOpen = false): string {
+	const path = `/manage/incidents/${id}`;
+	if (tab === "posts") {
+		return formOpen ? `${path}?tab=posts&post=1` : `${path}?tab=posts`;
+	}
+	return formOpen ? `${path}?post=1` : path;
+}
+
 function PostForm({
 	incident,
 	affected,
 	catalog,
+	tab,
 }: {
 	incident: Incident;
 	affected: Service[];
 	catalog: Service[];
+	tab: IncidentTab;
 }) {
 	return (
 		<form
@@ -72,6 +83,7 @@ function PostForm({
 			className="mb-6 space-y-4 border-b border-border pb-6"
 		>
 			<input type="hidden" name="id" value={incident.id} />
+			{tab === "posts" && <input type="hidden" name="tab" value="posts" />}
 			<StatusSelect kind={incident.kind} value={incident.status} />
 			<Field label="Message" htmlFor="message">
 				<textarea
@@ -89,13 +101,57 @@ function PostForm({
 			<div className="flex flex-wrap gap-2">
 				<SubmitButton className={buttonClass.primary}>Post update</SubmitButton>
 				<Link
-					href={`/manage/incidents/${incident.id}`}
+					href={incidentHref(incident.id, tab)}
 					className={buttonClass.secondary}
 				>
 					Cancel
 				</Link>
 			</div>
 		</form>
+	);
+}
+
+function PostsCard({
+	incident,
+	affected,
+	catalog,
+	canEdit,
+	showForm,
+	reviewed,
+	tab,
+	limit,
+}: {
+	incident: Incident;
+	affected: Service[];
+	catalog: Service[];
+	canEdit: boolean;
+	showForm: boolean;
+	reviewed: NotificationDraft[];
+	tab: IncidentTab;
+	limit?: number;
+}) {
+	return (
+		<Card
+			title="Posts"
+			actions={
+				canEdit &&
+				!showForm && (
+					<ButtonLink href={incidentHref(incident.id, tab, true)}>
+						Create a post
+					</ButtonLink>
+				)
+			}
+		>
+			{showForm && (
+				<PostForm
+					incident={incident}
+					affected={affected}
+					catalog={catalog}
+					tab={tab}
+				/>
+			)}
+			<PostList incident={incident} drafts={reviewed} limit={limit} />
+		</Card>
 	);
 }
 
@@ -121,30 +177,16 @@ function IncidentBody({
 	return (
 		<div className="space-y-6">
 			{tab === "dashboard" && (
-				<Card
-					title="Posts"
-					actions={
-						canEdit &&
-						!showForm && (
-							<ButtonLink href={`/manage/incidents/${incident.id}?post=1`}>
-								Create a post
-							</ButtonLink>
-						)
-					}
-				>
-					{showForm && (
-						<PostForm
-							incident={incident}
-							affected={affected}
-							catalog={catalog}
-						/>
-					)}
-					<PostList
-						incident={incident}
-						drafts={reviewed}
-						limit={LATEST_POSTS}
-					/>
-				</Card>
+				<PostsCard
+					incident={incident}
+					affected={affected}
+					catalog={catalog}
+					canEdit={canEdit}
+					showForm={showForm}
+					reviewed={reviewed}
+					tab="dashboard"
+					limit={LATEST_POSTS}
+				/>
 			)}
 			{tab === "dashboard" && pending.length > 0 && (
 				<Card title="Drafts" description="These drafts wait for review.">
@@ -162,9 +204,15 @@ function IncidentBody({
 				</Card>
 			)}
 			{tab === "posts" && (
-				<Card title="Posts">
-					<PostList incident={incident} drafts={reviewed} />
-				</Card>
+				<PostsCard
+					incident={incident}
+					affected={affected}
+					catalog={catalog}
+					canEdit={canEdit}
+					showForm={showForm}
+					reviewed={reviewed}
+					tab="posts"
+				/>
 			)}
 		</div>
 	);
@@ -194,7 +242,8 @@ export default async function ManageIncidentPage({
 	);
 	const isIncident = incident.kind === "incident";
 	const regionName = regionNameFor(incident, regions);
-	const showForm = tab === "dashboard" && query.post === "1" && canEdit;
+	const showForm =
+		(tab === "dashboard" || tab === "posts") && query.post === "1" && canEdit;
 	return (
 		<ManagePage
 			title={incident.title}

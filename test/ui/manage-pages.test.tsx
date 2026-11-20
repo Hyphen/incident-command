@@ -850,7 +850,7 @@ describe("incident pages", () => {
 		).toBeInTheDocument();
 		coveredPage.unmount();
 
-		render(
+		const timeline = render(
 			await IncidentPage({
 				params: params({ id: incident.id }),
 				searchParams: params({ tab: "timeline" }),
@@ -862,6 +862,41 @@ describe("incident pages", () => {
 		);
 		expect(screen.getByText(/System \(system\)/)).toBeInTheDocument();
 		expect(screen.getByText("Looking")).toBeInTheDocument();
+		timeline.unmount();
+
+		const posts = render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "posts" }),
+			}),
+		);
+		expect(screen.getByRole("link", { name: "Posts" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		expect(screen.getByRole("link", { name: "Create a post" })).toHaveAttribute(
+			"href",
+			`/manage/incidents/${incident.id}?tab=posts&post=1`,
+		);
+		posts.unmount();
+
+		render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "posts", post: "1" }),
+			}),
+		);
+		const postsForm = screen
+			.getByRole("button", { name: "Post update" })
+			.closest("form") as HTMLElement;
+		expect(postsForm.querySelector('input[name="tab"]')).toHaveValue("posts");
+		expect(screen.getByRole("link", { name: "Cancel" })).toHaveAttribute(
+			"href",
+			`/manage/incidents/${incident.id}?tab=posts`,
+		);
+		expect(
+			screen.queryByRole("link", { name: "Create a post" }),
+		).not.toBeInTheDocument();
 	});
 
 	it("shows pending drafts and who approved each post", async () => {
