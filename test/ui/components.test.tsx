@@ -410,6 +410,29 @@ describe("status components", () => {
 		expect(screen.getByText(/50% uptime/)).toBeInTheDocument();
 	});
 
+	it("keeps a tooltip inside the visible uptime row", () => {
+		const days = Array.from({ length: 90 }, (_, index) => ({
+			date: new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10),
+			status: "operational" as const,
+			uptime: 1,
+			trackedMs: 86_400_000,
+			downtimeMs: 0,
+			incidents: [],
+		}));
+		const { container } = render(<UptimeBars days={days} />);
+		const tips = [...container.querySelectorAll(".ic-uptime-day .absolute")];
+		const center = (item: number, count: number) =>
+			`${((item + 0.5) / count) * 100}%`;
+		const narrow = tips[78] as HTMLElement;
+		expect(narrow.style.getPropertyValue("--tip")).toBe(center(18, 30));
+		expect(narrow.style.getPropertyValue("--tip-sm")).toBe(center(78, 90));
+		expect(narrow.className).toContain("clamp(0px,calc(var(--tip)");
+		expect(narrow.className).not.toContain("right-0");
+		const hidden = tips[0] as HTMLElement;
+		expect(hidden.style.getPropertyValue("--tip")).toBe("0%");
+		expect(hidden.style.getPropertyValue("--tip-sm")).toBe(center(0, 90));
+	});
+
 	it("renders the minute timeline of each service", () => {
 		const service = {
 			id: "svc_api",

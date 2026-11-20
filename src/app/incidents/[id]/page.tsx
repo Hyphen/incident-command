@@ -130,7 +130,9 @@ export default async function IncidentPage({ params }: Props) {
 				{timeline.services.length > 0 && <StatusTimeline {...timeline} />}
 				<section className="rounded-card border border-border bg-surface p-6">
 					<h2 className="mb-6 font-semibold">Updates</h2>
-					<Timeline incident={incident} />
+					<div className="max-w-prose">
+						<Timeline incident={incident} />
+					</div>
 				</section>
 			</article>
 		</PublicPage>
