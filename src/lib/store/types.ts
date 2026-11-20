@@ -99,7 +99,11 @@ export const INDEXES: Record<CollectionName, readonly IndexDefinition[]> = {
 		{ field: "token", unique: true },
 		{ field: "target", unique: true },
 	],
-	notification_drafts: [{ field: "state" }, { field: "createdAt" }],
+	notification_drafts: [
+		{ field: "state" },
+		{ field: "createdAt" },
+		{ field: "incidentId" },
+	],
 	notification_channels: [],
 };
 

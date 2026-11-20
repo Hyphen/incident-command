@@ -176,7 +176,7 @@ export async function createIncidentAction(form: FormData): Promise<void> {
 export async function postIncidentUpdateAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
-	await attempt(`/manage/incidents/${id}`, () =>
+	await attempt(`/manage/incidents/${id}?post=1`, () =>
 		services.incidents.postUpdate(actor, id, {
 			status: nonEmpty(form, "status") as EventStatus | undefined,
 			message: text(form, "message"),
@@ -252,7 +252,7 @@ export async function discardDraftAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
 	await attempt(draftPath(id), () => services.drafts.discard(actor, id));
-	redirect(flash("/manage/drafts", "draft_discarded"));
+	redirect(flash("/manage/incidents", "draft_discarded"));
 }
 
 // ---- services -------------------------------------------------------------------

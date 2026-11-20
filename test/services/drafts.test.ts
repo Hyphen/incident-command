@@ -117,6 +117,7 @@ describe("DraftService", () => {
 		expect(approved).toMatchObject({
 			state: "approved",
 			incidentId: incident.id,
+			updateId: incident.updates[0]?.id,
 			content: { title: "Elevated API errors", impact: "major" },
 			reviewedBy: { type: "member", id: EDITOR.id, name: EDITOR.name },
 			reviewedAt: "2026-11-02T12:01:00.000Z",
@@ -157,8 +158,10 @@ describe("DraftService", () => {
 			status: "identified",
 			message: "A fix is ready to deploy.",
 			author: { id: EDITOR.id },
+			notified: true,
 		});
 		expect(approved.incidentId).toBe(incident.id);
+		expect(approved.updateId).toBe(updated.updates.at(-1)?.id);
 		expect(t.notifier.incidents.map((n) => n.notification.event)).toEqual([
 			"incident.updated",
 		]);
@@ -508,6 +511,7 @@ describe("DraftService", () => {
 		expect(await t.services.drafts.get(draft.id)).toMatchObject({
 			state: "approved",
 			incidentId: incident?.id,
+			updateId: incident?.updates[0]?.id,
 		});
 		await expect(
 			t.services.drafts.approve(EDITOR, draft.id, draft.content),
@@ -525,9 +529,13 @@ describe("DraftService", () => {
 		await expect(
 			t.services.drafts.approve(EDITOR, update.id, update.content),
 		).rejects.toThrow("database offline");
-		expect((await t.services.drafts.get(update.id)).state).toBe("approved");
+		const storedUpdate = await t.services.drafts.get(update.id);
 		const updates = (await t.services.incidents.get(incident?.id as string))
 			.updates;
+		expect(storedUpdate).toMatchObject({
+			state: "approved",
+			updateId: updates.at(-1)?.id,
+		});
 		expect(updates.map((entry) => entry.message)).toEqual(["x", "Resolved"]);
 	});
 
@@ -612,6 +620,32 @@ describe("DraftService", () => {
 			third.id,
 			second.id,
 		]);
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Listed",
+			message: "x",
+			notify: false,
+		});
+		const update = await t.services.drafts.create(AGENT, {
+			incidentId: incident.id,
+			message: "y",
+		});
+		expect(
+			ids(
+				await t.services.drafts.list({
+					incidentId: incident.id,
+					pending: true,
+				}),
+			),
+		).toEqual([update.id]);
+		expect(
+			await t.services.drafts.list({
+				incidentId: incident.id,
+				pending: false,
+			}),
+		).toEqual([]);
+		expect(await t.services.drafts.list({ incidentId: "inc_missing" })).toEqual(
+			[],
+		);
 		await expect(t.services.drafts.find("drf_missing")).resolves.toBe(
 			undefined,
 		);
