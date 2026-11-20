@@ -60,7 +60,7 @@ export default async function StatusPage({ searchParams }: Props = {}) {
 			/>
 			<OverallBanner status={summary.overall} />
 			{summary.settings.description && (
-				<p className="ic-description text-muted">
+				<p className="ic-description max-w-prose text-muted">
 					{summary.settings.description}
 				</p>
 			)}

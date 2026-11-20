@@ -62,7 +62,7 @@ export function IncidentCard({
 				)}
 				{latest && (
 					<div className="mt-4 border-l-2 border-border pl-4">
-						<p className="text-sm whitespace-pre-wrap">
+						<p className="max-w-prose text-sm whitespace-pre-wrap">
 							<span className="font-medium">
 								{EVENT_STATUS_LABELS[latest.status]}
 							</span>{" "}

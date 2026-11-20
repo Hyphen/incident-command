@@ -62,7 +62,7 @@ export function IncidentList({
 											status={incident.status}
 										/>
 									</div>
-									<p className="mt-1 line-clamp-2 text-sm text-muted">
+									<p className="mt-1 line-clamp-2 max-w-prose text-sm text-muted">
 										{incident.updates.at(-1)?.message}
 									</p>
 									{regionName && (
