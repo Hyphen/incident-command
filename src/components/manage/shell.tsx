@@ -1,16 +1,15 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { logoutAction } from "@/app/manage/actions";
 import { LogoImage } from "@/components/logo-image";
 import { PoweredBy } from "@/components/powered-by";
 import { publicLogoSrc } from "@/lib/brand";
-import { hasRole, ROLE_LABELS } from "@/lib/domain/status";
+import { hasRole } from "@/lib/domain/status";
 import type { PublicMember, Role, Settings } from "@/lib/domain/types";
 import { resolveFlash } from "@/lib/flash";
 import type { StoreHealth } from "@/lib/store/cached";
-import { SubmitButton } from "../submit-button";
 import { PortalNav } from "./portal-nav";
 import { Flash } from "./ui";
+import { UserMenu } from "./user-menu";
 
 export const NAV: { label: string; href: string; role: Role }[] = [
 	{ label: "Overview", href: "/manage", role: "viewer" },
@@ -21,7 +20,6 @@ export const NAV: { label: string; href: string; role: Role }[] = [
 	{ label: "Agents", href: "/manage/agents", role: "viewer" },
 	{ label: "Subscribers", href: "/manage/subscribers", role: "admin" },
 	{ label: "Settings", href: "/manage/settings", role: "admin" },
-	{ label: "Account", href: "/manage/account", role: "viewer" },
 ];
 
 export interface FlashParams {
@@ -66,22 +64,7 @@ export function PortalFrame({
 						({ label, href }) => ({ label, href }),
 					)}
 				/>
-				<div className="hidden border-t border-border px-5 py-4 text-sm lg:mt-6 lg:block">
-					<p className="truncate font-medium">{member.name}</p>
-					<p className="truncate text-xs text-muted">
-						{member.email} · {ROLE_LABELS[member.role]}
-					</p>
-					<div className="mt-3 flex gap-3 text-xs">
-						<Link href="/" className="text-muted hover:text-fg">
-							View status page
-						</Link>
-						<form action={logoutAction}>
-							<SubmitButton className="inline-flex items-center gap-1 text-muted hover:text-fg disabled:opacity-50">
-								Sign out
-							</SubmitButton>
-						</form>
-					</div>
-				</div>
+				<UserMenu member={member} />
 			</aside>
 			<div className="flex min-h-dvh flex-col">
 				<main className="mx-auto w-full max-w-5xl flex-1 space-y-6 px-4 py-8 lg:px-8">

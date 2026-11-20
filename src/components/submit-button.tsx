@@ -14,12 +14,14 @@ export function SubmitButton({
 	onClick,
 	formAction,
 	formNoValidate,
+	role,
 }: {
 	children: ReactNode;
 	/** Usually a `buttonClass` value. */
 	className: string;
 	onClick?: MouseEventHandler<HTMLButtonElement>;
 	formNoValidate?: boolean;
+	role?: "menuitem";
 	/**
 	 * The server action of this button, when a form has more than one. All
 	 * buttons of the form are disabled while an action runs, but only the
@@ -32,6 +34,7 @@ export function SubmitButton({
 	return (
 		<button
 			type="submit"
+			role={role}
 			disabled={pending}
 			aria-busy={busy}
 			onClick={onClick}
