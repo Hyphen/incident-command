@@ -18,10 +18,11 @@ export async function GET(
 ): Promise<Response> {
 	const { id } = await params;
 	const { services } = await getApp();
-	const [incident, settings, catalog] = await Promise.all([
+	const [incident, settings, catalog, regions] = await Promise.all([
 		services.incidents.find(id),
 		services.settings.get(),
 		services.catalog.list({ includeHidden: false }),
+		services.regions.list(),
 	]);
 	const origin = originFrom(
 		request.headers,
@@ -36,7 +37,7 @@ export async function GET(
 		);
 	}
 	return markdownResponse(
-		incidentMarkdown(settings, incident, catalog, origin),
+		incidentMarkdown(settings, incident, catalog, origin, regions),
 		"text/markdown",
 	);
 }

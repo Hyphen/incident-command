@@ -691,4 +691,32 @@ describe("DraftService", () => {
 			NotFoundError,
 		);
 	});
+
+	it("keeps a region on a new draft and rejects it on an update", async () => {
+		const region = await t.services.regions.create(ADMIN, {
+			name: "United States",
+		});
+		const draft = await t.services.drafts.create(AGENT, {
+			title: "API errors",
+			message: "Looking",
+			regionId: region.id,
+		});
+		expect(draft.content.regionId).toBe(region.id);
+		const approved = await t.services.drafts.approve(
+			EDITOR,
+			draft.id,
+			draft.content,
+		);
+		expect(approved.incident.regionId).toBe(region.id);
+		const update = await t.services.drafts.create(AGENT, {
+			incidentId: approved.incident.id,
+			message: "Next",
+		});
+		await expect(
+			t.services.drafts.update(EDITOR, update.id, {
+				message: "Next",
+				regionId: region.id,
+			}),
+		).rejects.toThrow(/regionId/);
+	});
 });

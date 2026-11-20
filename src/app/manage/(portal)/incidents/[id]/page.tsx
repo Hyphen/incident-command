@@ -11,6 +11,7 @@ import { DraftList } from "@/components/manage/draft-list";
 import {
 	AddServices,
 	ImpactSelect,
+	RegionSelect,
 	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
@@ -36,6 +37,7 @@ import { StatusTimeline } from "@/components/status/status-timeline";
 import { Timeline } from "@/components/status/timeline";
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
+import { regionNameFor } from "@/lib/domain/regions";
 import { hasRole } from "@/lib/domain/status";
 import type { Incident, NotificationDraft, Service } from "@/lib/domain/types";
 
@@ -180,8 +182,9 @@ export default async function ManageIncidentPage({
 	}
 	const tab = incidentTab(query.tab);
 	const canEdit = hasRole(member.role, "editor");
-	const [catalog, timeline, pending, reviewed] = await Promise.all([
+	const [catalog, regions, timeline, pending, reviewed] = await Promise.all([
 		services.catalog.list(),
+		services.regions.list(),
 		services.status.incidentTimeline(incident),
 		services.drafts.list({ pending: true, incidentId: incident.id }),
 		services.drafts.list({ pending: false, incidentId: incident.id }),
@@ -190,6 +193,7 @@ export default async function ManageIncidentPage({
 		incident.serviceIds.includes(service.id),
 	);
 	const isIncident = incident.kind === "incident";
+	const regionName = regionNameFor(incident, regions);
 	const showForm = tab === "dashboard" && query.post === "1" && canEdit;
 	return (
 		<ManagePage
@@ -212,6 +216,7 @@ export default async function ManageIncidentPage({
 					status={incident.status}
 				/>
 				{isIncident && <ImpactBadge impact={incident.impact} />}
+				{regionName && <span className="text-sm text-muted">{regionName}</span>}
 			</div>
 			<IncidentTabs id={incident.id} active={tab} />
 			{tab === "dashboard" && timeline.services.length > 0 && (
@@ -252,6 +257,7 @@ export default async function ManageIncidentPage({
 										end={incident.scheduledEnd}
 									/>
 								)}
+								<RegionSelect regions={regions} value={incident.regionId} />
 								<SubmitButton className={buttonClass.secondary}>
 									Save details
 								</SubmitButton>

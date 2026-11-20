@@ -9,10 +9,12 @@ import {
 	createAgentAction,
 	createAgentTokenAction,
 	createIncidentAction,
+	createRegionAction,
 	createServiceAction,
 	deleteAgentAction,
 	deleteIncidentAction,
 	deleteMemberAction,
+	deleteRegionAction,
 	deleteServiceAction,
 	deleteSubscriberAction,
 	denyAgentAction,
@@ -37,6 +39,7 @@ import {
 	updateMemberAction,
 	updateNotificationChannelAction,
 	updateNotificationProviderAction,
+	updateRegionAction,
 	updateServiceAction,
 	updateSubscriberServicesAction,
 } from "@/app/manage/actions";
@@ -1696,5 +1699,96 @@ describe("public subscribe actions", () => {
 		await expect(
 			subscribeAction(form({ type: "email", target: "a@b.co" })),
 		).rejects.toThrow("db down");
+	});
+});
+
+describe("region actions", () => {
+	it("creates a region and selects it on an incident", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "editor");
+		expectSameFlash(
+			await redirectOf(createRegionAction(form({ name: "United States" }))),
+			"/manage/regions?notice=Region created",
+		);
+		const [region] = await services.regions.list();
+		expectSameFlash(
+			await redirectOf(
+				updateRegionAction(
+					form({ id: region?.id ?? "", name: "US East", order: "2" }),
+				),
+			),
+			"/manage/regions?notice=Region saved",
+		);
+		const created = await redirectOf(
+			createIncidentAction(
+				form({
+					title: "API down",
+					message: "Investigating",
+					regionId: region?.id ?? "",
+				}),
+			),
+		);
+		const [incident] = await services.incidents.list();
+		expect(incident?.regionId).toBe(region?.id);
+		expectSameFlash(
+			created,
+			`/manage/incidents/${incident?.id}?notice=Incident declared`,
+		);
+		expectSameFlash(
+			await redirectOf(
+				editIncidentAction(
+					form({ id: incident?.id ?? "", title: "API outage" }),
+				),
+			),
+			`/manage/incidents/${incident?.id}?notice=Incident saved`,
+		);
+		expect((await services.incidents.get(incident?.id ?? "")).regionId).toBe(
+			region?.id,
+		);
+		expectSameFlash(
+			await redirectOf(
+				editIncidentAction(
+					form({ id: incident?.id ?? "", title: "API outage", regionId: "" }),
+				),
+			),
+			`/manage/incidents/${incident?.id}?notice=Incident saved`,
+		);
+		expect(
+			(await services.incidents.get(incident?.id ?? "")).regionId,
+		).toBeUndefined();
+		const draft = await services.drafts.create(agentActor(), {
+			title: "Next",
+			message: "x",
+		});
+		expectSameFlash(
+			await redirectOf(
+				saveDraftAction(
+					form({
+						id: draft.id,
+						title: "Next",
+						message: "Edited",
+						regionId: region?.id ?? "",
+					}),
+				),
+			),
+			`/manage/drafts/${draft.id}?notice=Draft saved`,
+		);
+		expect((await services.drafts.get(draft.id)).content.regionId).toBe(
+			region?.id,
+		);
+		expectSameFlash(
+			await redirectOf(deleteRegionAction(form({ id: region?.id ?? "" }))),
+			"/manage/regions?notice=Region deleted",
+		);
+		expect(await services.regions.list()).toEqual([]);
+	});
+
+	it("rejects the reserved region name", async () => {
+		const { app } = await setupApp();
+		await signIn(app, "editor");
+		expectSameFlash(
+			await redirectOf(createRegionAction(form({ name: "Global" }))),
+			"/manage/regions?error=Global is the default region. Choose another name.",
+		);
 	});
 });

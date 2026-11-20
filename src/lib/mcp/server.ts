@@ -46,6 +46,10 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
   The update adds those services. A service that is already affected stays. The new service gets
   the status of that update. edit_incident replaces the service list and does not set a status.
 - Schedule planned work with schedule_maintenance (statuses: scheduled -> in_progress -> verifying -> completed).
+- By default an incident uses Global. Call list_regions before you set a region.
+  Pass regionId to create_incident, schedule_maintenance, draft_notification, or edit_incident.
+  Pass null to edit_incident to move an incident to Global.
+  Pass regionId to get_status to read one region. With no regions, the status page is one page.
 - When a person must review a notification first, use draft_notification and give that person the reviewUrl.
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
 - Everything you post is public on the status page and may notify subscribers. Write for customers.`;
@@ -141,6 +145,7 @@ function incidentSummary(incident: Incident) {
 		scheduledStart: incident.scheduledStart,
 		scheduledEnd: incident.scheduledEnd,
 		latestUpdate: latest?.message,
+		regionId: incident.regionId ?? null,
 		updatedAt: incident.updatedAt,
 	};
 }
@@ -285,14 +290,27 @@ export function createMcpServer(
 		{
 			title: "Get status",
 			description:
-				"Current overall status, every visible service with its status and uptime, open incidents and maintenance.",
-			inputSchema: {},
+				"Current overall status, every visible service with its status and uptime, open incidents and maintenance. Pass regionId to read one region.",
+			inputSchema: {
+				regionId: z
+					.string()
+					.min(1)
+					.optional()
+					.describe("A region id. Omit this field to read Global."),
+			},
 			readOnly: true,
 		},
-		async () => {
-			const summary = await services.status.summary();
+		async ({ regionId }) => {
+			const summary = await services.status.summary(
+				regionId ? { regionId } : {},
+			);
 			return {
 				page: summary.settings.siteName,
+				region: summary.region?.name ?? null,
+				regions: summary.regions.map((region) => ({
+					id: region.id,
+					name: region.name,
+				})),
 				overall: summary.overall,
 				services: summary.services.map((service) => ({
 					id: service.id,
@@ -319,6 +337,19 @@ export function createMcpServer(
 			readOnly: true,
 		},
 		async () => services.catalog.list(),
+	);
+
+	tool(
+		"status.read",
+		"list_regions",
+		{
+			title: "List regions",
+			description:
+				"Named regions in display order. An empty list means the status page is one page. Global is the default and is not in this list.",
+			inputSchema: {},
+			readOnly: true,
+		},
+		async () => services.regions.list(),
 	);
 
 	tool(
@@ -431,6 +462,57 @@ export function createMcpServer(
 		},
 	);
 
+	// ---- regions --------------------------------------------------------------
+
+	const regionName = z
+		.string()
+		.describe("The region name. Do not use Global. That name is reserved.");
+
+	tool(
+		"services.write",
+		"create_region",
+		{
+			title: "Create region",
+			description:
+				"Adds a named region. The status page then shows Global and a tab for each region.",
+			inputSchema: {
+				name: regionName,
+				order: z.number().int().optional().describe("Display order"),
+			},
+		},
+		async (args) => services.regions.create(actor, args),
+	);
+
+	tool(
+		"services.write",
+		"update_region",
+		{
+			title: "Update region",
+			description: "Renames a region or changes its display order.",
+			inputSchema: {
+				id,
+				name: regionName.optional(),
+				order: z.number().int().optional(),
+			},
+		},
+		async ({ id: regionId, ...patch }) =>
+			services.regions.update(actor, regionId, patch),
+	);
+
+	tool(
+		"services.delete",
+		"delete_region",
+		{
+			title: "Delete region",
+			description: "Deletes a region. Incidents in that region move to Global.",
+			inputSchema: { id },
+		},
+		async (args) => {
+			await services.regions.delete(actor, args.id);
+			return { deleted: args.id };
+		},
+	);
+
 	// ---- incidents ------------------------------------------------------------
 
 	tool(
@@ -453,6 +535,13 @@ export function createMcpServer(
 					.optional()
 					.describe(
 						"investigating (default) | identified | monitoring | resolved",
+					),
+				regionId: z
+					.string()
+					.min(1)
+					.optional()
+					.describe(
+						"A region id from list_regions. Omit this field for Global.",
 					),
 				notify,
 			},
@@ -514,6 +603,14 @@ export function createMcpServer(
 				serviceIds: z.array(z.string()).optional(),
 				scheduledStart: isoDate.optional(),
 				scheduledEnd: isoDate.optional(),
+				regionId: z
+					.string()
+					.min(1)
+					.nullable()
+					.optional()
+					.describe(
+						"A region id. Pass null to move the incident to Global. Omit this field to keep the region.",
+					),
 			},
 		},
 		async ({ id: incidentId, ...patch }) =>
@@ -547,6 +644,13 @@ export function createMcpServer(
 				scheduledStart: isoDate,
 				scheduledEnd: isoDate,
 				serviceIds: z.array(z.string()).optional(),
+				regionId: z
+					.string()
+					.min(1)
+					.optional()
+					.describe(
+						"A region id from list_regions. Omit this field for Global.",
+					),
 				notify,
 			},
 		},
@@ -611,6 +715,13 @@ export function createMcpServer(
 				scheduledEnd: isoDate
 					.optional()
 					.describe("New maintenance only: end of the window (ISO 8601)"),
+				regionId: z
+					.string()
+					.min(1)
+					.optional()
+					.describe(
+						"New events only: a region id from list_regions. Omit this field for Global.",
+					),
 			},
 		},
 		async (args) => {

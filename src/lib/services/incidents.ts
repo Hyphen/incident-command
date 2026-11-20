@@ -36,6 +36,7 @@ import {
 	type ServiceContext,
 } from "./context";
 import type { NotificationSettingsService } from "./notification-settings";
+import type { RegionService } from "./regions";
 import type { SettingsService } from "./settings";
 import type { SubscriberService } from "./subscribers";
 
@@ -151,6 +152,7 @@ export class IncidentService {
 	private readonly subscribers: SubscriberService;
 	private readonly settings: SettingsService;
 	private readonly notificationSettings: NotificationSettingsService;
+	private readonly regions: RegionService;
 
 	constructor(
 		ctx: ServiceContext,
@@ -158,12 +160,14 @@ export class IncidentService {
 		subscribers: SubscriberService,
 		settings: SettingsService,
 		notificationSettings: NotificationSettingsService,
+		regions: RegionService,
 	) {
 		this.ctx = ctx;
 		this.catalog = catalog;
 		this.subscribers = subscribers;
 		this.settings = settings;
 		this.notificationSettings = notificationSettings;
+		this.regions = regions;
 	}
 
 	async list(options: IncidentListOptions = {}): Promise<Incident[]> {
@@ -230,6 +234,9 @@ export class IncidentService {
 		assertWindow(data.scheduledStart, data.scheduledEnd);
 		const serviceIds = await this.validateServices(data.serviceIds ?? []);
 		assertAffected(serviceIds, data.serviceStatuses);
+		if (data.regionId) {
+			await this.regions.get(data.regionId);
+		}
 		return { ...data, serviceIds };
 	}
 
@@ -296,6 +303,9 @@ export class IncidentService {
 		}
 		if (isClosedStatus(status)) {
 			incident.resolvedAt = now;
+		}
+		if (data.regionId) {
+			incident.regionId = data.regionId;
 		}
 		await this.ctx.store.insert("incidents", incident);
 		await this.syncServices(
@@ -410,6 +420,12 @@ export class IncidentService {
 		const serviceIds = patch.serviceIds
 			? await this.validateServices(patch.serviceIds)
 			: undefined;
+		const regionId =
+			patch.regionId === undefined
+				? undefined
+				: patch.regionId === null
+					? null
+					: (await this.regions.get(patch.regionId)).id;
 		const { next } = await this.mutate(id, (current) => {
 			const next: Incident = {
 				...current,
@@ -418,6 +434,11 @@ export class IncidentService {
 				serviceIds: serviceIds ?? current.serviceIds,
 				updatedAt: iso(this.ctx.now()),
 			};
+			if (regionId === null) {
+				delete next.regionId;
+			} else if (regionId) {
+				next.regionId = regionId;
+			}
 			if (current.kind === "maintenance") {
 				const scheduledStart =
 					patch.scheduledStart ?? (current.scheduledStart as string);

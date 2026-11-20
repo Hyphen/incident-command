@@ -757,4 +757,40 @@ describe("IncidentService", () => {
 		expect(spy).toHaveBeenCalledWith(expect.stringContaining("odd failure"));
 		spy.mockRestore();
 	});
+
+	it("sets, keeps and clears the region of an incident", async () => {
+		const region = await t.services.regions.create(EDITOR, {
+			name: "United States",
+		});
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Down",
+			message: "Looking",
+			regionId: region.id,
+		});
+		expect(incident.regionId).toBe(region.id);
+		const kept = await t.services.incidents.edit(EDITOR, incident.id, {
+			title: "Still down",
+		});
+		expect(kept.regionId).toBe(region.id);
+		const cleared = await t.services.incidents.edit(EDITOR, incident.id, {
+			regionId: null,
+		});
+		expect(cleared.regionId).toBeUndefined();
+		const moved = await t.services.incidents.edit(EDITOR, incident.id, {
+			regionId: region.id,
+		});
+		expect(moved.regionId).toBe(region.id);
+		await expect(
+			t.services.incidents.create(EDITOR, {
+				title: "Missing",
+				message: "x",
+				regionId: "reg_missing",
+			}),
+		).rejects.toBeInstanceOf(NotFoundError);
+		await expect(
+			t.services.incidents.edit(EDITOR, incident.id, {
+				regionId: "reg_missing",
+			}),
+		).rejects.toBeInstanceOf(NotFoundError);
+	});
 });

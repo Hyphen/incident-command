@@ -60,6 +60,7 @@ const CREATE_ONLY_FIELDS = [
 	"impact",
 	"scheduledStart",
 	"scheduledEnd",
+	"regionId",
 ] as const;
 
 function targetOf(draft: NotificationDraft): Target {
@@ -327,6 +328,9 @@ export class DraftService {
 			serviceStatus: data.serviceStatus,
 			serviceStatuses: data.serviceStatuses,
 		};
+		if (data.regionId) {
+			content.regionId = data.regionId;
+		}
 		if (target.kind === "maintenance") {
 			content.scheduledStart = data.scheduledStart;
 			content.scheduledEnd = data.scheduledEnd;

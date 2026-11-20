@@ -1,7 +1,13 @@
 import { type ResolutionStats, resolutionStats } from "../domain/metrics";
+import {
+	changesOnRegion,
+	incidentOnRegion,
+	serviceStatusOnRegion,
+} from "../domain/regions";
 import { impactToStatus, worstStatus } from "../domain/status";
 import type {
 	Incident,
+	Region,
 	Service,
 	ServiceStatus,
 	Settings,
@@ -20,9 +26,11 @@ import {
 	uptimePeriods,
 	uptimeWindow,
 } from "../domain/uptime";
+import { NotFoundError } from "../errors";
 import type { ServiceCatalog } from "./catalog";
 import type { ServiceContext } from "./context";
 import type { IncidentService } from "./incidents";
+import type { RegionService } from "./regions";
 import type { SettingsService } from "./settings";
 
 export const RECENT_DAYS = 14;
@@ -49,6 +57,10 @@ export interface StatusSummary {
 	activeMaintenance: Incident[];
 	upcomingMaintenance: Incident[];
 	recentIncidents: Incident[];
+	/** Named regions. Empty when the page has no region tabs. */
+	regions: Region[];
+	/** Set when this summary is one region. Absent means the Global view. */
+	region?: Region;
 	/** The combined uptime of the visible services across the window. */
 	uptime: UptimeResult;
 	window: UptimeWindow;
@@ -135,46 +147,84 @@ export class StatusService {
 	private readonly settings: SettingsService;
 	private readonly catalog: ServiceCatalog;
 	private readonly incidents: IncidentService;
+	private readonly regions: RegionService;
 
 	constructor(
 		ctx: ServiceContext,
 		settings: SettingsService,
 		catalog: ServiceCatalog,
 		incidents: IncidentService,
+		regions: RegionService,
 	) {
 		this.ctx = ctx;
 		this.settings = settings;
 		this.catalog = catalog;
 		this.incidents = incidents;
+		this.regions = regions;
 	}
 
-	async summary(): Promise<StatusSummary> {
+	async summary(options: { regionId?: string } = {}): Promise<StatusSummary> {
+		const regions = await this.regions.list();
+		const region = options.regionId
+			? regions.find((item) => item.id === options.regionId)
+			: undefined;
+		if (options.regionId && !region) {
+			throw new NotFoundError("Region", options.regionId);
+		}
 		const settings = await this.settings.get();
 		const now = this.ctx.now();
 		const window = uptimeWindow(now, settings.uptimeDays);
 		const since = new Date(
 			Math.min(window.start.getTime(), now.getTime() - RECENT_DAYS * DAY_MS),
 		).toISOString();
-		const [services, changes, open, recent] = await Promise.all([
-			this.catalog.list({ includeHidden: false }),
-			this.ctx.store.find("service_status_changes", {
-				where: [
-					{ field: "createdAt", op: "gte", value: window.start.toISOString() },
-				],
-				sort: [{ field: "createdAt" }],
-			}),
-			this.incidents.list({ open: true }),
-			this.incidents.list({ since }),
-		]);
+		const onTab = (incident: Incident) =>
+			!region || incidentOnRegion(incident, region.id);
+		const [services, changes, open, recent, regionIncidents] =
+			await Promise.all([
+				this.catalog.list({ includeHidden: false }),
+				this.ctx.store.find(
+					"service_status_changes",
+					region
+						? { sort: [{ field: "createdAt" }] }
+						: {
+								where: [
+									{
+										field: "createdAt",
+										op: "gte",
+										value: window.start.toISOString(),
+									},
+								],
+								sort: [{ field: "createdAt" }],
+							},
+				),
+				this.incidents.list({ open: true }),
+				this.incidents.list({ since }),
+				region ? this.incidents.list() : Promise.resolve(undefined),
+			]);
 		const byId = new Map<string, Incident>();
 		for (const incident of [...open, ...recent]) {
 			byId.set(incident.id, incident);
 		}
-		const relevant = [...byId.values()];
+		const relevant = [...byId.values()].filter(onTab);
+		const viewOpen = open.filter(onTab);
 
+		const viewChanges =
+			region && regionIncidents
+				? changesOnRegion(changes, regionIncidents, region.id)
+				: changes;
 		const views: ServiceView[] = services.map((service) => ({
 			...service,
-			...computeUptime(service, changes, relevant, window),
+			...computeUptime(service, viewChanges, relevant, window),
+			...(region && regionIncidents
+				? {
+						status: serviceStatusOnRegion(
+							service,
+							changes,
+							regionIncidents,
+							region.id,
+						),
+					}
+				: {}),
 		}));
 
 		const groups: ServiceGroupView[] = [];
@@ -189,14 +239,14 @@ export class StatusService {
 			group.status = worstStatus(group.services.map((c) => c.status));
 		}
 
-		const activeIncidents = open.filter(
+		const activeIncidents = viewOpen.filter(
 			(incident) => incident.kind === "incident",
 		);
-		const activeMaintenance = open.filter(
+		const activeMaintenance = viewOpen.filter(
 			(incident) =>
 				incident.kind === "maintenance" && incident.status !== "scheduled",
 		);
-		const upcomingMaintenance = open
+		const upcomingMaintenance = viewOpen
 			.filter(
 				(incident) =>
 					incident.kind === "maintenance" && incident.status === "scheduled",
@@ -207,7 +257,9 @@ export class StatusService {
 		).toISOString();
 		const recentIncidents = recent.filter(
 			(incident) =>
-				incident.createdAt >= recentCutoff && incident.status !== "scheduled",
+				incident.createdAt >= recentCutoff &&
+				incident.status !== "scheduled" &&
+				onTab(incident),
 		);
 
 		const overall = worstStatus([
@@ -225,6 +277,8 @@ export class StatusService {
 			activeMaintenance,
 			upcomingMaintenance,
 			recentIncidents,
+			regions,
+			...(region ? { region } : {}),
 			uptime: combineUptime(views, relevant, window),
 			window,
 			generatedAt: now.toISOString(),
@@ -312,7 +366,17 @@ export class StatusService {
 	 * start before that month, and the earliest page has no older page. Thus a
 	 * crawler that follows the "older" links comes to an end.
 	 */
-	async history(month?: string, months = 3): Promise<HistoryPage> {
+	async history(
+		month?: string,
+		months = 3,
+		regionId?: string,
+	): Promise<HistoryPage> {
+		if (regionId) {
+			const regions = await this.regions.list();
+			if (!regions.some((region) => region.id === regionId)) {
+				throw new NotFoundError("Region", regionId);
+			}
+		}
 		const current = monthKey(this.ctx.now());
 		const [first] = await this.ctx.store.find("incidents", {
 			where: [{ field: "status", op: "ne", value: "scheduled" }],
@@ -331,7 +395,11 @@ export class StatusService {
 				since: monthStart(oldest),
 				before: monthStart(addMonths(newest, 1)),
 			})
-		).filter((incident) => incident.status !== "scheduled");
+		).filter(
+			(incident) =>
+				incident.status !== "scheduled" &&
+				(!regionId || incidentOnRegion(incident, regionId)),
+		);
 		const result: HistoryMonth[] = [];
 		for (let offset = 0; offset < months; offset++) {
 			const key = addMonths(newest, -offset);

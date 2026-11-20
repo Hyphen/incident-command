@@ -8,6 +8,7 @@ import { IncidentService } from "./incidents";
 import { MemberService } from "./members";
 import { NotificationSettingsService } from "./notification-settings";
 import { OAuthService } from "./oauth";
+import { RegionService } from "./regions";
 import { SessionService } from "./sessions";
 import { SettingsService } from "./settings";
 import { StatusService } from "./status";
@@ -17,6 +18,7 @@ export interface Services {
 	settings: SettingsService;
 	notificationSettings: NotificationSettingsService;
 	catalog: ServiceCatalog;
+	regions: RegionService;
 	incidents: IncidentService;
 	drafts: DraftService;
 	status: StatusService;
@@ -33,6 +35,7 @@ export interface Services {
 export function createServices(ctx: ServiceContext): Services {
 	const settings = new SettingsService(ctx);
 	const notificationSettings = new NotificationSettingsService(ctx);
+	const regions = new RegionService(ctx);
 	const subscribers = new SubscriberService(
 		ctx,
 		settings,
@@ -45,11 +48,12 @@ export function createServices(ctx: ServiceContext): Services {
 		subscribers,
 		settings,
 		notificationSettings,
+		regions,
 	);
 	const activity = new ActivityService(ctx);
 	const agents = new AgentService(ctx, activity);
 	const drafts = new DraftService(ctx, incidents, activity);
-	const status = new StatusService(ctx, settings, catalog, incidents);
+	const status = new StatusService(ctx, settings, catalog, incidents, regions);
 	const sessions = new SessionService(ctx);
 	const oauth = new OAuthService(ctx, agents, activity);
 	const members = new MemberService(ctx, sessions, oauth);
@@ -58,6 +62,7 @@ export function createServices(ctx: ServiceContext): Services {
 		settings,
 		notificationSettings,
 		catalog,
+		regions,
 		incidents,
 		drafts,
 		status,

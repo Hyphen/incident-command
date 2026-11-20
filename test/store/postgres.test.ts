@@ -149,6 +149,7 @@ describe("PostgresStore", () => {
 			"ic_oauth_clients",
 			"ic_oauth_codes",
 			"ic_oauth_grants",
+			"ic_regions",
 			"ic_service_status_changes",
 			"ic_services",
 			"ic_sessions",

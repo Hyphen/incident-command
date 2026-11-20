@@ -137,6 +137,7 @@ describe("MCP handler", () => {
 			"whoami",
 			"get_status",
 			"list_services",
+			"list_regions",
 			"list_incidents",
 			"get_incident",
 			"get_notification_draft",
@@ -150,7 +151,8 @@ describe("MCP handler", () => {
 		expect(admin).toContain("create_agent_token");
 		expect(admin).toContain("get_notification_settings");
 		expect(admin).toContain("update_notification_channel");
-		expect(admin).toHaveLength(41);
+		expect(admin).toHaveLength(45);
+		expect(admin).toContain("create_region");
 		expect(admin).toEqual(
 			expect.arrayContaining([
 				"create_agent",
@@ -160,6 +162,44 @@ describe("MCP handler", () => {
 				"set_subscriber_services",
 			]),
 		);
+	});
+
+	it("reads and updates one region", async () => {
+		const { client, call } = await connect(
+			t,
+			await tokenFor(t, permissionsForRole("editor"), "editor bot"),
+		);
+		const region = (await call("create_region", { name: "United States" }))
+			.data;
+		expect(region.name).toBe("United States");
+		expect((await call("list_regions")).data).toEqual([region]);
+		const incident = (
+			await call("create_incident", {
+				title: "API errors",
+				message: "Investigating",
+				regionId: region.id,
+				impact: "major",
+			})
+		).data;
+		expect(incident.regionId).toBe(region.id);
+		const status = (await call("get_status", { regionId: region.id })).data;
+		expect(status.region).toBe("United States");
+		expect(status.activeIncidents[0].regionId).toBe(region.id);
+		const missing = await call("get_status", { regionId: "reg_missing" });
+		expect(missing.isError).toBe(true);
+		expect(missing.text).toMatch(/not_found/);
+		const renamed = (
+			await call("update_region", { id: region.id, name: "US East" })
+		).data;
+		expect(renamed.name).toBe("US East");
+		expect((await call("delete_region", { id: region.id })).data).toEqual({
+			deleted: region.id,
+		});
+		expect((await call("list_regions")).data).toEqual([]);
+		expect(
+			(await call("get_incident", { id: incident.id })).data.regionId,
+		).toBe(undefined);
+		await client.close();
 	});
 
 	it("lets an editor agent run an incident end to end", async () => {

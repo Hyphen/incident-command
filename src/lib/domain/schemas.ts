@@ -68,6 +68,21 @@ const serviceStatusesSchema = z
 	.optional()
 	.transform((entries) => (entries?.length ? entries : undefined));
 
+export const createRegionSchema = z.object({
+	name: z.string().trim().min(1).max(80),
+	order: z.number().int().optional(),
+});
+export type CreateRegionInput = z.input<typeof createRegionSchema>;
+
+export const updateRegionSchema = z.object({
+	name: z.string().trim().min(1).max(80).optional(),
+	order: z.number().int().optional(),
+});
+export type UpdateRegionInput = z.input<typeof updateRegionSchema>;
+
+/** A region id. Null clears the region and the incident becomes global. */
+const regionIdSchema = z.union([z.string().trim().min(1), z.null()]).optional();
+
 export const createServiceSchema = z.object({
 	name: z.string().trim().min(1).max(120),
 	description: text(500),
@@ -99,6 +114,7 @@ export const createIncidentSchema = z.object({
 	serviceStatuses: serviceStatusesSchema,
 	scheduledStart: isoDate.optional(),
 	scheduledEnd: isoDate.optional(),
+	regionId: z.string().trim().min(1).optional(),
 	notify: z.boolean().optional(),
 });
 export type CreateIncidentInput = z.input<typeof createIncidentSchema>;
@@ -120,6 +136,7 @@ export const editIncidentSchema = z.object({
 	serviceIds: z.array(z.string().min(1)).max(100).optional(),
 	scheduledStart: isoDate.optional(),
 	scheduledEnd: isoDate.optional(),
+	regionId: regionIdSchema,
 });
 export type EditIncidentInput = z.input<typeof editIncidentSchema>;
 

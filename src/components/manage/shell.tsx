@@ -15,6 +15,7 @@ export const NAV: { label: string; href: string; role: Role }[] = [
 	{ label: "Overview", href: "/manage", role: "viewer" },
 	{ label: "Incidents", href: "/manage/incidents", role: "viewer" },
 	{ label: "Services", href: "/manage/services", role: "viewer" },
+	{ label: "Regions", href: "/manage/regions", role: "viewer" },
 	{ label: "Members", href: "/manage/members", role: "admin" },
 	{ label: "Agents", href: "/manage/agents", role: "viewer" },
 	{ label: "Subscribers", href: "/manage/subscribers", role: "admin" },
