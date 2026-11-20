@@ -26,6 +26,10 @@ describe("IncidentService", () => {
 		(await t.services.catalog.get(id)).status;
 
 	it("creates an incident, sets service status and notifies", async () => {
+		await t.services.subscribers.addWebhook(ADMIN, {
+			url: "https://hooks.example.com/web-only",
+			serviceIds: [web],
+		});
 		const incident = await t.services.incidents.create(EDITOR, {
 			title: "API errors",
 			message: "Investigating elevated errors",
@@ -52,6 +56,11 @@ describe("IncidentService", () => {
 		expect(
 			t.notifier.incidents[0]?.notification.services.map((c) => c.id),
 		).toEqual([api]);
+		expect(
+			t.notifier.incidents[0]?.subscribers.map(
+				(subscriber) => subscriber.target,
+			),
+		).toEqual(["https://hooks.example.com/x"]);
 		// The notifier gets the delivery settings that apply at send time.
 		expect(t.notifier.incidents[0]?.channels.email).toMatchObject({
 			channel: "email",

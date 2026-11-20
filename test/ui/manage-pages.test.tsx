@@ -1533,6 +1533,26 @@ describe("admin pages", () => {
 		).toBeInTheDocument();
 	});
 
+	it("lets an admin set the services for a subscriber", async () => {
+		const { app, services } = await setupApp();
+		const { actor } = await signIn(app, "admin");
+		const api = await services.catalog.create(actor, { name: "API" });
+		await services.subscribers.addEmail(actor, {
+			email: "api@acme.dev",
+			serviceIds: [api.id],
+		});
+		render(await SubscribersPage(flash({ notice: "services_saved" })));
+		expect(
+			screen
+				.getAllByRole("checkbox", { name: "API" })
+				.map((box) => (box as HTMLInputElement).checked),
+		).toEqual([false, true]);
+		expect(
+			screen.getByRole("button", { name: "Save services" }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("status")).toHaveTextContent("Services saved");
+	});
+
 	it("renders the general settings section", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");

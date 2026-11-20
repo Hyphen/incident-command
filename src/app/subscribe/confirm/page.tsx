@@ -26,6 +26,14 @@ export default async function ConfirmPage({
 					<p>
 						{subscriber.target} will now receive {settings.siteName} updates.
 					</p>
+					<p>
+						<Link
+							href={`/subscribe/services?token=${encodeURIComponent(subscriber.token)}`}
+							className="underline hover:text-fg"
+						>
+							Choose the services that send a notification.
+						</Link>
+					</p>
 				</NoticeCard>
 			) : (
 				<NoticeCard title="This link is invalid">

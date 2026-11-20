@@ -584,7 +584,9 @@ export class IncidentService {
 			return;
 		}
 		try {
-			const subscribers = await this.subscribers.recipients();
+			const subscribers = await this.subscribers.recipients(
+				incident.serviceIds,
+			);
 			if (subscribers.length === 0) {
 				return;
 			}
