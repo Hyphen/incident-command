@@ -7,8 +7,11 @@ import {
 	updateRegionSchema,
 } from "../domain/schemas";
 import type { Actor, Incident, Region } from "../domain/types";
-import { NotFoundError, ValidationError } from "../errors";
+import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import { iso, parse, requirePermission, type ServiceContext } from "./context";
+
+/** Stop after five failed writes. The same limit as an incident update. */
+const MAX_WRITE_ATTEMPTS = 5;
 
 export class RegionService {
 	private readonly ctx: ServiceContext;
@@ -98,20 +101,45 @@ export class RegionService {
 
 	/** Removes the region from each incident that uses it. */
 	private async clearIncidents(regionId: string): Promise<void> {
-		const now = iso(this.ctx.now());
 		const incidents = await this.ctx.store.find(
 			"incidents",
 			{ where: [{ field: "regionId", op: "eq", value: regionId }] },
 			{ consistent: true },
 		);
 		for (const incident of incidents) {
+			await this.clearRegion(incident.id, regionId);
+		}
+	}
+
+	/**
+	 * Removes the region from the latest incident. The write succeeds only
+	 * when the revision still matches, and a newer save is tried again.
+	 */
+	private async clearRegion(id: string, regionId: string): Promise<void> {
+		for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt++) {
+			const current = await this.ctx.store.get("incidents", id, {
+				consistent: true,
+			});
+			if (!current || current.regionId !== regionId) {
+				return;
+			}
 			const next: Incident = {
-				...incident,
-				revision: (incident.revision ?? 0) + 1,
-				updatedAt: now,
+				...current,
+				revision: (current.revision ?? 0) + 1,
+				updatedAt: iso(this.ctx.now()),
 			};
 			delete next.regionId;
-			await this.ctx.store.update("incidents", next);
+			const saved = await this.ctx.store.update("incidents", next, {
+				where: [
+					{ field: "revision", op: "eq", value: current.revision ?? null },
+				],
+			});
+			if (saved) {
+				return;
+			}
 		}
+		throw new ConflictError(
+			"The incident is being changed by someone else. Please try again.",
+		);
 	}
 }

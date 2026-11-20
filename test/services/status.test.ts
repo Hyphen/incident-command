@@ -435,4 +435,105 @@ describe("StatusService", () => {
 			t.services.status.history(undefined, 3, "reg_missing"),
 		).rejects.toBeInstanceOf(NotFoundError);
 	});
+
+	it("ends a regional outage when that incident ends", async () => {
+		t.clock.set("2026-10-01T00:00:00.000Z");
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
+		const united = await t.services.regions.create(EDITOR, {
+			name: "United States",
+		});
+		const europe = await t.services.regions.create(EDITOR, { name: "Europe" });
+		t.clock.set("2026-11-02T10:00:00.000Z");
+		const us = await t.services.incidents.create(EDITOR, {
+			title: "US down",
+			message: "Down",
+			impact: "critical",
+			serviceIds: [api.id],
+			regionId: united.id,
+		});
+		t.clock.set("2026-11-02T10:30:00.000Z");
+		const eu = await t.services.incidents.create(EDITOR, {
+			title: "EU down",
+			message: "Down",
+			impact: "critical",
+			serviceIds: [api.id],
+			regionId: europe.id,
+		});
+		t.clock.set("2026-11-02T11:00:00.000Z");
+		await t.services.incidents.resolve(EDITOR, us.id);
+		t.clock.set("2026-11-02T12:00:00.000Z");
+		await t.services.incidents.resolve(EDITOR, eu.id);
+
+		const hour = 60 * 60 * 1000;
+		const usView = await t.services.status.summary({ regionId: united.id });
+		const euView = await t.services.status.summary({ regionId: europe.id });
+		expect(usView.services[0]?.status).toBe("operational");
+		expect(euView.services[0]?.status).toBe("operational");
+		expect(
+			usView.services[0]?.days.find((day) => day.date === "2026-11-02")
+				?.downtimeMs,
+		).toBe(hour);
+		expect(
+			euView.services[0]?.days.find((day) => day.date === "2026-11-02")
+				?.downtimeMs,
+		).toBe(hour * 1.5);
+	});
+
+	it("keeps the status a closed incident recorded", async () => {
+		t.clock.set("2026-10-01T00:00:00.000Z");
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
+		const europe = await t.services.regions.create(EDITOR, { name: "Europe" });
+		t.clock.set("2026-11-02T10:00:00.000Z");
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Slow",
+			message: "Errors",
+			impact: "critical",
+			serviceIds: [api.id],
+		});
+		t.clock.set("2026-11-02T11:00:00.000Z");
+		await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			status: "resolved",
+			message: "Still slow",
+			serviceStatus: "degraded_performance",
+		});
+		const view = await t.services.status.summary({ regionId: europe.id });
+		expect(view.services[0]?.status).toBe("degraded_performance");
+		expect((await t.services.status.summary()).services[0]?.status).toBe(
+			"degraded_performance",
+		);
+	});
+
+	it("keeps an outage while another incident on the tab affects the service", async () => {
+		t.clock.set("2026-10-01T00:00:00.000Z");
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
+		const united = await t.services.regions.create(EDITOR, {
+			name: "United States",
+		});
+		t.clock.set("2026-11-02T10:00:00.000Z");
+		const us = await t.services.incidents.create(EDITOR, {
+			title: "US down",
+			message: "Down",
+			impact: "critical",
+			serviceIds: [api.id],
+			regionId: united.id,
+		});
+		t.clock.set("2026-11-02T10:30:00.000Z");
+		const wide = await t.services.incidents.create(EDITOR, {
+			title: "Watching",
+			message: "No impact yet",
+			impact: "none",
+			serviceIds: [api.id],
+		});
+		t.clock.set("2026-11-02T11:00:00.000Z");
+		await t.services.incidents.resolve(EDITOR, us.id);
+		const during = await t.services.status.summary({ regionId: united.id });
+		expect(during.services[0]?.status).toBe("major_outage");
+		expect((await t.services.status.summary()).services[0]?.status).toBe(
+			"major_outage",
+		);
+		t.clock.set("2026-11-02T12:00:00.000Z");
+		await t.services.incidents.resolve(EDITOR, wide.id);
+		const after = await t.services.status.summary({ regionId: united.id });
+		expect(after.services[0]?.status).toBe("operational");
+	});
 });

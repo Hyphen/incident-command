@@ -14,7 +14,7 @@ import RootLayout, {
 	viewport,
 } from "@/app/layout";
 import NotFound from "@/app/not-found";
-import StatusPage, { metadata as statusMetadata } from "@/app/page";
+import StatusPage, { generateMetadata as statusMetadata } from "@/app/page";
 import ConfirmPage from "@/app/subscribe/confirm/page";
 import SubscribePage from "@/app/subscribe/page";
 import UnsubscribePage from "@/app/subscribe/unsubscribe/page";
@@ -117,7 +117,18 @@ describe("status page", () => {
 			"href",
 			"/llms.txt",
 		);
-		expect(statusMetadata.alternates).toEqual({
+		expect(
+			(await statusMetadata({ searchParams: params({}) })).alternates,
+		).toEqual({
+			types: {
+				"application/rss+xml": "/feed.xml",
+				"text/markdown": "/llms.txt",
+			},
+		});
+		expect(
+			(await statusMetadata({ searchParams: params({ region: "" }) }))
+				.alternates,
+		).toEqual({
 			types: {
 				"application/rss+xml": "/feed.xml",
 				"text/markdown": "/llms.txt",
@@ -320,6 +331,18 @@ describe("status page", () => {
 		expect(screen.getAllByText("Everywhere").length).toBeGreaterThan(0);
 		expect(screen.getAllByText("Partial outage").length).toBeGreaterThan(0);
 		expect(screen.queryAllByText("Major outage")).toEqual([]);
+		expect(
+			(
+				await statusMetadata({
+					searchParams: params({ region: europe.id }),
+				})
+			).alternates,
+		).toEqual({
+			types: {
+				"application/rss+xml": "/feed.xml",
+				"text/markdown": `/llms.txt?region=${europe.id}`,
+			},
+		});
 		await expectNotFound(
 			StatusPage({ searchParams: params({ region: "reg_missing" }) }),
 		);

@@ -1,4 +1,11 @@
-import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import type { Incident } from "@/lib/domain/types";
+import {
+	ConflictError,
+	ForbiddenError,
+	NotFoundError,
+	ValidationError,
+} from "@/lib/errors";
+import type { DocumentStore } from "@/lib/store/types";
 import {
 	createTestContext,
 	EDITOR,
@@ -95,6 +102,133 @@ describe("RegionService", () => {
 		await expect(
 			t.services.regions.delete(EDITOR, "reg_missing"),
 		).rejects.toBeInstanceOf(NotFoundError);
+	});
+
+	function replaceUpdate(change: (current: Incident) => Promise<void>): void {
+		const update = t.store.update.bind(t.store);
+		let raced = false;
+		t.store.update = (async (collection, doc, options) => {
+			if (!raced && collection === "incidents" && options?.where) {
+				raced = true;
+				const current = await t.store.get("incidents", doc.id, {
+					consistent: true,
+				});
+				if (current) {
+					await change(current);
+				}
+			}
+			return update(collection, doc, options);
+		}) as DocumentStore["update"];
+	}
+
+	it("keeps a newer incident update when a region is deleted", async () => {
+		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Down",
+			message: "Looking",
+			regionId: region.id,
+		});
+		replaceUpdate(async (current) => {
+			await t.store.update("incidents", {
+				...current,
+				updates: [
+					...current.updates,
+					{
+						id: "upd_race",
+						status: current.status,
+						message: "Posted during the delete",
+						author: current.createdBy,
+						createdAt: current.updatedAt,
+					},
+				],
+				revision: (current.revision ?? 0) + 1,
+			});
+		});
+		await t.services.regions.delete(EDITOR, region.id);
+		const saved = await t.services.incidents.get(incident.id);
+		expect(saved.regionId).toBeUndefined();
+		expect(saved.updates.map((update) => update.message)).toContain(
+			"Posted during the delete",
+		);
+	});
+
+	it("stops when the incident keeps changing", async () => {
+		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Down",
+			message: "Looking",
+			regionId: region.id,
+		});
+		const update = t.store.update.bind(t.store);
+		t.store.update = (async (collection, doc, options) => {
+			if (collection === "incidents" && options?.where) {
+				const current = await t.store.get("incidents", doc.id, {
+					consistent: true,
+				});
+				if (current) {
+					await update("incidents", {
+						...current,
+						revision: (current.revision ?? 0) + 1,
+					});
+				}
+			}
+			return update(collection, doc, options);
+		}) as DocumentStore["update"];
+		await expect(
+			t.services.regions.delete(EDITOR, region.id),
+		).rejects.toBeInstanceOf(ConflictError);
+		expect(await t.services.regions.list()).toEqual([region]);
+		expect((await t.services.incidents.get(incident.id)).regionId).toBe(
+			region.id,
+		);
+	});
+
+	it("deletes a region when the incident is already gone", async () => {
+		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Down",
+			message: "Looking",
+			regionId: region.id,
+		});
+		replaceUpdate(async (current) => {
+			await t.store.delete("incidents", current.id);
+		});
+		await t.services.regions.delete(EDITOR, region.id);
+		expect(await t.store.get("incidents", incident.id)).toBeUndefined();
+		expect(await t.services.regions.list()).toEqual([]);
+	});
+
+	it("keeps a clear that another delete already saved", async () => {
+		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Down",
+			message: "Looking",
+			regionId: region.id,
+		});
+		replaceUpdate(async (current) => {
+			const next: Incident = {
+				...current,
+				updates: [
+					...current.updates,
+					{
+						id: "upd_race",
+						status: current.status,
+						message: "Cleared first",
+						author: current.createdBy,
+						createdAt: current.updatedAt,
+					},
+				],
+				revision: (current.revision ?? 0) + 1,
+			};
+			delete next.regionId;
+			await t.store.update("incidents", next);
+		});
+		await t.services.regions.delete(EDITOR, region.id);
+		const saved = await t.services.incidents.get(incident.id);
+		expect(saved.regionId).toBeUndefined();
+		expect(saved.updates.map((update) => update.message)).toContain(
+			"Cleared first",
+		);
 	});
 
 	it("requires the service permissions", async () => {

@@ -14,13 +14,29 @@ import { RECENT_DAYS } from "@/lib/services/status";
 import { publicAlternates } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { alternates: publicAlternates(LLMS_PATH) };
 
-export default async function StatusPage({
+interface Props {
+	searchParams?: Promise<{ region?: string }>;
+}
+
+/** The Markdown alternate shows the same region as the page. */
+export async function generateMetadata({
 	searchParams,
 }: {
-	searchParams?: Promise<{ region?: string }>;
-} = {}) {
+	searchParams: Promise<{ region?: string }>;
+}): Promise<Metadata> {
+	const { region } = await searchParams;
+	const params = new URLSearchParams();
+	if (region) {
+		params.set("region", region);
+	}
+	const query = params.toString();
+	return {
+		alternates: publicAlternates(`${LLMS_PATH}${query ? `?${query}` : ""}`),
+	};
+}
+
+export default async function StatusPage({ searchParams }: Props = {}) {
 	const { region: regionId } = searchParams ? await searchParams : {};
 	const { services } = await getApp();
 	const regions = await services.regions.list();

@@ -1,4 +1,4 @@
-import { impactToStatus, worstStatus } from "./status";
+import { impactToStatus, isClosedStatus, worstStatus } from "./status";
 import type {
 	Incident,
 	Region,
@@ -44,9 +44,6 @@ function byTime(a: ServiceStatusChange, b: ServiceStatusChange): number {
 
 /** The status an open incident implies when it did not record a change. */
 function impliedEffect(incident: Incident): ServiceStatus | undefined {
-	if (incident.status === "scheduled") {
-		return undefined;
-	}
 	if (incident.kind === "maintenance") {
 		return incident.status === "in_progress" ? "under_maintenance" : undefined;
 	}
@@ -56,43 +53,94 @@ function impliedEffect(incident: Incident): ServiceStatus | undefined {
 	return impactToStatus(incident.impact);
 }
 
+function at(value: string): number {
+	return Date.parse(value);
+}
+
+/** An incident affects a service at `when` when that time is inside its window. */
+function openAt(incident: Incident, when: number): boolean {
+	if (incident.status === "scheduled") {
+		return false;
+	}
+	if (isClosedStatus(incident.status) && !incident.resolvedAt) {
+		return false;
+	}
+	if (at(incident.startedAt) > when) {
+		return false;
+	}
+	return !(incident.resolvedAt && at(incident.resolvedAt) <= when);
+}
+
 /**
- * The status of a service on one region tab.
- * A manual status stays. An open incident in another region does not count.
- * A global incident counts on every region tab.
+ * Another incident on this tab still affects the service, so a skipped
+ * recovery must not clear the earlier outage.
  */
-export function serviceStatusOnRegion(
-	service: Service,
-	changes: readonly ServiceStatusChange[],
-	openIncidents: readonly Incident[],
+function heldByOther(
+	incidents: readonly Incident[],
 	regionId: string,
-): ServiceStatus {
-	const here = new Set(
-		openIncidents
-			.filter((incident) => incidentOnRegion(incident, regionId))
-			.map((incident) => incident.id),
+	serviceId: string,
+	exceptId: string,
+	resolvedAt: number,
+	when: number,
+): boolean {
+	return incidents.some(
+		(incident) =>
+			incident.id !== exceptId &&
+			incidentOnRegion(incident, regionId) &&
+			incident.serviceIds.includes(serviceId) &&
+			at(incident.startedAt) <= resolvedAt &&
+			openAt(incident, when),
 	);
-	const mine = changes
-		.filter((change) => change.serviceId === service.id)
-		.sort(byTime);
-	let status = mine[0]?.previousStatus ?? service.status;
+}
+
+/**
+ * The status recorded for one service at one time.
+ * A manual change stays. A change from another region does not count.
+ * A change from before an incident closed counts only while another
+ * incident on this tab still affects the service.
+ * A status recorded when the incident closed stays.
+ */
+function replay(
+	serviceId: string,
+	initial: ServiceStatus,
+	changes: readonly ServiceStatusChange[],
+	incidents: readonly Incident[],
+	regionId: string,
+	when: number,
+): ServiceStatus {
+	const byId = new Map(incidents.map((incident) => [incident.id, incident]));
+	let status = initial;
 	const seen = new Set<string>();
-	for (const change of mine) {
+	for (const change of changes) {
+		if (at(change.createdAt) > when) {
+			break;
+		}
 		if (!change.incidentId) {
 			status = change.status;
 			continue;
 		}
-		seen.add(change.incidentId);
-		if (!here.has(change.incidentId)) {
+		const incident = byId.get(change.incidentId);
+		if (!incident || !incidentOnRegion(incident, regionId)) {
 			continue;
 		}
+		const resolved = incident.resolvedAt ? at(incident.resolvedAt) : undefined;
+		if (
+			resolved !== undefined &&
+			resolved <= when &&
+			at(change.createdAt) < resolved &&
+			!heldByOther(incidents, regionId, serviceId, incident.id, resolved, when)
+		) {
+			continue;
+		}
+		seen.add(incident.id);
 		status = change.status;
 	}
-	for (const incident of openIncidents) {
+	for (const incident of incidents) {
 		if (
-			!here.has(incident.id) ||
+			!openAt(incident, when) ||
+			!incidentOnRegion(incident, regionId) ||
 			seen.has(incident.id) ||
-			!incident.serviceIds.includes(service.id)
+			!incident.serviceIds.includes(serviceId)
 		) {
 			continue;
 		}
@@ -102,4 +150,105 @@ export function serviceStatusOnRegion(
 		}
 	}
 	return status;
+}
+
+/**
+ * The status of a service on one region tab.
+ * A manual status stays. An incident in another region does not count.
+ * A global incident counts on every region tab.
+ * A closed incident keeps a status that its close recorded.
+ */
+export function serviceStatusOnRegion(
+	service: Service,
+	changes: readonly ServiceStatusChange[],
+	incidents: readonly Incident[],
+	regionId: string,
+): ServiceStatus {
+	const mine = changes
+		.filter((change) => change.serviceId === service.id)
+		.sort(byTime);
+	const initial = mine[0]?.previousStatus ?? service.status;
+	return replay(
+		service.id,
+		initial,
+		mine,
+		incidents,
+		regionId,
+		Number.POSITIVE_INFINITY,
+	);
+}
+
+/**
+ * Status changes as one region sees them. Uptime for a region uses this list.
+ * An outage in another region does not count. An outage ends when its
+ * incident ends, unless another incident on this tab still affects the service.
+ */
+export function changesOnRegion(
+	changes: readonly ServiceStatusChange[],
+	incidents: readonly Incident[],
+	regionId: string,
+): ServiceStatusChange[] {
+	const byService = new Map<string, ServiceStatusChange[]>();
+	for (const change of changes) {
+		const list = byService.get(change.serviceId);
+		if (list) {
+			list.push(change);
+		} else {
+			byService.set(change.serviceId, [change]);
+		}
+	}
+	const result: ServiceStatusChange[] = [];
+	for (const [serviceId, mine] of byService) {
+		const earliest = mine.reduce((best, change) =>
+			byTime(change, best) < 0 ? change : best,
+		);
+		const initial = earliest.previousStatus;
+		const sorted = mine.slice().sort(byTime);
+		const times = new Set<number>();
+		for (const change of sorted) {
+			times.add(at(change.createdAt));
+		}
+		for (const incident of incidents) {
+			if (!incidentOnRegion(incident, regionId)) {
+				continue;
+			}
+			const affects =
+				incident.serviceIds.includes(serviceId) ||
+				sorted.some((change) => change.incidentId === incident.id);
+			if (!affects) {
+				continue;
+			}
+			times.add(at(incident.startedAt));
+			if (incident.resolvedAt) {
+				times.add(at(incident.resolvedAt));
+			}
+		}
+		const ordered = [...times].sort((a, b) => a - b);
+		let status = initial;
+		let emitted = false;
+		let index = 0;
+		for (const when of ordered) {
+			const next = replay(
+				serviceId,
+				initial,
+				sorted,
+				incidents,
+				regionId,
+				when,
+			);
+			if (!emitted || next !== status) {
+				result.push({
+					id: `ssc_region_${serviceId}_${index}`,
+					serviceId,
+					status: next,
+					previousStatus: emitted ? status : initial,
+					createdAt: new Date(when).toISOString(),
+				});
+				status = next;
+				emitted = true;
+				index += 1;
+			}
+		}
+	}
+	return result;
 }

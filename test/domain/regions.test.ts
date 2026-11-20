@@ -1,4 +1,5 @@
 import {
+	changesOnRegion,
 	incidentOnRegion,
 	regionNameFor,
 	serviceStatusOnRegion,
@@ -221,5 +222,175 @@ describe("incident regions", () => {
 				[],
 			),
 		).toBe("major_outage");
+	});
+
+	it("keeps a status that a close recorded", () => {
+		const closed = incident({
+			id: "inc_g",
+			status: "resolved",
+			impact: "critical",
+			startedAt: "2026-11-02T10:00:00.000Z",
+			resolvedAt: "2026-11-02T12:00:00.000Z",
+		});
+		expect(
+			serviceStatusOnRegion(
+				service(),
+				[
+					change(
+						"ch_open",
+						"2026-11-02T10:00:00.000Z",
+						"major_outage",
+						"operational",
+						"inc_g",
+					),
+					change(
+						"ch_close",
+						"2026-11-02T12:00:00.000Z",
+						"degraded_performance",
+						"major_outage",
+						"inc_g",
+					),
+				],
+				[closed],
+				"reg_us",
+			),
+		).toBe("degraded_performance");
+	});
+
+	it("ends an outage when its incident ends", () => {
+		const united = incident({
+			id: "inc_us",
+			regionId: "reg_us",
+			status: "resolved",
+			impact: "critical",
+			startedAt: "2026-11-02T10:00:00.000Z",
+			resolvedAt: "2026-11-02T11:00:00.000Z",
+		});
+		const europe = incident({
+			id: "inc_eu",
+			regionId: "reg_eu",
+			status: "resolved",
+			impact: "critical",
+			startedAt: "2026-11-02T10:30:00.000Z",
+			resolvedAt: "2026-11-02T12:00:00.000Z",
+		});
+		const usChange = change(
+			"ch_us",
+			"2026-11-02T10:00:00.000Z",
+			"major_outage",
+			"operational",
+			"inc_us",
+		);
+		const euChange = change(
+			"ch_late",
+			"2026-11-02T12:00:00.000Z",
+			"operational",
+			"major_outage",
+			"inc_eu",
+		);
+		const webChange = change(
+			"ch_web",
+			"2026-11-02T10:00:00.000Z",
+			"partial_outage",
+			"operational",
+			"inc_us",
+		);
+		webChange.serviceId = "svc_web";
+		const changes = [euChange, usChange, webChange];
+		const web = incident({
+			id: "inc_web",
+			regionId: "reg_us",
+			serviceIds: ["svc_web"],
+			impact: "none",
+		});
+		const scheduled = incident({
+			id: "mnt",
+			kind: "maintenance",
+			status: "scheduled",
+			impact: "none",
+			startedAt: "2026-11-02T10:00:00.000Z",
+		});
+		const ended = incident({
+			id: "inc_old",
+			regionId: "reg_us",
+			status: "resolved",
+			impact: "critical",
+		});
+		const us = changesOnRegion(
+			changes,
+			[united, europe, web, scheduled, ended],
+			"reg_us",
+		).filter((change) => change.serviceId === "svc_api");
+		expect(us.map((change) => [change.createdAt, change.status])).toEqual([
+			["2026-11-02T10:00:00.000Z", "major_outage"],
+			["2026-11-02T11:00:00.000Z", "operational"],
+		]);
+		const eu = changesOnRegion(changes, [united, europe], "reg_eu").filter(
+			(change) => change.serviceId === "svc_api",
+		);
+		expect(eu.map((change) => [change.createdAt, change.status])).toEqual([
+			["2026-11-02T10:00:00.000Z", "operational"],
+			["2026-11-02T10:30:00.000Z", "major_outage"],
+			["2026-11-02T12:00:00.000Z", "operational"],
+		]);
+		expect(
+			serviceStatusOnRegion(
+				service(),
+				[
+					change(
+						"ch_manual",
+						"2026-11-02T09:00:00.000Z",
+						"degraded_performance",
+						"operational",
+					),
+					usChange,
+					euChange,
+				],
+				[united, europe],
+				"reg_us",
+			),
+		).toBe("degraded_performance");
+		const holder = incident({
+			id: "inc_hold",
+			impact: "none",
+			startedAt: "2026-11-02T10:30:00.000Z",
+		});
+		expect(
+			serviceStatusOnRegion(service(), [usChange], [united, holder], "reg_us"),
+		).toBe("major_outage");
+		const later = incident({
+			id: "inc_later",
+			impact: "none",
+			startedAt: "2026-11-02T11:30:00.000Z",
+		});
+		expect(
+			serviceStatusOnRegion(service(), [usChange], [united, later], "reg_us"),
+		).toBe("operational");
+		expect(
+			serviceStatusOnRegion(
+				service(),
+				[usChange],
+				[united, scheduled],
+				"reg_us",
+			),
+		).toBe("operational");
+		expect(
+			serviceStatusOnRegion(service(), [usChange], [united, ended], "reg_us"),
+		).toBe("operational");
+		const mixed = changesOnRegion(
+			[
+				change("c2", "2026-11-02T12:00:00.000Z", "operational", "major_outage"),
+				change("c1", "2026-11-02T10:00:00.000Z", "major_outage", "operational"),
+				change(
+					"c3",
+					"2026-11-02T13:00:00.000Z",
+					"degraded_performance",
+					"operational",
+				),
+			],
+			[],
+			"reg_us",
+		);
+		expect(mixed.at(-1)?.status).toBe("degraded_performance");
 	});
 });

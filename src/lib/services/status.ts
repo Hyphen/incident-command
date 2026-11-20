@@ -1,5 +1,9 @@
 import { type ResolutionStats, resolutionStats } from "../domain/metrics";
-import { incidentOnRegion, serviceStatusOnRegion } from "../domain/regions";
+import {
+	changesOnRegion,
+	incidentOnRegion,
+	serviceStatusOnRegion,
+} from "../domain/regions";
 import { impactToStatus, worstStatus } from "../domain/status";
 import type {
 	Incident,
@@ -175,7 +179,7 @@ export class StatusService {
 		).toISOString();
 		const onTab = (incident: Incident) =>
 			!region || incidentOnRegion(incident, region.id);
-		const [services, changes, open, recent, ignoreIncidentIds] =
+		const [services, changes, open, recent, regionIncidents] =
 			await Promise.all([
 				this.catalog.list({ includeHidden: false }),
 				this.ctx.store.find(
@@ -195,18 +199,7 @@ export class StatusService {
 				),
 				this.incidents.list({ open: true }),
 				this.incidents.list({ since }),
-				region
-					? this.incidents
-							.list()
-							.then(
-								(incidents) =>
-									new Set(
-										incidents
-											.filter((incident) => !onTab(incident))
-											.map((incident) => incident.id),
-									),
-							)
-					: Promise.resolve(undefined),
+				region ? this.incidents.list() : Promise.resolve(undefined),
 			]);
 		const byId = new Map<string, Incident>();
 		for (const incident of [...open, ...recent]) {
@@ -215,17 +208,19 @@ export class StatusService {
 		const relevant = [...byId.values()].filter(onTab);
 		const viewOpen = open.filter(onTab);
 
+		const viewChanges =
+			region && regionIncidents
+				? changesOnRegion(changes, regionIncidents, region.id)
+				: changes;
 		const views: ServiceView[] = services.map((service) => ({
 			...service,
-			...computeUptime(service, changes, relevant, window, {
-				ignoreIncidentIds,
-			}),
-			...(region
+			...computeUptime(service, viewChanges, relevant, window),
+			...(region && regionIncidents
 				? {
 						status: serviceStatusOnRegion(
 							service,
 							changes,
-							viewOpen,
+							regionIncidents,
 							region.id,
 						),
 					}
