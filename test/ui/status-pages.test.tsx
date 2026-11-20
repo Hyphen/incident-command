@@ -17,6 +17,7 @@ import NotFound from "@/app/not-found";
 import StatusPage, { metadata as statusMetadata } from "@/app/page";
 import ConfirmPage from "@/app/subscribe/confirm/page";
 import SubscribePage from "@/app/subscribe/page";
+import ServicesPage from "@/app/subscribe/services/page";
 import UnsubscribePage from "@/app/subscribe/unsubscribe/page";
 import { setApp } from "@/lib/app";
 import { DESIGN_SELECTORS, NO_DATA_STATUS } from "@/lib/design";
@@ -647,9 +648,91 @@ describe("subscription pages", () => {
 		expect(
 			screen.getByText(/jane@example.com will now receive/),
 		).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", {
+				name: "Choose the services that send a notification.",
+			}),
+		).toHaveAttribute(
+			"href",
+			`/subscribe/services?token=${encodeURIComponent(token ?? "")}`,
+		);
 		ok.unmount();
 		render(await ConfirmPage({ searchParams: params({}) }));
 		expect(screen.getByText("This link is invalid")).toBeInTheDocument();
+	});
+
+	it("lets a subscriber choose services", async () => {
+		const { services, notifier } = await setupApp();
+		const hidden = render(await ServicesPage({ searchParams: params({}) }));
+		expect(screen.getByText("This link is invalid")).toBeInTheDocument();
+		hidden.unmount();
+
+		await services.subscribers.subscribe({
+			type: "email",
+			target: "jane@example.com",
+		});
+		const token = notifier.confirmations[0]?.subscriber.token ?? "";
+		const empty = render(
+			await ServicesPage({ searchParams: params({ token }) }),
+		);
+		expect(
+			screen.getByText(
+				"There are no services to choose yet. You get every notice.",
+			),
+		).toBeInTheDocument();
+		empty.unmount();
+
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		await services.catalog.create(SYSTEM_ACTOR, {
+			name: "Billing",
+			hidden: true,
+		});
+		await services.subscribers.setServices(
+			SYSTEM_ACTOR,
+			(await services.subscribers.list(SYSTEM_ACTOR))[0]?.id ?? "",
+			{ serviceIds: [api.id] },
+		);
+		const page = render(
+			await ServicesPage({
+				searchParams: params({
+					token,
+					...flashQueryParams({ notice: "services_saved" }),
+				}),
+			}),
+		);
+		expect(screen.getByRole("status")).toHaveTextContent("Services saved");
+		expect(screen.getByRole("checkbox", { name: "API" })).toBeChecked();
+		expect(screen.queryByRole("checkbox", { name: "Billing" })).toBeNull();
+		page.unmount();
+
+		render(
+			await ServicesPage({
+				searchParams: params({
+					token,
+					...flashQueryParams({ error: "validation_failed" }),
+				}),
+			}),
+		);
+		expect(screen.getByRole("alert")).toHaveTextContent(
+			"Check the form and try again.",
+		);
+	});
+
+	it("shows service tags on the subscribe form", async () => {
+		const { services } = await setupApp();
+		await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		await services.catalog.create(SYSTEM_ACTOR, {
+			name: "Billing",
+			hidden: true,
+		});
+		render(await SubscribePage({ searchParams: params({}) }));
+		expect(screen.getByRole("checkbox", { name: "API" })).not.toBeChecked();
+		expect(screen.queryByRole("checkbox", { name: "Billing" })).toBeNull();
+		expect(
+			screen.getByText(
+				"Select no service to get a notification for every service.",
+			),
+		).toBeInTheDocument();
 	});
 
 	it("renders the unsubscribe confirmation and result", async () => {

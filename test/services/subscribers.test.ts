@@ -32,7 +32,7 @@ describe("SubscriberService", () => {
 			enabled: true,
 			providers: [{ type: "sendgrid", from: "status@test.dev" }],
 		});
-		await expect(t.services.subscribers.recipients()).resolves.toEqual([]);
+		await expect(t.services.subscribers.recipients([])).resolves.toEqual([]);
 
 		// re-subscribing before confirming resends without duplicating
 		await t.services.subscribers.subscribe({
@@ -52,7 +52,9 @@ describe("SubscriberService", () => {
 		await expect(
 			t.services.subscribers.confirm(pending?.token ?? ""),
 		).resolves.toMatchObject({ confirmed: true });
-		await expect(t.services.subscribers.recipients()).resolves.toHaveLength(1);
+		await expect(t.services.subscribers.recipients([])).resolves.toHaveLength(
+			1,
+		);
 		await expect(
 			t.services.subscribers.subscribe({
 				type: "email",
@@ -154,11 +156,13 @@ describe("SubscriberService", () => {
 			["sms", "+15551234567", false, "sms"],
 			["webhook", "https://hooks.example.com/a", false, "webhook"],
 		]);
-		await expect(t.services.subscribers.recipients()).resolves.toEqual([]);
+		await expect(t.services.subscribers.recipients([])).resolves.toEqual([]);
 		for (const { subscriber } of t.notifier.confirmations) {
 			await t.services.subscribers.confirm(subscriber.token);
 		}
-		await expect(t.services.subscribers.recipients()).resolves.toHaveLength(2);
+		await expect(t.services.subscribers.recipients([])).resolves.toHaveLength(
+			2,
+		);
 	});
 
 	it("removes the subscriber of an address that a visitor enters", async () => {
@@ -245,5 +249,161 @@ describe("SubscriberService", () => {
 		await expect(
 			t.services.subscribers.addSms(EDITOR, { phone: "+15551234567" }),
 		).rejects.toBeInstanceOf(ForbiddenError);
+	});
+
+	it("notifies a subscriber only for the chosen services", async () => {
+		const api = await t.services.catalog.create(ADMIN, { name: "API" });
+		const web = await t.services.catalog.create(ADMIN, { name: "Web" });
+		const billing = await t.services.catalog.create(ADMIN, {
+			name: "Billing",
+			hidden: true,
+		});
+		const limited = await t.services.subscribers.addEmail(ADMIN, {
+			email: "api@acme.dev",
+			serviceIds: [api.id],
+		});
+		const everyone = await t.services.subscribers.addWebhook(ADMIN, {
+			url: "https://hooks.example.com/all",
+			serviceIds: [],
+		});
+		const targets = async (ids: string[]) =>
+			(await t.services.subscribers.recipients(ids)).map(
+				(subscriber) => subscriber.target,
+			);
+		await expect(targets([api.id])).resolves.toEqual([
+			"api@acme.dev",
+			"https://hooks.example.com/all",
+		]);
+		await expect(targets([web.id])).resolves.toEqual([
+			"https://hooks.example.com/all",
+		]);
+		await expect(targets([])).resolves.toEqual([
+			"https://hooks.example.com/all",
+		]);
+		expect(limited.serviceIds).toEqual([api.id]);
+		expect(everyone.serviceIds).toBeUndefined();
+
+		const cleared = await t.services.subscribers.setServices(
+			ADMIN,
+			limited.id,
+			{
+				serviceIds: [],
+			},
+		);
+		expect(cleared.serviceIds).toBeUndefined();
+		expect(cleared).not.toHaveProperty("token");
+		await expect(targets([web.id])).resolves.toEqual([
+			"api@acme.dev",
+			"https://hooks.example.com/all",
+		]);
+
+		await t.services.subscribers.setServices(ADMIN, limited.id, {
+			serviceIds: [api.id, billing.id],
+		});
+		await expect(
+			t.services.subscribers.setServices(ADMIN, limited.id, {
+				serviceIds: [api.id, api.id],
+			}),
+		).rejects.toBeInstanceOf(ValidationError);
+		await expect(
+			t.services.subscribers.setServices(ADMIN, limited.id, {
+				serviceIds: ["svc_missing"],
+			}),
+		).rejects.toThrow(/svc_missing/);
+		await expect(
+			t.services.subscribers.setServices(ADMIN, "sub_missing", {
+				serviceIds: [],
+			}),
+		).rejects.toBeInstanceOf(NotFoundError);
+		await expect(
+			t.services.subscribers.setServices(EDITOR, limited.id, {
+				serviceIds: [],
+			}),
+		).rejects.toBeInstanceOf(ForbiddenError);
+
+		const token = (
+			await t.services.subscribers.addEmail(ADMIN, {
+				email: "choice@acme.dev",
+				serviceIds: [api.id, billing.id],
+			})
+		).token;
+		expect(await t.services.subscribers.own(token)).toMatchObject({
+			target: "choice@acme.dev",
+			serviceIds: [api.id, billing.id],
+		});
+		expect(await t.services.subscribers.own("")).toBeUndefined();
+		expect(await t.services.subscribers.own("nope")).toBeUndefined();
+		expect(await t.services.subscribers.updateOwnServices("nope", [])).toBe(
+			false,
+		);
+		await expect(
+			t.services.subscribers.updateOwnServices(token, [billing.id]),
+		).rejects.toThrow(/was not found/);
+		expect(
+			await t.services.subscribers.updateOwnServices(token, [web.id]),
+		).toBe(true);
+		expect(
+			(await t.services.subscribers.list(ADMIN)).find(
+				(subscriber) => subscriber.target === "choice@acme.dev",
+			)?.serviceIds,
+		).toEqual([web.id, billing.id]);
+		expect(await t.services.subscribers.updateOwnServices(token, [])).toBe(
+			true,
+		);
+		expect(
+			(await t.services.subscribers.list(ADMIN)).find(
+				(subscriber) => subscriber.target === "choice@acme.dev",
+			)?.serviceIds,
+		).toEqual([billing.id]);
+
+		await expect(
+			t.services.subscribers.subscribe({
+				type: "email",
+				target: "pending@acme.dev",
+				serviceIds: [billing.id],
+			}),
+		).rejects.toThrow(/was not found/);
+		expect(await t.store.count("subscribers")).toBe(3);
+		await t.services.subscribers.subscribe({
+			type: "email",
+			target: "pending@acme.dev",
+			serviceIds: [web.id],
+		});
+		const pending = t.notifier.confirmations.at(-1)?.subscriber;
+		expect(pending?.serviceIds).toEqual([web.id]);
+		await t.services.subscribers.subscribe({
+			type: "email",
+			target: "pending@acme.dev",
+			serviceIds: [api.id],
+		});
+		expect(t.notifier.confirmations.at(-1)?.subscriber.serviceIds).toEqual([
+			api.id,
+		]);
+		await t.services.subscribers.confirm(pending?.token ?? "");
+		await expect(
+			t.services.subscribers.subscribe({
+				type: "email",
+				target: "pending@acme.dev",
+				serviceIds: [web.id],
+			}),
+		).resolves.toBe("already_subscribed");
+		expect(
+			(await t.services.subscribers.list(ADMIN)).find(
+				(subscriber) => subscriber.target === "pending@acme.dev",
+			)?.serviceIds,
+		).toEqual([api.id]);
+
+		await t.services.catalog.delete(ADMIN, api.id);
+		expect(
+			(await t.services.subscribers.list(ADMIN)).find(
+				(subscriber) => subscriber.id === limited.id,
+			)?.serviceIds,
+		).toEqual([billing.id]);
+		await t.services.catalog.delete(ADMIN, billing.id);
+		const after = (await t.services.subscribers.list(ADMIN)).find(
+			(subscriber) => subscriber.target === "choice@acme.dev",
+		);
+		expect(after?.serviceIds).toBeUndefined();
+		await expect(targets([web.id])).resolves.toContain("choice@acme.dev");
 	});
 });

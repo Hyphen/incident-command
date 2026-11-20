@@ -119,6 +119,11 @@
 		"kind": "notice",
 		"text": "Subscriber removed"
 	},
+	"services_saved": {
+		"id": "fls_services_saved1",
+		"kind": "notice",
+		"text": "Services saved"
+	},
 	"settings_saved": {
 		"id": "fls_6hn8bnly3mmpyovf",
 		"kind": "notice",

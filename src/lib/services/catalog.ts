@@ -9,12 +9,15 @@ import {
 import type { Actor, Service, ServiceStatus } from "../domain/types";
 import { NotFoundError } from "../errors";
 import { iso, parse, requirePermission, type ServiceContext } from "./context";
+import type { SubscriberService } from "./subscribers";
 
 export class ServiceCatalog {
 	private readonly ctx: ServiceContext;
+	private readonly subscribers: SubscriberService;
 
-	constructor(ctx: ServiceContext) {
+	constructor(ctx: ServiceContext, subscribers: SubscriberService) {
 		this.ctx = ctx;
+		this.subscribers = subscribers;
 	}
 
 	/** All services ordered for display. */
@@ -153,6 +156,7 @@ export class ServiceCatalog {
 		await this.ctx.store.deleteMany("service_status_changes", {
 			where: [{ field: "serviceId", op: "eq", value: id }],
 		});
+		await this.subscribers.forgetService(id);
 	}
 
 	private async load(id: string): Promise<Service> {

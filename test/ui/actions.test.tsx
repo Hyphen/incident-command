@@ -38,11 +38,13 @@ import {
 	updateNotificationChannelAction,
 	updateNotificationProviderAction,
 	updateServiceAction,
+	updateSubscriberServicesAction,
 } from "@/app/manage/actions";
 import {
 	subscribeAction,
 	unsubscribeAction,
 	unsubscribeAddressAction,
+	updateServicesAction,
 } from "@/app/subscribe/actions";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { BRAND_ASSET_MESSAGES } from "@/lib/domain/brand-asset";
@@ -1064,6 +1066,44 @@ describe("subscriber and settings actions", () => {
 			),
 			"/manage/subscribers?notice=Subscriber added",
 		);
+		const api = await services.catalog.create(actor, { name: "API" });
+		expectSameFlash(
+			await redirectOf(
+				addSubscriberAction(
+					form({
+						type: "email",
+						target: "api@acme.dev",
+						serviceIds: [api.id],
+					}),
+				),
+			),
+			"/manage/subscribers?notice=Subscriber added",
+		);
+		const chosen = (await services.subscribers.list(actor)).find(
+			(item) => item.target === "api@acme.dev",
+		);
+		expect(chosen?.serviceIds).toEqual([api.id]);
+		expectSameFlash(
+			await redirectOf(
+				updateSubscriberServicesAction(
+					form({ id: chosen?.id ?? "", serviceIds: [] }),
+				),
+			),
+			"/manage/subscribers?notice=Services saved",
+		);
+		expect(
+			(await services.subscribers.list(actor)).find(
+				(item) => item.id === chosen?.id,
+			)?.serviceIds,
+		).toBeUndefined();
+		expect(
+			flashMessage(
+				await redirectOf(
+					updateSubscriberServicesAction(form({ id: "sub_missing" })),
+				),
+				"error",
+			),
+		).toBe("That item was not found.");
 		expect(
 			(await services.subscribers.list(actor)).map((item) => item.target),
 		).toContain("+15551234567");
@@ -1548,6 +1588,70 @@ describe("public subscribe actions", () => {
 		expect(await redirectOf(unsubscribeAction(new FormData()))).toBe(
 			"/subscribe/unsubscribe?done=1",
 		);
+	});
+
+	it("saves the services a subscriber chooses", async () => {
+		const { services, notifier } = await setupApp();
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		await services.subscribers.subscribe({
+			type: "email",
+			target: "jane@example.com",
+			serviceIds: [api.id],
+		});
+		const token = notifier.confirmations[0]?.subscriber.token ?? "";
+		expect(
+			await redirectOf(
+				subscribeAction(
+					form({
+						type: "email",
+						target: "sam@example.com",
+						serviceIds: [api.id],
+					}),
+				),
+			),
+		).toBe("/subscribe?channel=email&status=confirmation_sent");
+		expect(notifier.confirmations.at(-1)?.subscriber.serviceIds).toEqual([
+			api.id,
+		]);
+		expect(
+			flashMessage(
+				await redirectOf(updateServicesAction(form({ token, serviceIds: [] }))),
+				"notice",
+			),
+		).toBe("Services saved");
+		expect(
+			(await services.subscribers.list(SYSTEM_ACTOR)).find(
+				(subscriber) => subscriber.target === "jane@example.com",
+			)?.serviceIds,
+		).toBeUndefined();
+		expect(
+			flashMessage(
+				await redirectOf(
+					updateServicesAction(form({ token, serviceIds: [api.id] })),
+				),
+				"notice",
+			),
+		).toBe("Services saved");
+		expect(await redirectOf(updateServicesAction(new FormData()))).toBe(
+			"/subscribe/services",
+		);
+		expect(
+			await redirectOf(updateServicesAction(form({ token: "nope" }))),
+		).toBe("/subscribe/services");
+		expect(
+			flashMessage(
+				await redirectOf(
+					updateServicesAction(form({ token, serviceIds: ["svc_missing"] })),
+				),
+				"error",
+			),
+		).toBe("Check the form and try again.");
+		vi.spyOn(services.subscribers, "updateOwnServices").mockRejectedValueOnce(
+			new Error("db down"),
+		);
+		await expect(
+			updateServicesAction(form({ token, serviceIds: [api.id] })),
+		).rejects.toThrow("db down");
 	});
 
 	it("unsubscribes an address that the visitor enters", async () => {

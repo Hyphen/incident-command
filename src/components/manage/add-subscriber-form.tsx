@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { addSubscriberAction } from "@/app/manage/actions";
+import { ServiceTags } from "@/components/service-tags";
 import { SubmitButton } from "@/components/submit-button";
 import type { SubscriberType } from "@/lib/domain/types";
 import { buttonClass, Field, inputClass } from "./ui";
@@ -64,8 +65,10 @@ const disabledClass = "cursor-not-allowed border-border bg-bg opacity-60";
  */
 export function AddSubscriberForm({
 	available,
+	services = [],
 }: {
 	available: Record<SubscriberType, boolean>;
+	services?: readonly { id: string; name: string }[];
 }) {
 	const [type, setType] = useState<SubscriberType>("webhook");
 	const target = TARGETS[type];
@@ -134,6 +137,7 @@ export function AddSubscriberForm({
 					</SubmitButton>
 				</div>
 			</Field>
+			<ServiceTags services={services} />
 		</form>
 	);
 }
