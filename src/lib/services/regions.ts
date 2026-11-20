@@ -73,7 +73,7 @@ export class RegionService {
 
 	/**
 	 * Deletes a region. Each incident in that region becomes global.
-	 * Global incidents show on every region tab.
+	 * A Global incident shows on the Global tab only.
 	 */
 	async delete(actor: Actor, id: string): Promise<void> {
 		requirePermission(actor, "services.delete");

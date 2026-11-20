@@ -56,7 +56,8 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
 - By default an incident uses Global. Call list_regions before you set a region.
   Pass regionId to create_incident, schedule_maintenance, draft_notification, or edit_incident.
   Pass null to edit_incident to move an incident to Global.
-  Pass regionId to get_status to read one region. With no regions, the status page is one page.
+  Pass regionId to get_status to read one region. A region omits Global incidents and maintenance.
+  With no regions, the status page is one page.
 - When a person must review a notification first, use draft_notification and give that person the reviewUrl.
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
 - Everything you post is public on the status page and may notify subscribers. Write for customers.`;
@@ -297,7 +298,7 @@ export function createMcpServer(
 		{
 			title: "Get status",
 			description:
-				"Current overall status, every visible service with its status and uptime, open incidents and maintenance. Pass regionId to read one region.",
+				"Current overall status, every visible service with its status and uptime, open incidents and maintenance. Pass regionId to read one region. A region omits Global.",
 			inputSchema: {
 				regionId: z
 					.string()

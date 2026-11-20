@@ -10,12 +10,12 @@ import type {
 /** The name of the default region. It is not a stored region. */
 export const GLOBAL_REGION_NAME = "Global";
 
-/** An incident with no region, or an incident in this region. */
+/** An incident in this region. A Global incident is not in a region. */
 export function incidentOnRegion(
 	incident: Pick<Incident, "regionId">,
 	regionId: string,
 ): boolean {
-	return incident.regionId === undefined || incident.regionId === regionId;
+	return incident.regionId === regionId;
 }
 
 /**
@@ -40,6 +40,54 @@ export function regionNameFor(
 
 function byTime(a: ServiceStatusChange, b: ServiceStatusChange): number {
 	return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+}
+
+/**
+ * Orders changes that share one time. The order follows the status chain.
+ * An id can sort first when that change is not the first change.
+ */
+function chainSameTime(
+	group: readonly ServiceStatusChange[],
+): ServiceStatusChange[] {
+	const remaining = group.slice().sort(byTime);
+	const ordered: ServiceStatusChange[] = [];
+	let previous: ServiceStatus | undefined;
+	while (remaining.length > 0) {
+		const produced = new Set(remaining.map((change) => change.status));
+		const index =
+			previous === undefined
+				? remaining.findIndex((change) => !produced.has(change.previousStatus))
+				: remaining.findIndex((change) => change.previousStatus === previous);
+		const next = remaining.splice(
+			index === -1 ? 0 : index,
+			1,
+		)[0] as ServiceStatusChange;
+		ordered.push(next);
+		previous = next.status;
+	}
+	return ordered;
+}
+
+/** Orders the changes of one service. The same time follows the status chain. */
+function orderChanges(
+	changes: readonly ServiceStatusChange[],
+): ServiceStatusChange[] {
+	const byStamp = new Map<string, ServiceStatusChange[]>();
+	for (const change of changes) {
+		const list = byStamp.get(change.createdAt);
+		if (list) {
+			list.push(change);
+		} else {
+			byStamp.set(change.createdAt, [change]);
+		}
+	}
+	const ordered: ServiceStatusChange[] = [];
+	for (const [, group] of [...byStamp.entries()].sort((left, right) =>
+		left[0].localeCompare(right[0]),
+	)) {
+		ordered.push(...chainSameTime(group));
+	}
+	return ordered;
 }
 
 /** The status an open incident implies when it did not record a change. */
@@ -155,7 +203,7 @@ function replay(
 /**
  * The status of a service on one region tab.
  * A manual status stays. An incident in another region does not count.
- * A global incident counts on every region tab.
+ * A Global incident does not count.
  * A closed incident keeps a status that its close recorded.
  */
 export function serviceStatusOnRegion(
@@ -164,9 +212,9 @@ export function serviceStatusOnRegion(
 	incidents: readonly Incident[],
 	regionId: string,
 ): ServiceStatus {
-	const mine = changes
-		.filter((change) => change.serviceId === service.id)
-		.sort(byTime);
+	const mine = orderChanges(
+		changes.filter((change) => change.serviceId === service.id),
+	);
 	const initial = mine[0]?.previousStatus ?? service.status;
 	return replay(
 		service.id,
@@ -180,8 +228,9 @@ export function serviceStatusOnRegion(
 
 /**
  * Status changes as one region sees them. Uptime for a region uses this list.
- * An outage in another region does not count. An outage ends when its
- * incident ends, unless another incident on this tab still affects the service.
+ * An outage in another region does not count. A Global outage does not count.
+ * An outage ends when its incident ends, unless another incident on this tab
+ * still affects the service.
  */
 export function changesOnRegion(
 	changes: readonly ServiceStatusChange[],
@@ -199,11 +248,8 @@ export function changesOnRegion(
 	}
 	const result: ServiceStatusChange[] = [];
 	for (const [serviceId, mine] of byService) {
-		const earliest = mine.reduce((best, change) =>
-			byTime(change, best) < 0 ? change : best,
-		);
-		const initial = earliest.previousStatus;
-		const sorted = mine.slice().sort(byTime);
+		const sorted = orderChanges(mine);
+		const initial = (sorted[0] as ServiceStatusChange).previousStatus;
 		const times = new Set<number>();
 		for (const change of sorted) {
 			times.add(at(change.createdAt));

@@ -60,8 +60,8 @@ function incident(overrides: Partial<Incident> = {}): Incident {
 }
 
 describe("incident regions", () => {
-	it("treats a missing region as global", () => {
-		expect(incidentOnRegion(incident(), "reg_us")).toBe(true);
+	it("matches only the selected region", () => {
+		expect(incidentOnRegion(incident(), "reg_us")).toBe(false);
 		expect(incidentOnRegion(incident({ regionId: "reg_us" }), "reg_us")).toBe(
 			true,
 		);
@@ -91,7 +91,8 @@ describe("incident regions", () => {
 		): ServiceStatus => serviceStatusOnRegion(api, changes, open, here);
 
 		expect(status([], [])).toBe("operational");
-		expect(status([], [incident()])).toBe("partial_outage");
+		expect(status([], [incident()])).toBe("operational");
+		expect(status([], [incident({ regionId: here })])).toBe("partial_outage");
 		expect(
 			status(
 				[change("ch_manual", AT, "degraded_performance", "operational")],
@@ -115,7 +116,7 @@ describe("incident regions", () => {
 				[change("ch_global", AT, "partial_outage", "operational", "inc_g")],
 				[incident({ id: "inc_g" })],
 			),
-		).toBe("partial_outage");
+		).toBe("operational");
 		expect(
 			status(
 				[change("ch_closed", AT, "major_outage", "operational", "inc_old")],
@@ -163,7 +164,16 @@ describe("incident regions", () => {
 			),
 		).toBe("operational");
 		expect(
-			status([], [incident({ status: "scheduled", kind: "maintenance" })]),
+			status(
+				[],
+				[
+					incident({
+						status: "scheduled",
+						kind: "maintenance",
+						regionId: here,
+					}),
+				],
+			),
 		).toBe("operational");
 		expect(
 			status(
@@ -174,6 +184,7 @@ describe("incident regions", () => {
 						kind: "maintenance",
 						status: "in_progress",
 						impact: "none",
+						regionId: here,
 					}),
 				],
 			),
@@ -187,6 +198,7 @@ describe("incident regions", () => {
 						kind: "maintenance",
 						status: "in_progress",
 						impact: "none",
+						regionId: here,
 					}),
 				],
 			),
@@ -199,13 +211,25 @@ describe("incident regions", () => {
 						kind: "maintenance",
 						status: "verifying",
 						impact: "none",
+						regionId: here,
 					}),
 				],
 			),
 		).toBe("operational");
-		expect(status([], [incident({ impact: "none" })])).toBe("operational");
+		expect(status([], [incident({ impact: "none", regionId: here })])).toBe(
+			"operational",
+		);
 		expect(
-			status([], [incident({ serviceIds: ["svc_web"], impact: "critical" })]),
+			status(
+				[],
+				[
+					incident({
+						serviceIds: ["svc_web"],
+						impact: "critical",
+						regionId: here,
+					}),
+				],
+			),
 		).toBe("operational");
 		expect(
 			status(
@@ -222,11 +246,33 @@ describe("incident regions", () => {
 				[],
 			),
 		).toBe("major_outage");
+		expect(
+			status(
+				[
+					change("ch_z", AT, "degraded_performance", "operational", "inc_us"),
+					change("ch_a", AT, "major_outage", "degraded_performance", "inc_us"),
+				],
+				[incident({ id: "inc_us", regionId: here })],
+			),
+		).toBe("major_outage");
+		expect(
+			status(
+				[
+					change("ch_z", AT, "major_outage", "operational", "inc_other"),
+					change("ch_a", AT, "partial_outage", "major_outage", "inc_global"),
+				],
+				[
+					incident({ id: "inc_other", regionId: "reg_eu" }),
+					incident({ id: "inc_global" }),
+				],
+			),
+		).toBe("operational");
 	});
 
 	it("keeps a status that a close recorded", () => {
 		const closed = incident({
 			id: "inc_g",
+			regionId: "reg_us",
 			status: "resolved",
 			impact: "critical",
 			startedAt: "2026-11-02T10:00:00.000Z",
@@ -305,6 +351,7 @@ describe("incident regions", () => {
 		});
 		const scheduled = incident({
 			id: "mnt",
+			regionId: "reg_us",
 			kind: "maintenance",
 			status: "scheduled",
 			impact: "none",
@@ -352,6 +399,7 @@ describe("incident regions", () => {
 		).toBe("degraded_performance");
 		const holder = incident({
 			id: "inc_hold",
+			regionId: "reg_us",
 			impact: "none",
 			startedAt: "2026-11-02T10:30:00.000Z",
 		});
@@ -360,6 +408,7 @@ describe("incident regions", () => {
 		).toBe("major_outage");
 		const later = incident({
 			id: "inc_later",
+			regionId: "reg_us",
 			impact: "none",
 			startedAt: "2026-11-02T11:30:00.000Z",
 		});
