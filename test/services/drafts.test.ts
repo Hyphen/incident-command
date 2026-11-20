@@ -273,11 +273,10 @@ describe("DraftService", () => {
 				incidentId: incident.id,
 				kind: "incident",
 				title: "New title",
-				serviceIds: [api],
 				message: "x",
 			}),
 		).rejects.toThrow(
-			"kind, title, serviceIds: only a new incident or maintenance uses these fields",
+			"kind, title: only a new incident or maintenance uses these fields",
 		);
 		await expect(
 			t.services.drafts.create(VIEWER, { title: "Errors", message: "x" }),
@@ -404,6 +403,45 @@ describe("DraftService", () => {
 				serviceStatuses: [{ serviceId: other, status: "major_outage" }],
 			}),
 		).rejects.toThrow(/only an affected service can have its own status/);
+	});
+
+	it("adds a service when an update draft is approved", async () => {
+		const web = (await t.services.catalog.create(ADMIN, { name: "Web" })).id;
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "API errors",
+			message: "x",
+			impact: "major",
+			serviceIds: [api],
+			notify: false,
+		});
+		const draft = await t.services.drafts.create(AGENT, {
+			incidentId: incident.id,
+			message: "Web is down",
+			serviceIds: [web, web],
+			serviceStatuses: [{ serviceId: web, status: "major_outage" }],
+		});
+		expect(draft.content.serviceIds).toEqual([web]);
+		expect(await statusOf(web)).toBe("operational");
+		expect(await statusOf(api)).toBe("partial_outage");
+
+		const cleared = await t.services.drafts.update(EDITOR, draft.id, {
+			message: "Web is down",
+		});
+		expect(cleared.content.serviceIds).toBeUndefined();
+
+		const saved = await t.services.drafts.update(EDITOR, draft.id, {
+			message: "Web is down",
+			serviceIds: [web],
+			serviceStatuses: [{ serviceId: web, status: "major_outage" }],
+		});
+		const { incident: published } = await t.services.drafts.approve(
+			EDITOR,
+			draft.id,
+			saved.content,
+		);
+		expect(published.serviceIds).toEqual([api, web]);
+		expect(await statusOf(web)).toBe("major_outage");
+		expect(await statusOf(api)).toBe("partial_outage");
 	});
 
 	it("saves edits while the draft waits for review", async () => {

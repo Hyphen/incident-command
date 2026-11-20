@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ServiceTags } from "@/components/service-tags";
 import { SubmitButton } from "@/components/submit-button";
 import type { SubscriberType } from "@/lib/domain/types";
 
@@ -69,12 +70,15 @@ export function ChannelForm({
 	initial,
 	submitLabel,
 	hints,
+	services = [],
 }: {
 	action: (formData: FormData) => Promise<void>;
 	available: readonly SubscriberType[];
 	initial: SubscriberType;
 	submitLabel: string;
 	hints: Record<SubscriberType, string>;
+	/** Services the visitor can choose. An empty list hides the choice. */
+	services?: readonly { id: string; name: string }[];
 }) {
 	const [type, setType] = useState(initial);
 	const field = CHANNEL_FIELDS[type];
@@ -142,6 +146,7 @@ export function ChannelForm({
 					{submitLabel}
 				</SubmitButton>
 			</div>
+			<ServiceTags services={services} />
 		</form>
 	);
 }

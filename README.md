@@ -19,6 +19,7 @@
 - **Pluggable storage:** PostgreSQL, MongoDB or in-memory, chosen from `DATABASE_URI`. Adding an adapter means implementing one small interface.
 - **Keeps working when the database doesn't:** reads go through a [cacheable](https://cacheable.org) layer that never expires entries while the database is offline, so the status page keeps serving the last known state during an outage.
 - **Notifications with [airhorn](https://airhorn.org):** signed webhooks (Slack and Discord compatible), email through SendGrid or Amazon SES, and text messages through Twilio or Amazon SNS. Visitors subscribe through each channel that can send, with double opt-in. Email and text messaging can have more than one provider, active/passive or load balanced. Provider credentials are encrypted in the database with `ENCRYPTION_KEY`.
+- **Service choice:** a subscriber can choose the services that send a notification. Set the choice on the status page, in the portal, with the API, or with MCP. No choice sends a notification for every service.
 
 <table>
 <tr>
@@ -82,6 +83,16 @@ claude mcp add --transport http incident-command https://status.example.com/api/
 The agent opens the portal in your browser. Sign in and select **Allow**. A new agent can read the status page and write drafts. For a script that cannot sign in, an admin can add an API token on the agent page.
 
 Ask your agent something like _"We're seeing API errors in us-east, declare a major incident on the REST API and keep the status page updated"_. An agent only sees the tools that its permissions allow. Details in [docs/mcp.md](docs/mcp.md).
+
+## Subscriber API
+
+The API uses the same bearer token as the MCP server.
+
+| Method  | Path                       | What it does                                                                               |
+| ------- | -------------------------- | ------------------------------------------------------------------------------------------ |
+| `GET`   | `/api/v1/subscribers`      | List subscribers. The response has no token.                                               |
+| `POST`  | `/api/v1/subscribers`      | Add a subscriber. Send `type`, `target`, and `serviceIds` when you want a limit.           |
+| `PATCH` | `/api/v1/subscribers/{id}` | Set `serviceIds`. An empty list clears the choice. The create response includes the token. |
 
 ## Architecture
 

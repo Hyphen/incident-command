@@ -9,6 +9,7 @@ import {
 } from "@/app/manage/actions";
 import { ConfirmButton } from "@/components/manage/confirm-button";
 import {
+	AddServices,
 	ImpactSelect,
 	ServicePicker,
 	ServiceStatusList,
@@ -143,12 +144,20 @@ function ReviewForm({
 					hint="Automatic follows the impact and the status. It restores services on resolution and starts maintenance mode when maintenance is in progress."
 				/>
 				{!isCreate && (
-					<ServiceStatusList
-						services={catalog.filter((service) =>
-							(incident as Incident).serviceIds.includes(service.id),
-						)}
-						values={content.serviceStatuses}
-					/>
+					<>
+						<ServiceStatusList
+							services={catalog.filter((service) =>
+								(incident as Incident).serviceIds.includes(service.id),
+							)}
+							values={content.serviceStatuses}
+						/>
+						<AddServices
+							catalog={catalog}
+							affectedIds={(incident as Incident).serviceIds}
+							selected={content.serviceIds}
+							statuses={content.serviceStatuses}
+						/>
+					</>
 				)}
 				<div className="flex flex-wrap gap-2">
 					<SubmitButton
@@ -211,7 +220,13 @@ function DraftSummary({
 					</Item>
 				)}
 				{affected.length > 0 && (
-					<Item label="Affected services">
+					<Item
+						label={
+							draft.action === "update"
+								? "Services to add"
+								: "Affected services"
+						}
+					>
 						{affected.map((service) => service.name).join(", ")}
 					</Item>
 				)}

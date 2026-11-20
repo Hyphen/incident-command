@@ -9,8 +9,8 @@ import {
 import { ConfirmButton } from "@/components/manage/confirm-button";
 import { DraftList } from "@/components/manage/draft-list";
 import {
+	AddServices,
 	ImpactSelect,
-	ServicePicker,
 	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
@@ -58,9 +58,11 @@ const LATEST_POSTS = 5;
 function PostForm({
 	incident,
 	affected,
+	catalog,
 }: {
 	incident: Incident;
 	affected: Service[];
+	catalog: Service[];
 }) {
 	return (
 		<form
@@ -80,6 +82,7 @@ function PostForm({
 			</Field>
 			<ServiceStatusSelect hint="Automatic restores services when resolving and starts maintenance mode when in progress." />
 			<ServiceStatusList services={affected} />
+			<AddServices catalog={catalog} affectedIds={incident.serviceIds} />
 			<Checkbox name="notify" label="Notify subscribers" defaultChecked />
 			<div className="flex flex-wrap gap-2">
 				<SubmitButton className={buttonClass.primary}>Post update</SubmitButton>
@@ -98,6 +101,7 @@ function IncidentBody({
 	tab,
 	incident,
 	affected,
+	catalog,
 	canEdit,
 	showForm,
 	pending,
@@ -106,6 +110,7 @@ function IncidentBody({
 	tab: IncidentTab;
 	incident: Incident;
 	affected: Service[];
+	catalog: Service[];
 	canEdit: boolean;
 	showForm: boolean;
 	pending: NotificationDraft[];
@@ -125,7 +130,13 @@ function IncidentBody({
 						)
 					}
 				>
-					{showForm && <PostForm incident={incident} affected={affected} />}
+					{showForm && (
+						<PostForm
+							incident={incident}
+							affected={affected}
+							catalog={catalog}
+						/>
+					)}
 					<PostList
 						incident={incident}
 						drafts={reviewed}
@@ -213,6 +224,7 @@ export default async function ManageIncidentPage({
 					tab={tab}
 					incident={incident}
 					affected={affected}
+					catalog={catalog}
 					canEdit={canEdit}
 					showForm={showForm}
 					pending={pending}
@@ -240,10 +252,6 @@ export default async function ManageIncidentPage({
 										end={incident.scheduledEnd}
 									/>
 								)}
-								<ServicePicker
-									services={catalog}
-									selected={incident.serviceIds}
-								/>
 								<SubmitButton className={buttonClass.secondary}>
 									Save details
 								</SubmitButton>

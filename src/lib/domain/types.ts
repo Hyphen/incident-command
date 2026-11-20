@@ -419,6 +419,11 @@ export interface Subscriber {
 	token: string;
 	confirmedAt?: string;
 	createdAt: string;
+	/**
+	 * Services that send a notification to this subscriber.
+	 * Omit the list to send a notification for every service.
+	 */
+	serviceIds?: string[];
 }
 
 /** The public text and fields of a notification draft. */
@@ -427,7 +432,10 @@ export interface DraftContent {
 	title?: string;
 	/** The impact of a new incident. Not used by an update. */
 	impact?: IncidentImpact;
-	/** The affected services of a new incident or maintenance. Not used by an update. */
+	/**
+	 * The affected services of a new incident or maintenance.
+	 * On an update, the services to add. An update does not remove a service.
+	 */
 	serviceIds?: string[];
 	/** The window of new maintenance. Not used by an update. */
 	scheduledStart?: string;

@@ -134,11 +134,22 @@ function serviceStatuses(form: FormData) {
 	const selected = form.has("serviceIds")
 		? list(form, "serviceIds")
 		: undefined;
+	const added = list(form, "addServiceIds");
+	const candidates = list(form, "addServiceCandidate");
 	return Object.entries(prefixed(form, "serviceStatus:"))
-		.filter(
-			([serviceId, status]) =>
-				status !== "" && (selected?.includes(serviceId) ?? true),
-		)
+		.filter(([serviceId, status]) => {
+			if (status === "") {
+				return false;
+			}
+			if (selected && !selected.includes(serviceId)) {
+				return false;
+			}
+			// A service in the add list keeps its status only when it is selected.
+			if (candidates.includes(serviceId) && !added.includes(serviceId)) {
+				return false;
+			}
+			return true;
+		})
 		.map(([serviceId, status]) => ({
 			serviceId,
 			status: status as ServiceStatus,
@@ -180,6 +191,7 @@ export async function postIncidentUpdateAction(form: FormData): Promise<void> {
 		services.incidents.postUpdate(actor, id, {
 			status: nonEmpty(form, "status") as EventStatus | undefined,
 			message: text(form, "message"),
+			serviceIds: list(form, "addServiceIds"),
 			serviceStatus: nonEmpty(form, "serviceStatus") as
 				| ServiceStatus
 				| undefined,
@@ -197,7 +209,6 @@ export async function editIncidentAction(form: FormData): Promise<void> {
 		services.incidents.edit(actor, id, {
 			title: text(form, "title"),
 			impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
-			serviceIds: list(form, "serviceIds"),
 			scheduledStart: dateTime(form, "scheduledStart"),
 			scheduledEnd: dateTime(form, "scheduledEnd"),
 		}),
@@ -217,10 +228,12 @@ export async function deleteIncidentAction(form: FormData): Promise<void> {
 
 /** The draft fields of the review form. Fields that the form does not show stay empty. */
 function draftContent(form: FormData) {
+	const serviceIds = list(form, "serviceIds");
+	const addServiceIds = list(form, "addServiceIds");
 	return {
 		title: nonEmpty(form, "title"),
 		impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
-		serviceIds: list(form, "serviceIds"),
+		serviceIds: serviceIds.length > 0 ? serviceIds : addServiceIds,
 		scheduledStart: dateTime(form, "scheduledStart"),
 		scheduledEnd: dateTime(form, "scheduledEnd"),
 		status: nonEmpty(form, "status") as EventStatus | undefined,
@@ -508,18 +521,28 @@ export async function disconnectAgentAction(form: FormData): Promise<void> {
 
 export async function addSubscriberAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("admin");
-	const target = text(form, "target");
-	await attempt("/manage/subscribers", () => {
-		switch (text(form, "type")) {
-			case "email":
-				return services.subscribers.addEmail(actor, { email: target });
-			case "sms":
-				return services.subscribers.addSms(actor, { phone: target });
-			default:
-				return services.subscribers.addWebhook(actor, { url: target });
-		}
-	});
+	await attempt("/manage/subscribers", () =>
+		services.subscribers.add(actor, {
+			type: text(form, "type"),
+			target: text(form, "target"),
+			...(form.has("serviceIds")
+				? { serviceIds: list(form, "serviceIds") }
+				: {}),
+		}),
+	);
 	redirect(flash("/manage/subscribers", "subscriber_added"));
+}
+
+export async function updateSubscriberServicesAction(
+	form: FormData,
+): Promise<void> {
+	const { actor, services } = await requireMemberForAction("admin");
+	await attempt("/manage/subscribers", () =>
+		services.subscribers.setServices(actor, text(form, "id"), {
+			serviceIds: list(form, "serviceIds"),
+		}),
+	);
+	redirect(flash("/manage/subscribers", "services_saved"));
 }
 
 export async function deleteSubscriberAction(form: FormData): Promise<void> {

@@ -58,7 +58,6 @@ const CREATE_ONLY_FIELDS = [
 	"kind",
 	"title",
 	"impact",
-	"serviceIds",
 	"scheduledStart",
 	"scheduledEnd",
 ] as const;
@@ -285,10 +284,8 @@ export class DraftService {
 		input: DraftContentInput & { kind?: IncidentKind },
 	): Promise<{ kind: IncidentKind; content: DraftContent }> {
 		if (target.action === "update") {
-			const extra = CREATE_ONLY_FIELDS.filter((field) =>
-				field === "serviceIds"
-					? (input.serviceIds?.length ?? 0) > 0
-					: input[field] !== undefined,
+			const extra = CREATE_ONLY_FIELDS.filter(
+				(field) => input[field] !== undefined,
 			);
 			if (extra.length > 0) {
 				throw new ValidationError(
@@ -302,6 +299,7 @@ export class DraftService {
 					message: input.message,
 					serviceStatus: input.serviceStatus,
 					serviceStatuses: input.serviceStatuses,
+					serviceIds: input.serviceIds,
 				},
 			);
 			return {
@@ -311,6 +309,7 @@ export class DraftService {
 					message: data.message,
 					serviceStatus: data.serviceStatus,
 					serviceStatuses: data.serviceStatuses,
+					serviceIds: data.serviceIds,
 				},
 			};
 		}
@@ -350,6 +349,7 @@ export class DraftService {
 					message: content.message,
 					serviceStatus: content.serviceStatus,
 					serviceStatuses: content.serviceStatuses,
+					serviceIds: content.serviceIds,
 				},
 				{ id },
 			);

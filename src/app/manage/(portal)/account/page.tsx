@@ -7,7 +7,7 @@ import { requireMember } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/domain/status";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Account" };
+export const metadata: Metadata = { title: "My Profile" };
 
 export default async function AccountPage({
 	searchParams,
@@ -17,7 +17,7 @@ export default async function AccountPage({
 	const flash = await searchParams;
 	const { member, app } = await requireMember();
 	return (
-		<ManagePage title="Account" flash={flash} health={app.store.health}>
+		<ManagePage title="My Profile" flash={flash} health={app.store.health}>
 			<Card title="Profile">
 				<dl className="grid gap-2 text-sm sm:grid-cols-[120px_1fr]">
 					<dt className="text-muted">Name</dt>

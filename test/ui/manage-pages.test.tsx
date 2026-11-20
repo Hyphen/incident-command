@@ -319,11 +319,17 @@ describe("portal layout", () => {
 		expect(
 			screen.getByRole("link", { name: "Incident Command" }),
 		).toHaveAttribute("href", "https://github.com/jaredwray/incident-command");
+		expect(
+			nav.queryByRole("link", { name: "Account" }),
+		).not.toBeInTheDocument();
+		expect(
+			nav.queryByRole("link", { name: "My Profile" }),
+		).not.toBeInTheDocument();
 		expect(screen.getByText(member.name)).toBeInTheDocument();
 		expect(screen.getByText(`${member.email} · Editor`)).toBeInTheDocument();
 		expect(
-			screen.getByRole("button", { name: "Sign out" }),
-		).toBeInTheDocument();
+			screen.queryByRole("menuitem", { name: "My Profile" }),
+		).not.toBeInTheDocument();
 		expect(screen.getByRole("main")).toHaveTextContent("Page content");
 	});
 
@@ -358,6 +364,79 @@ describe("portal layout", () => {
 			"aria-current",
 		);
 		expect(nav.getByRole("link", { name: "Members" })).toBeInTheDocument();
+	});
+
+	it("opens My Profile from the user", async () => {
+		const { app } = await setupApp();
+		const { member } = await signIn(app, "editor");
+		render(await PortalLayout({ children: page }));
+		const user = screen.getByRole("button", { name: new RegExp(member.name) });
+		expect(user).toHaveAttribute("aria-expanded", "false");
+
+		fireEvent.click(user);
+		expect(user).toHaveAttribute("aria-expanded", "true");
+		const menu = screen.getByRole("menu", { name: "User" });
+		const profile = within(menu).getByRole("menuitem", { name: "My Profile" });
+		expect(profile).toHaveAttribute("href", "/manage/account");
+		expect(profile).not.toHaveAttribute("aria-current");
+		expect(
+			within(menu).getByRole("menuitem", { name: "View status page" }),
+		).toHaveAttribute("href", "/");
+		expect(
+			within(menu).getByRole("menuitem", { name: "Sign out" }),
+		).toBeInTheDocument();
+
+		fireEvent.pointerDown(user);
+		expect(screen.getByRole("menu", { name: "User" })).toBeInTheDocument();
+		fireEvent.keyDown(document, { key: "Tab" });
+		expect(screen.getByRole("menu", { name: "User" })).toBeInTheDocument();
+
+		fireEvent.pointerDown(document.body);
+		expect(
+			screen.queryByRole("menu", { name: "User" }),
+		).not.toBeInTheDocument();
+
+		fireEvent.click(user);
+		fireEvent.pointerDown(document);
+		expect(
+			screen.queryByRole("menu", { name: "User" }),
+		).not.toBeInTheDocument();
+
+		fireEvent.click(user);
+		screen.getByRole("menuitem", { name: "My Profile" }).focus();
+		fireEvent.keyDown(document, { key: "Escape" });
+		expect(
+			screen.queryByRole("menu", { name: "User" }),
+		).not.toBeInTheDocument();
+		expect(user).toHaveFocus();
+
+		fireEvent.click(user);
+		fireEvent.click(screen.getByRole("menuitem", { name: "My Profile" }));
+		expect(
+			screen.queryByRole("menu", { name: "User" }),
+		).not.toBeInTheDocument();
+		fireEvent.click(user);
+		fireEvent.click(screen.getByRole("menuitem", { name: "View status page" }));
+		expect(
+			screen.queryByRole("menu", { name: "User" }),
+		).not.toBeInTheDocument();
+		fireEvent.click(user);
+		expect(user).toHaveAttribute("aria-expanded", "true");
+		fireEvent.click(user);
+		expect(user).toHaveAttribute("aria-expanded", "false");
+	});
+
+	it("marks My Profile when that page is open", async () => {
+		const { app } = await setupApp();
+		const { member } = await signIn(app, "viewer");
+		setPathname("/manage/account");
+		render(await PortalLayout({ children: page }));
+		const user = screen.getByRole("button", { name: new RegExp(member.name) });
+		expect(user.className).toContain("bg-surface-muted");
+		fireEvent.click(user);
+		const profile = screen.getByRole("menuitem", { name: "My Profile" });
+		expect(profile).toHaveAttribute("aria-current", "page");
+		expect(profile.className).toContain("bg-surface-muted");
 	});
 
 	it("shows only the page to a visitor who is not signed in", async () => {
@@ -640,7 +719,7 @@ describe("incident pages", () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "editor");
 		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
-		await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		const incident = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "API errors",
 			message: "Looking",
@@ -688,25 +767,47 @@ describe("incident pages", () => {
 			screen.queryByRole("heading", { name: "Drafts" }),
 		).not.toBeInTheDocument();
 		expect(screen.getByDisplayValue("API errors")).toBeInTheDocument();
-		expect(screen.getByRole("checkbox", { name: /API/ })).toBeChecked();
+		const detailsForm = screen
+			.getByRole("button", { name: "Save details" })
+			.closest("form") as HTMLElement;
+		expect(
+			within(detailsForm).queryByText("Affected services"),
+		).not.toBeInTheDocument();
+		expect(within(detailsForm).queryByRole("checkbox")).not.toBeInTheDocument();
 		expect(
 			screen.getByRole("button", { name: "Delete incident" }),
 		).toBeInTheDocument();
 		dashboard.unmount();
 
-		// The update form offers a status for each affected service only.
+		// The update form sets a status for each affected service and can add another.
 		const form = render(
 			await IncidentPage({
 				params: params({ id: incident.id }),
 				searchParams: params({ post: "1" }),
 			}),
 		);
-		const own = screen.getByRole("combobox", { name: "Status of API" });
+		const updateForm = screen
+			.getByRole("button", { name: "Post update" })
+			.closest("form") as HTMLElement;
+		const own = within(updateForm).getByRole("combobox", {
+			name: "Status of API",
+		});
 		expect(own).toHaveAttribute("name", `serviceStatus:${api.id}`);
 		expect(own).toHaveValue("");
-		expect(screen.getByText("Now: Degraded performance")).toBeInTheDocument();
 		expect(
-			screen.queryByRole("combobox", { name: "Status of Web" }),
+			within(updateForm).getByText("Now: Degraded performance"),
+		).toBeInTheDocument();
+		expect(
+			within(updateForm).getByRole("checkbox", { name: /Web/ }),
+		).not.toBeChecked();
+		expect(
+			within(updateForm).getByRole("combobox", { name: "Status of Web" }),
+		).toHaveValue("");
+		expect(
+			within(updateForm).getByText("Now: Operational"),
+		).toBeInTheDocument();
+		expect(
+			within(updateForm).queryByRole("checkbox", { name: /API/ }),
 		).not.toBeInTheDocument();
 		expect(
 			screen.getByRole("button", { name: "Post update" }),
@@ -719,6 +820,26 @@ describe("incident pages", () => {
 			screen.queryByRole("link", { name: "Create a post" }),
 		).not.toBeInTheDocument();
 		form.unmount();
+
+		const covered = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Both",
+			message: "x",
+			serviceIds: [api.id, web.id],
+			notify: false,
+		});
+		const coveredPage = render(
+			await IncidentPage({
+				params: params({ id: covered.id }),
+				searchParams: params({ post: "1" }),
+			}),
+		);
+		const fullForm = screen
+			.getByRole("button", { name: "Post update" })
+			.closest("form") as HTMLElement;
+		expect(
+			within(fullForm).getByText("Every service is on this incident."),
+		).toBeInTheDocument();
+		coveredPage.unmount();
 
 		render(
 			await IncidentPage({
@@ -789,7 +910,7 @@ describe("incident pages", () => {
 		expect(screen.queryByText("Looking")).not.toBeInTheDocument();
 		expect(screen.getByText("Sixth")).toBeInTheDocument();
 		expect(
-			screen.getByRole("link", { name: "Please review this." }),
+			screen.getByRole("link", { name: /^Please review this/ }),
 		).toHaveAttribute("href", `/manage/drafts/${pending.id}`);
 		expect(screen.queryByText("Drop this.")).not.toBeInTheDocument();
 		dashboard.unmount();
@@ -961,13 +1082,13 @@ describe("notification draft pages", () => {
 
 		render(await IncidentsPage(flash({ notice: "draft_discarded" })));
 		expect(screen.getByRole("status")).toHaveTextContent("Draft discarded");
-		expect(screen.getByRole("link", { name: "API errors" })).toHaveAttribute(
+		expect(screen.getByRole("link", { name: /^API errors/ })).toHaveAttribute(
 			"href",
 			`/manage/drafts/${created.id}`,
 		);
 		expect(
 			screen
-				.getAllByRole("link", { name: "Database slow" })
+				.getAllByRole("link", { name: /^Database slow/ })
 				.map((link) => link.getAttribute("href")),
 		).toEqual(
 			expect.arrayContaining([
@@ -976,13 +1097,13 @@ describe("notification draft pages", () => {
 			]),
 		);
 		expect(
-			screen.getByRole("link", { name: "Deleted incident" }),
+			screen.getByRole("link", { name: /^Deleted incident/ }),
 		).toBeInTheDocument();
 		expect(
 			screen.getAllByText(/New incident · Drafted by Test agent/),
 		).toHaveLength(1);
 		expect(screen.getAllByText(/Incident update · Drafted by/)).toHaveLength(2);
-		expect(screen.getAllByText("Waiting for review")).toHaveLength(3);
+		expect(screen.getAllByText("Review")).toHaveLength(3);
 		expect(
 			screen.queryByText("Discarded by Editor User"),
 		).not.toBeInTheDocument();
@@ -1078,7 +1199,7 @@ describe("notification draft pages", () => {
 		page.unmount();
 
 		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
-		await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		const incident = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "API errors",
 			message: "x",
@@ -1089,7 +1210,11 @@ describe("notification draft pages", () => {
 		const update = await services.drafts.create(AGENT, {
 			incidentId: incident.id,
 			message: "A fix is ready.",
-			serviceStatuses: [{ serviceId: api.id, status: "partial_outage" }],
+			serviceIds: [web.id],
+			serviceStatuses: [
+				{ serviceId: api.id, status: "partial_outage" },
+				{ serviceId: web.id, status: "major_outage" },
+			],
 		});
 		render(await draftPage(update.id));
 		expect(
@@ -1105,12 +1230,17 @@ describe("notification draft pages", () => {
 		).toHaveValue("");
 		expect(screen.queryByLabelText("Title")).not.toBeInTheDocument();
 		expect(screen.queryByText("Affected services")).not.toBeInTheDocument();
-		// An update offers a status for each affected service of the incident.
+		expect(screen.getByText("Add a service")).toBeInTheDocument();
+		// An update offers a status for each affected service, and for a service to add.
 		expect(screen.getByRole("combobox", { name: "Status of API" })).toHaveValue(
 			"partial_outage",
 		);
+		expect(screen.getByRole("checkbox", { name: /Web/ })).toBeChecked();
+		expect(screen.getByRole("combobox", { name: "Status of Web" })).toHaveValue(
+			"major_outage",
+		);
 		expect(
-			screen.queryByRole("combobox", { name: "Status of Web" }),
+			screen.queryByRole("checkbox", { name: /API/ }),
 		).not.toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "View incident" })).toHaveAttribute(
 			"href",
@@ -1171,9 +1301,11 @@ describe("notification draft pages", () => {
 		).not.toBeInTheDocument();
 		approved.unmount();
 
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		const update = await services.drafts.create(AGENT, {
 			incidentId: incident.id,
 			message: "Nothing to add.",
+			serviceIds: [web.id],
 		});
 		await services.drafts.discard(actor, update.id);
 		render(await draftPage(update.id));
@@ -1183,6 +1315,8 @@ describe("notification draft pages", () => {
 			),
 		).toBeInTheDocument();
 		expect(screen.getByText("Nothing to add.")).toBeInTheDocument();
+		expect(screen.getByText("Services to add")).toBeInTheDocument();
+		expect(screen.getByText("Web")).toBeInTheDocument();
 		expect(
 			screen.queryByText("Status", { selector: "dt" }),
 		).not.toBeInTheDocument();
@@ -1682,6 +1816,26 @@ describe("admin pages", () => {
 		).toBeInTheDocument();
 	});
 
+	it("lets an admin set the services for a subscriber", async () => {
+		const { app, services } = await setupApp();
+		const { actor } = await signIn(app, "admin");
+		const api = await services.catalog.create(actor, { name: "API" });
+		await services.subscribers.addEmail(actor, {
+			email: "api@acme.dev",
+			serviceIds: [api.id],
+		});
+		render(await SubscribersPage(flash({ notice: "services_saved" })));
+		expect(
+			screen
+				.getAllByRole("checkbox", { name: "API" })
+				.map((box) => (box as HTMLInputElement).checked),
+		).toEqual([false, true]);
+		expect(
+			screen.getByRole("button", { name: "Save services" }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("status")).toHaveTextContent("Services saved");
+	});
+
 	it("renders the general settings section", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "admin");
@@ -1979,6 +2133,9 @@ describe("admin pages", () => {
 		const { app } = await setupApp();
 		const { member } = await signIn(app, "viewer");
 		render(await AccountPage(flash()));
+		expect(
+			screen.getByRole("heading", { name: "My Profile" }),
+		).toBeInTheDocument();
 		expect(
 			screen.getByText(member.email, { selector: "dd" }),
 		).toBeInTheDocument();
