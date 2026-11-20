@@ -639,11 +639,21 @@ export function createMcpServer(
 		"delete_incident",
 		{
 			title: "Delete incident",
-			description: "Permanently deletes an incident or maintenance.",
-			inputSchema: { id },
+			description:
+				"Deletes an incident or maintenance from the public view. The record stays in the portal, with this agent and the reason.",
+			inputSchema: {
+				id,
+				reason: z
+					.string()
+					.describe(
+						"Why you delete it. The portal records the reason and this agent.",
+					),
+			},
 		},
 		async (args) => {
-			await services.incidents.delete(actor, args.id);
+			await services.incidents.delete(actor, args.id, {
+				reason: args.reason,
+			});
 			return { deleted: args.id };
 		},
 	);

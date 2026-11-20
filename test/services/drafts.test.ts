@@ -592,7 +592,9 @@ describe("DraftService", () => {
 		);
 		vi.spyOn(t.services.incidents, "postUpdate").mockImplementationOnce(
 			async (...args) => {
-				await t.services.incidents.delete(EDITOR, incident.id);
+				await t.services.incidents.delete(EDITOR, incident.id, {
+					reason: "Gone during approval",
+				});
 				return postUpdate(...args);
 			},
 		);

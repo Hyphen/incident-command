@@ -466,11 +466,22 @@ describe("incident page", () => {
 	});
 
 	it("404s for unknown incidents", async () => {
-		await setupApp();
+		const { services } = await setupApp();
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Hidden",
+			message: "x",
+		});
+		await services.incidents.delete(SYSTEM_ACTOR, incident.id, {
+			reason: "Duplicate",
+		});
 		await expectNotFound(IncidentPage({ params: params({ id: "nope" }) }));
+		await expectNotFound(IncidentPage({ params: params({ id: incident.id }) }));
 		expect(await incidentMetadata({ params: params({ id: "nope" }) })).toEqual({
 			title: "Incident not found",
 		});
+		expect(
+			await incidentMetadata({ params: params({ id: incident.id }) }),
+		).toEqual({ title: "Incident not found" });
 	});
 });
 

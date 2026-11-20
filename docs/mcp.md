@@ -154,7 +154,7 @@ Delete a region and its incidents move to Global.
 | `post_incident_update`        | `incidents.publish`   | Add a timeline update. It records the title and the impact, and it can change them.          |
 | `resolve_incident`            | `incidents.publish`   | Resolve an incident or complete maintenance; restores affected services.                     |
 | `edit_incident`               | `incidents.edit`      | Replace the service list, or change the window or the region. It does not change the title.  |
-| `delete_incident`             | `incidents.delete`    | Delete an incident or maintenance.                                                           |
+| `delete_incident`             | `incidents.delete`    | Delete an incident from the public view. The portal keeps the reason.                        |
 | `schedule_maintenance`        | `incidents.publish`   | Announce planned maintenance with a window.                                                  |
 | `draft_notification`          | `drafts.write`        | Save a notification for review by a person. Returns the `reviewUrl`.                         |
 | `get_notification_draft`      | `drafts.read`         | One notification draft and its review state.                                                 |
