@@ -331,6 +331,18 @@ describe("incident actions", () => {
 			),
 			`/manage/incidents/${incident?.id}?notice=Update posted`,
 		);
+		expectSameFlash(
+			await redirectOf(
+				postIncidentUpdateAction(
+					form({
+						id: incident?.id ?? "",
+						message: "Noted on the posts tab",
+						tab: "posts",
+					}),
+				),
+			),
+			`/manage/incidents/${incident?.id}?tab=posts&notice=Update posted`,
+		);
 		expect((await services.incidents.get(incident?.id ?? "")).status).toBe(
 			"resolved",
 		);
@@ -489,6 +501,20 @@ describe("incident actions", () => {
 			new URL(missingUpdate, "http://localhost").searchParams.get("post"),
 		).toBe("1");
 		expect(flashMessage(missingUpdate, "error")).toBeTruthy();
+		const missingPostsUpdate = await redirectOf(
+			postIncidentUpdateAction(
+				form({ id: "nope", message: "x", tab: "posts" }),
+			),
+		);
+		expect(new URL(missingPostsUpdate, "http://localhost").pathname).toBe(
+			"/manage/incidents/nope",
+		);
+		expect(
+			new URL(missingPostsUpdate, "http://localhost").searchParams.get("tab"),
+		).toBe("posts");
+		expect(
+			new URL(missingPostsUpdate, "http://localhost").searchParams.get("post"),
+		).toBe("1");
 		const missingEdit = await redirectOf(
 			editIncidentAction(form({ id: "nope", title: "x" })),
 		);

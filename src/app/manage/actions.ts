@@ -344,10 +344,20 @@ export async function createIncidentAction(form: FormData): Promise<void> {
 	);
 }
 
+/** The path after a post. A post from the posts tab returns to that tab. */
+function postedPath(id: string, tab: string, formOpen: boolean): string {
+	const path = `/manage/incidents/${id}`;
+	if (tab === "posts") {
+		return formOpen ? `${path}?tab=posts&post=1` : `${path}?tab=posts`;
+	}
+	return formOpen ? `${path}?post=1` : path;
+}
+
 export async function postIncidentUpdateAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
-	await attempt(`/manage/incidents/${id}?post=1`, () =>
+	const tab = text(form, "tab");
+	await attempt(postedPath(id, tab, true), () =>
 		services.incidents.postUpdate(actor, id, {
 			status: nonEmpty(form, "status") as EventStatus | undefined,
 			message: text(form, "message"),
@@ -359,7 +369,7 @@ export async function postIncidentUpdateAction(form: FormData): Promise<void> {
 			notify: checkbox(form, "notify"),
 		}),
 	);
-	redirect(flash(`/manage/incidents/${id}`, "update_posted"));
+	redirect(flash(postedPath(id, tab, false), "update_posted"));
 }
 
 export async function editIncidentAction(form: FormData): Promise<void> {
