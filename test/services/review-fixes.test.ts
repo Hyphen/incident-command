@@ -17,12 +17,13 @@ describe("concurrent incident writes", () => {
 		await Promise.all([
 			t.services.incidents.postUpdate(EDITOR, incident.id, {
 				message: "From agent A",
+				title: "Down (renamed)",
 			}),
 			t.services.incidents.postUpdate(EDITOR, incident.id, {
 				message: "From agent B",
 			}),
 			t.services.incidents.edit(EDITOR, incident.id, {
-				title: "Down (edited)",
+				serviceIds: [],
 			}),
 		]);
 		const saved = await t.services.incidents.get(incident.id);
@@ -31,7 +32,8 @@ describe("concurrent incident writes", () => {
 			"From agent B",
 			"Investigating",
 		]);
-		expect(saved.title).toBe("Down (edited)");
+		expect(saved.title).toBe("Down (renamed)");
+		expect(saved.serviceIds).toEqual([]);
 		expect(saved.revision).toBe(4);
 	});
 

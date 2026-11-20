@@ -1,3 +1,4 @@
+import { ImpactBadge } from "@/components/status/badges";
 import { LocalTime } from "@/components/time";
 import { EVENT_STATUS_LABELS } from "@/lib/domain/status";
 import type {
@@ -75,6 +76,12 @@ export function PostList({
 						<p className="text-sm font-semibold">
 							{EVENT_STATUS_LABELS[post.status]}
 						</p>
+						{incident.kind === "incident" && (
+							<div className="mt-1">
+								<ImpactBadge impact={post.impact} />
+							</div>
+						)}
+						<p className="mt-1 text-sm">{post.title}</p>
 						<p className="mt-1 whitespace-pre-wrap">{post.message}</p>
 						<p className="mt-1 text-xs text-muted">
 							<LocalTime iso={post.createdAt} />

@@ -187,6 +187,8 @@ const incident: Incident = {
 
 const update = {
 	id: "upd_1",
+	title: "API errors <script>",
+	impact: "major" as const,
 	status: "investigating" as const,
 	message: "We are looking into elevated errors & timeouts.",
 	author: { type: "agent" as const, id: "agt_1", name: "Bot" },
@@ -266,6 +268,13 @@ describe("templates", () => {
 		expect(
 			summaryText({ ...notification, siteUrl: "https://x.co" }).split("\n")[2],
 		).toBe("https://x.co/incidents/inc_1");
+		expect(
+			summaryText({
+				...notification,
+				incident: { ...incident, title: "Old title" },
+				update: { ...update, title: "New title" },
+			}),
+		).toContain("New incident: New title");
 	});
 
 	it("fits text messages in SMS_MAX_LENGTH characters and keeps the link whole", () => {
@@ -287,7 +296,7 @@ describe("templates", () => {
 		// A long site name and title are cut, so the status still fits.
 		const longHeader = {
 			settings: { ...settings, siteName: "S".repeat(120) },
-			incident: { ...incident, title: "T".repeat(200) },
+			update: { ...update, title: "T".repeat(200) },
 		};
 		const huge = smsText({ ...notification, ...longHeader, siteUrl: url });
 		expect(huge).toHaveLength(SMS_MAX_LENGTH);
@@ -314,6 +323,7 @@ describe("templates", () => {
 		expect(data).toMatchObject({
 			siteName: "Acme Status",
 			prefix: "New incident",
+			title: "API errors <script>",
 			statusLabel: "Investigating",
 			services: "API",
 			incidentUrl: "https://x.co/incidents/inc_1",
@@ -327,7 +337,34 @@ describe("templates", () => {
 			{ id: "svc_1", name: "API", status: "partial_outage" },
 		]);
 		expect(payload.page).toEqual({ name: "Acme Status", url: undefined });
-		expect(payload.update.message).toBe(update.message);
+		expect(payload.update).toMatchObject({
+			title: update.title,
+			impact: update.impact,
+			message: update.message,
+		});
+		const renamed = webhookPayload({
+			...notification,
+			incident: { ...incident, title: "Old title", impact: "minor" },
+			update: { ...update, title: "New title", impact: "critical" },
+		});
+		expect(renamed.update).toMatchObject({
+			title: "New title",
+			impact: "critical",
+		});
+		expect(renamed.incident).toMatchObject({
+			title: "Old title",
+			impact: "minor",
+		});
+		expect(
+			emailData(
+				{
+					...notification,
+					siteUrl: "https://x.co",
+					update: { ...update, title: "New title", impact: "critical" },
+				},
+				subscriber(),
+			).title,
+		).toBe("New title");
 		expect(payload.incident.regionId).toBeNull();
 		expect(
 			webhookPayload({

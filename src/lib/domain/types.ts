@@ -231,7 +231,11 @@ export interface ServiceStatusChange {
 	createdAt: string;
 }
 
-export interface IncidentUpdate {
+/**
+ * A post as the store may hold it. Posts from an old version omit `title`
+ * and `impact`. The service fills those fields on read.
+ */
+export interface StoredIncidentUpdate {
 	id: string;
 	status: EventStatus;
 	message: string;
@@ -239,13 +243,25 @@ export interface IncidentUpdate {
 	/** The author asked to notify subscribers. Old posts omit this field. */
 	notified?: boolean;
 	createdAt: string;
+	/** The title that this post records. Old posts omit this field. */
+	title?: string;
+	/** The impact that this post records. Old posts omit this field. */
+	impact?: IncidentImpact;
+}
+
+/** One post on an incident. It always has the title and the impact. */
+export interface IncidentUpdate extends StoredIncidentUpdate {
+	title: string;
+	impact: IncidentImpact;
 }
 
 export interface Incident {
 	id: string;
 	kind: IncidentKind;
+	/** The title of the latest post. */
 	title: string;
 	status: EventStatus;
+	/** The impact of the latest post. */
 	impact: IncidentImpact;
 	serviceIds: string[];
 	/** The region of this incident. Missing means Global. */
@@ -260,6 +276,11 @@ export interface Incident {
 	createdBy: AuthorRef;
 	createdAt: string;
 	updatedAt: string;
+}
+
+/** An incident document. Posts from an old version can omit title and impact. */
+export interface StoredIncident extends Omit<Incident, "updates"> {
+	updates: StoredIncidentUpdate[];
 }
 
 /** Authenticator data for one member. APIs and pages do not receive this object. */
@@ -476,9 +497,15 @@ export interface Subscriber {
 
 /** The public text and fields of a notification draft. */
 export interface DraftContent {
-	/** The title of a new incident or maintenance. Not used by an update. */
+	/**
+	 * The title of a new incident or maintenance.
+	 * An update stores a new title here. An absent title keeps the current title.
+	 */
 	title?: string;
-	/** The impact of a new incident. Not used by an update. */
+	/**
+	 * The impact of a new incident.
+	 * An update stores a new impact here. An absent impact keeps the current impact.
+	 */
 	impact?: IncidentImpact;
 	/**
 	 * The affected services of a new incident or maintenance.

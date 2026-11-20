@@ -82,15 +82,41 @@ export function RegionSelect({
 	);
 }
 
-export function ImpactSelect({
+/** The title field. Each post records the title. */
+export function TitleField({
 	value,
-	id = "impact",
+	hint,
+	id = "title",
 }: {
-	value?: IncidentImpact;
+	value?: string;
+	hint?: string;
 	id?: string;
 }) {
 	return (
-		<Field label="Impact" htmlFor={id}>
+		<Field label="Incident Title" htmlFor={id} hint={hint}>
+			<input
+				id={id}
+				name="title"
+				defaultValue={value}
+				required
+				maxLength={200}
+				className={inputClass}
+			/>
+		</Field>
+	);
+}
+
+export function ImpactSelect({
+	value,
+	id = "impact",
+	hint,
+}: {
+	value?: IncidentImpact;
+	id?: string;
+	hint?: string;
+}) {
+	return (
+		<Field label="Impact" htmlFor={id} hint={hint}>
 			<Select id={id} name="impact" defaultValue={value ?? "minor"}>
 				{INCIDENT_IMPACTS.map((impact) => (
 					<option key={impact} value={impact}>

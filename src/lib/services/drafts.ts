@@ -56,8 +56,6 @@ type Target =
 /** Fields that only a new incident or maintenance uses. */
 const CREATE_ONLY_FIELDS = [
 	"kind",
-	"title",
-	"impact",
 	"scheduledStart",
 	"scheduledEnd",
 	"regionId",
@@ -296,6 +294,8 @@ export class DraftService {
 			const { incident, data } = await this.incidents.checkUpdate(
 				target.incidentId,
 				{
+					title: input.title,
+					impact: input.impact,
 					status: input.status,
 					message: input.message,
 					serviceStatus: input.serviceStatus,
@@ -303,16 +303,20 @@ export class DraftService {
 					serviceIds: input.serviceIds,
 				},
 			);
-			return {
-				kind: incident.kind,
-				content: {
-					status: data.status,
-					message: data.message,
-					serviceStatus: data.serviceStatus,
-					serviceStatuses: data.serviceStatuses,
-					serviceIds: data.serviceIds,
-				},
+			const content: DraftContent = {
+				status: data.status,
+				message: data.message,
+				serviceStatus: data.serviceStatus,
+				serviceStatuses: data.serviceStatuses,
+				serviceIds: data.serviceIds,
 			};
+			if (data.title !== undefined && data.title !== incident.title) {
+				content.title = data.title;
+			}
+			if (data.impact !== undefined && data.impact !== incident.impact) {
+				content.impact = data.impact;
+			}
+			return { kind: incident.kind, content };
 		}
 		const data = await this.incidents.check({
 			...input,
@@ -349,6 +353,8 @@ export class DraftService {
 				actor,
 				draft.incidentId as string,
 				{
+					title: content.title,
+					impact: content.impact,
 					status: content.status,
 					message: content.message,
 					serviceStatus: content.serviceStatus,

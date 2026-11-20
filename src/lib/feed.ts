@@ -88,7 +88,7 @@ export function buildRssFeed(
 		...items.map((item) =>
 			[
 				"<item>",
-				`<title>${escapeXml(`${EVENT_STATUS_LABELS[item.update.status]}: ${item.incident.title}`)}</title>`,
+				`<title>${escapeXml(`${EVENT_STATUS_LABELS[item.update.status]}: ${item.update.title}`)}</title>`,
 				`<link>${escapeXml(`${base}/incidents/${item.incident.id}`)}</link>`,
 				`<guid isPermaLink="false">${escapeXml(item.update.id)}</guid>`,
 				`<pubDate>${new Date(item.update.createdAt).toUTCString()}</pubDate>`,

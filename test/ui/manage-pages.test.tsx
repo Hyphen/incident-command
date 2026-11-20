@@ -706,7 +706,7 @@ describe("incident pages", () => {
 		const own = screen.getByRole("combobox", { name: "Status of API" });
 		expect(own).toHaveValue("");
 		// A status of a service that is not selected has no effect, also when no service is selected.
-		fireEvent.change(screen.getByLabelText("Title"), {
+		fireEvent.change(screen.getByLabelText("Incident Title"), {
 			target: { value: "Errors" },
 		});
 		fireEvent.change(screen.getByLabelText("Message"), {
@@ -775,14 +775,13 @@ describe("incident pages", () => {
 		expect(
 			screen.queryByRole("heading", { name: "Drafts" }),
 		).not.toBeInTheDocument();
-		expect(screen.getByDisplayValue("API errors")).toBeInTheDocument();
-		const detailsForm = screen
-			.getByRole("button", { name: "Save details" })
-			.closest("form") as HTMLElement;
+		expect(screen.queryByLabelText("Incident Title")).not.toBeInTheDocument();
 		expect(
-			within(detailsForm).queryByText("Affected services"),
+			screen.queryByRole("button", { name: "Save details" }),
 		).not.toBeInTheDocument();
-		expect(within(detailsForm).queryByRole("checkbox")).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Save region" }),
+		).not.toBeInTheDocument();
 		expect(
 			screen.getByRole("button", { name: "Delete incident" }),
 		).toBeInTheDocument();
@@ -801,6 +800,10 @@ describe("incident pages", () => {
 		const own = within(updateForm).getByRole("combobox", {
 			name: "Status of API",
 		});
+		expect(within(updateForm).getByLabelText("Incident Title")).toHaveValue(
+			"API errors",
+		);
+		expect(within(updateForm).getByLabelText("Impact")).toHaveValue("minor");
 		expect(own).toHaveAttribute("name", `serviceStatus:${api.id}`);
 		expect(own).toHaveValue("");
 		expect(
@@ -829,6 +832,13 @@ describe("incident pages", () => {
 			screen.queryByRole("link", { name: "Create a post" }),
 		).not.toBeInTheDocument();
 		form.unmount();
+
+		await services.incidents.postUpdate(SYSTEM_ACTOR, incident.id, {
+			title: "API outage",
+			impact: "critical",
+			message: "Worse",
+			notify: false,
+		});
 
 		const covered = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "Both",
@@ -860,7 +870,12 @@ describe("incident pages", () => {
 			"aria-current",
 			"page",
 		);
-		expect(screen.getByText(/System \(system\)/)).toBeInTheDocument();
+		expect(
+			screen.getByRole("heading", { level: 1, name: "API outage" }),
+		).toBeInTheDocument();
+		expect(screen.getByText("API errors")).toBeInTheDocument();
+		expect(screen.getAllByText("API outage").length).toBeGreaterThan(1);
+		expect(screen.getAllByText(/System \(system\)/).length).toBeGreaterThan(1);
 		expect(screen.getByText("Looking")).toBeInTheDocument();
 		timeline.unmount();
 
@@ -878,6 +893,27 @@ describe("incident pages", () => {
 			"href",
 			`/manage/incidents/${incident.id}?tab=posts&post=1`,
 		);
+		const items = screen.getAllByRole("listitem");
+		const newest = items[0]?.textContent ?? "";
+		expect(newest.indexOf("Investigating")).toBeLessThan(
+			newest.indexOf("Critical impact"),
+		);
+		expect(newest.indexOf("Critical impact")).toBeLessThan(
+			newest.indexOf("API outage"),
+		);
+		expect(newest.indexOf("API outage")).toBeLessThan(newest.indexOf("Worse"));
+		expect(
+			within(items[0] as HTMLElement).queryByText("Minor impact"),
+		).not.toBeInTheDocument();
+		expect(
+			within(items[1] as HTMLElement).getByText("API errors"),
+		).toBeInTheDocument();
+		expect(
+			within(items[1] as HTMLElement).getByText("Minor impact"),
+		).toBeInTheDocument();
+		expect(
+			within(items[1] as HTMLElement).getByText("Looking"),
+		).toBeInTheDocument();
 		posts.unmount();
 
 		render(
@@ -1022,6 +1058,11 @@ describe("incident pages", () => {
 			"2026-11-05T00:00",
 		);
 		expect(
+			screen.getByRole("button", { name: "Save window" }),
+		).toBeInTheDocument();
+		expect(screen.queryByLabelText("Impact")).not.toBeInTheDocument();
+		expect(screen.queryByText("None impact")).not.toBeInTheDocument();
+		expect(
 			screen.queryByRole("heading", {
 				name: "Status of the affected services",
 			}),
@@ -1045,6 +1086,8 @@ describe("incident pages", () => {
 		expect(
 			screen.queryByText("Status of each service"),
 		).not.toBeInTheDocument();
+		expect(screen.getByLabelText("Incident Title")).toHaveValue("Upgrade");
+		expect(screen.queryByLabelText("Impact")).not.toBeInTheDocument();
 		form.unmount();
 
 		const { app: viewerApp, services: viewerServices } = await setupApp();
@@ -1103,6 +1146,9 @@ describe("incident pages", () => {
 		);
 		expect(screen.getAllByText("United States").length).toBeGreaterThan(0);
 		expect(screen.getByLabelText("Region")).toHaveValue(region.id);
+		expect(
+			screen.getByRole("button", { name: "Save region" }),
+		).toBeInTheDocument();
 	});
 
 	it("404s for unknown incidents", async () => {
@@ -1221,7 +1267,7 @@ describe("notification draft pages", () => {
 			screen.getByRole("heading", { level: 1, name: "API errors" }),
 		).toBeInTheDocument();
 		expect(screen.getByText(/This draft waits for review/)).toBeInTheDocument();
-		expect(screen.getByLabelText("Title")).toHaveValue("API errors");
+		expect(screen.getByLabelText("Incident Title")).toHaveValue("API errors");
 		expect(screen.getByLabelText("Status")).toHaveValue("investigating");
 		expect(screen.getByLabelText("Impact")).toHaveValue("critical");
 		expect(screen.getByLabelText("Message")).toHaveValue(
@@ -1292,7 +1338,7 @@ describe("notification draft pages", () => {
 				{ serviceId: web.id, status: "major_outage" },
 			],
 		});
-		render(await draftPage(update.id));
+		const updatePage = render(await draftPage(update.id));
 		expect(
 			screen.getByRole("heading", { level: 1, name: "API errors" }),
 		).toBeInTheDocument();
@@ -1304,7 +1350,8 @@ describe("notification draft pages", () => {
 		expect(
 			screen.getByRole("option", { name: "Keep current status (Identified)" }),
 		).toHaveValue("");
-		expect(screen.queryByLabelText("Title")).not.toBeInTheDocument();
+		expect(screen.getByLabelText("Incident Title")).toHaveValue("API errors");
+		expect(screen.getByLabelText("Impact")).toHaveValue("minor");
 		expect(screen.queryByText("Affected services")).not.toBeInTheDocument();
 		expect(screen.getByText("Add a service")).toBeInTheDocument();
 		// An update offers a status for each affected service, and for a service to add.
@@ -1322,6 +1369,37 @@ describe("notification draft pages", () => {
 			"href",
 			`/manage/incidents/${incident.id}`,
 		);
+		updatePage.unmount();
+
+		const named = await services.drafts.create(AGENT, {
+			incidentId: incident.id,
+			message: "The title changes.",
+			title: "API outage",
+			impact: "critical",
+		});
+		const namedPage = render(await draftPage(named.id));
+		expect(screen.getByLabelText("Incident Title")).toHaveValue("API outage");
+		expect(screen.getByLabelText("Impact")).toHaveValue("critical");
+		namedPage.unmount();
+
+		const planned = await services.incidents.create(SYSTEM_ACTOR, {
+			kind: "maintenance",
+			title: "Database upgrade",
+			message: "x",
+			scheduledStart: "2026-11-05T02:00:00.000Z",
+			scheduledEnd: "2026-11-05T03:00:00.000Z",
+			notify: false,
+		});
+		const maintenanceUpdate = await services.drafts.create(AGENT, {
+			incidentId: planned.id,
+			message: "Still on track.",
+		});
+		const maintenanceReview = render(await draftPage(maintenanceUpdate.id));
+		expect(screen.getByLabelText("Incident Title")).toHaveValue(
+			"Database upgrade",
+		);
+		expect(screen.queryByLabelText("Impact")).not.toBeInTheDocument();
+		maintenanceReview.unmount();
 	});
 
 	it("shows a read-only draft to viewers and after review", async () => {

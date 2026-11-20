@@ -157,10 +157,10 @@ export function confirmationPayload(
 
 /** One-line human summary (used as Slack `text` / Discord `content`). */
 export function summaryText(notification: IncidentNotification): string {
-	const { incident, update, settings, event } = notification;
+	const { update, settings, event } = notification;
 	const url = incidentUrl(notification);
 	const lines = [
-		`[${settings.siteName}] ${EVENT_PREFIX[event]}: ${incident.title}`,
+		`[${settings.siteName}] ${EVENT_PREFIX[event]}: ${update.title}`,
 		`${EVENT_STATUS_LABELS[update.status]}: ${update.message}`,
 	];
 	if (url) {
@@ -190,13 +190,13 @@ function shorten(value: string, room: number): string {
  * `SMS_MIN_STATUS` characters, and the link stays whole.
  */
 export function smsText(notification: IncidentNotification): string {
-	const { incident, update, settings, event } = notification;
+	const { update, settings, event } = notification;
 	const url = incidentUrl(notification);
 	const tail = url ? `\n${url}` : "";
 	const status = `${EVENT_STATUS_LABELS[update.status]}: ${update.message}`;
 	const room = SMS_MAX_LENGTH - tail.length - 1;
 	const head = shorten(
-		`[${settings.siteName}] ${EVENT_PREFIX[event]}: ${incident.title}`,
+		`[${settings.siteName}] ${EVENT_PREFIX[event]}: ${update.title}`,
 		room - Math.min(status.length, SMS_MIN_STATUS),
 	);
 	return `${head}\n${shorten(status, room - head.length)}${tail}`;
@@ -209,7 +209,7 @@ export function emailData(
 	return {
 		siteName: notification.settings.siteName,
 		prefix: EVENT_PREFIX[notification.event],
-		title: notification.incident.title,
+		title: notification.update.title,
 		statusLabel: EVENT_STATUS_LABELS[notification.update.status],
 		message: notification.update.message,
 		services: notification.services.map((service) => service.name).join(", "),
@@ -254,6 +254,8 @@ export function webhookPayload(notification: IncidentNotification) {
 		},
 		update: {
 			id: notification.update.id,
+			title: notification.update.title,
+			impact: notification.update.impact,
 			status: notification.update.status,
 			message: notification.update.message,
 			createdAt: notification.update.createdAt,

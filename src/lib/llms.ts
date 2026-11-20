@@ -292,6 +292,23 @@ export function historyMarkdown(
 	]);
 }
 
+/** One post in Markdown. An incident post includes the impact. */
+function updateMarkdown(
+	incident: Incident,
+	update: Incident["updates"][number],
+): string {
+	const lines = [
+		`### ${EVENT_STATUS_LABELS[update.status]}, ${formatDateTime(update.createdAt)}`,
+		"",
+		`- Title: ${text(update.title)}`,
+	];
+	if (incident.kind === "incident") {
+		lines.push(`- Impact: ${IMPACT_LABELS[update.impact]}`);
+	}
+	lines.push("", quote(update.message));
+	return lines.join("\n");
+}
+
 /** The page of one incident or maintenance in Markdown, with all its updates. */
 export function incidentMarkdown(
 	settings: Settings,
@@ -306,10 +323,7 @@ export function incidentMarkdown(
 		`> ${incident.kind === "maintenance" ? "Scheduled maintenance" : "An incident"} on the status page of ${text(settings.siteName)}.`,
 		details(incident, services, regions),
 		"## Updates\n\nNewest first.",
-		...updates.map(
-			(update) =>
-				`### ${EVENT_STATUS_LABELS[update.status]}, ${formatDateTime(update.createdAt)}\n\n${quote(update.message)}`,
-		),
+		...updates.map((update) => updateMarkdown(incident, update)),
 		pages([
 			`- ${link("Incident page", `${origin}/incidents/${incident.id}`)}: this page in HTML.`,
 			`- ${link("Current status", `${origin}${LLMS_PATH}`)}`,

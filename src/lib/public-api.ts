@@ -29,6 +29,8 @@ function publicIncident(
 		scheduledEnd: incident.scheduledEnd ?? null,
 		updates: [...incident.updates].reverse().map((update) => ({
 			id: update.id,
+			title: update.title,
+			impact: update.impact,
 			status: update.status,
 			message: update.message,
 			createdAt: update.createdAt,

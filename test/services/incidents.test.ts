@@ -590,9 +590,23 @@ describe("IncidentService", () => {
 			expect(maintenance.id).toMatch(/^mnt_/);
 			expect(await statusOf(api)).toBe("operational");
 
-			await t.services.incidents.postUpdate(EDITOR, maintenance.id, {
-				status: "in_progress",
-				message: "Started",
+			const started = await t.services.incidents.postUpdate(
+				EDITOR,
+				maintenance.id,
+				{
+					status: "in_progress",
+					message: "Started",
+					title: "Database upgrade",
+				},
+			);
+			expect(started.title).toBe("Database upgrade");
+			expect(started.updates[1]).toMatchObject({
+				title: "Database upgrade",
+				impact: "none",
+			});
+			expect(started.updates[0]).toMatchObject({
+				title: "DB upgrade",
+				impact: "none",
 			});
 			expect(await statusOf(api)).toBe("under_maintenance");
 			await t.services.incidents.postUpdate(EDITOR, maintenance.id, {
@@ -602,9 +616,12 @@ describe("IncidentService", () => {
 			expect(await statusOf(api)).toBe("under_maintenance");
 			const done = await t.services.incidents.resolve(EDITOR, maintenance.id);
 			expect(done.status).toBe("completed");
-			expect(done.updates.at(-1)?.message).toBe(
-				"This maintenance has been completed.",
-			);
+			expect(done.title).toBe("Database upgrade");
+			expect(done.updates.at(-1)).toMatchObject({
+				title: "Database upgrade",
+				impact: "none",
+				message: "This maintenance has been completed.",
+			});
 			expect(await statusOf(api)).toBe("operational");
 			expect(t.notifier.incidents.map((n) => n.notification.event)).toEqual([
 				"maintenance.scheduled",
@@ -663,18 +680,127 @@ describe("IncidentService", () => {
 			serviceIds: [api],
 		});
 		const edited = await t.services.incidents.edit(EDITOR, incident.id, {
-			title: "Renamed",
-			impact: "critical",
 			serviceIds: [web],
 		});
 		expect(edited).toMatchObject({
-			title: "Renamed",
-			impact: "critical",
+			title: "A",
+			impact: "minor",
 			serviceIds: [web],
 		});
+		expect(edited.updates).toHaveLength(1);
 		const untouched = await t.services.incidents.edit(EDITOR, incident.id, {});
-		expect(untouched).toMatchObject({ title: "Renamed", serviceIds: [web] });
+		expect(untouched).toMatchObject({ title: "A", serviceIds: [web] });
 		expect(untouched.scheduledStart).toBeUndefined();
+	});
+
+	it("records the title and the impact on each post", async () => {
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "API errors",
+			message: "Investigating",
+			impact: "minor",
+			serviceIds: [api],
+			notify: false,
+		});
+		expect(await statusOf(api)).toBe("degraded_performance");
+		const posted = await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			title: "API outage",
+			impact: "critical",
+			message: "The API is down",
+			serviceIds: [web],
+		});
+		expect(posted).toMatchObject({ title: "API outage", impact: "critical" });
+		expect(posted.updates[0]).toMatchObject({
+			title: "API errors",
+			impact: "minor",
+		});
+		expect(posted.updates[1]).toMatchObject({
+			title: "API outage",
+			impact: "critical",
+		});
+		expect(await statusOf(api)).toBe("degraded_performance");
+		expect(await statusOf(web)).toBe("major_outage");
+		expect(t.notifier.incidents.at(-1)?.notification.update.title).toBe(
+			"API outage",
+		);
+
+		const inherited = await t.services.incidents.postUpdate(
+			EDITOR,
+			incident.id,
+			{ message: "Still down", notify: false },
+		);
+		expect(inherited.updates.at(-1)).toMatchObject({
+			title: "API outage",
+			impact: "critical",
+		});
+		const resolved = await t.services.incidents.resolve(
+			EDITOR,
+			incident.id,
+			"Fixed",
+			false,
+		);
+		expect(resolved.updates.at(-1)).toMatchObject({
+			title: "API outage",
+			impact: "critical",
+			status: "resolved",
+		});
+
+		await expect(
+			t.services.incidents.postUpdate(EDITOR, incident.id, {
+				title: "  ",
+				message: "Nope",
+				notify: false,
+			}),
+		).rejects.toBeInstanceOf(ValidationError);
+		const saved = await t.services.incidents.get(incident.id);
+		expect(saved.title).toBe("API outage");
+		expect(saved.updates).toHaveLength(resolved.updates.length);
+	});
+
+	it("gives the title and the impact of the incident to posts that an old version stored", async () => {
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Old title",
+			message: "First",
+			impact: "minor",
+			notify: false,
+		});
+		const stored = await t.store.get("incidents", incident.id);
+		if (!stored) {
+			throw new Error("missing incident");
+		}
+		await t.store.update("incidents", {
+			...stored,
+			updates: stored.updates.map(
+				({ title: _title, impact: _impact, ...update }) => update,
+			),
+		});
+		const read = await t.services.incidents.get(incident.id);
+		expect(read.updates[0]).toMatchObject({
+			title: "Old title",
+			impact: "minor",
+		});
+		const listed = (await t.services.incidents.list()).find(
+			(item) => item.id === incident.id,
+		);
+		expect(listed?.updates[0]).toMatchObject({
+			title: "Old title",
+			impact: "minor",
+		});
+		await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			title: "New title",
+			impact: "critical",
+			message: "Second",
+			notify: false,
+		});
+		const raw = await t.store.get("incidents", incident.id);
+		expect(raw?.updates[0]).toMatchObject({
+			title: "Old title",
+			impact: "minor",
+		});
+		expect(raw?.updates[1]).toMatchObject({
+			title: "New title",
+			impact: "critical",
+		});
+		expect(raw?.title).toBe("New title");
 	});
 
 	it("lists with filters", async () => {
@@ -768,9 +894,7 @@ describe("IncidentService", () => {
 			regionId: region.id,
 		});
 		expect(incident.regionId).toBe(region.id);
-		const kept = await t.services.incidents.edit(EDITOR, incident.id, {
-			title: "Still down",
-		});
+		const kept = await t.services.incidents.edit(EDITOR, incident.id, {});
 		expect(kept.regionId).toBe(region.id);
 		const cleared = await t.services.incidents.edit(EDITOR, incident.id, {
 			regionId: null,

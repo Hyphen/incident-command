@@ -1,6 +1,7 @@
 import { EVENT_STATUS_LABELS } from "@/lib/domain/status";
 import type { Incident } from "@/lib/domain/types";
 import { LocalTime } from "../time";
+import { ImpactBadge } from "./badges";
 
 /** Incident updates, newest first. */
 export function Timeline({
@@ -19,6 +20,12 @@ export function Timeline({
 					<p className="text-sm font-semibold">
 						{EVENT_STATUS_LABELS[update.status]}
 					</p>
+					{incident.kind === "incident" && (
+						<div className="mt-1">
+							<ImpactBadge impact={update.impact} />
+						</div>
+					)}
+					<p className="mt-1 text-sm">{update.title}</p>
 					<p className="mt-1 whitespace-pre-wrap">{update.message}</p>
 					<p className="mt-1 text-xs text-muted">
 						<LocalTime iso={update.createdAt} />

@@ -6,7 +6,7 @@ import {
 	type UpdateRegionInput,
 	updateRegionSchema,
 } from "../domain/schemas";
-import type { Actor, Incident, Region } from "../domain/types";
+import type { Actor, Region, StoredIncident } from "../domain/types";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import { iso, parse, requirePermission, type ServiceContext } from "./context";
 
@@ -123,7 +123,7 @@ export class RegionService {
 			if (!current || current.regionId !== regionId) {
 				return;
 			}
-			const next: Incident = {
+			const next: StoredIncident = {
 				...current,
 				revision: (current.revision ?? 0) + 1,
 				updatedAt: iso(this.ctx.now()),
