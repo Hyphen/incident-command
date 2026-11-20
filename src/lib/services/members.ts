@@ -45,8 +45,16 @@ export const INVITE_TTL_DAYS = 7;
 const INVITE_TTL_MS = INVITE_TTL_DAYS * 86_400_000;
 
 export function toPublicMember(member: Member): PublicMember {
-	const { passwordHash: _passwordHash, ...rest } = member;
-	return rest;
+	const {
+		passwordHash: _passwordHash,
+		twoFactor: _twoFactor,
+		revision: _revision,
+		...rest
+	} = member;
+	return {
+		...rest,
+		twoFactorEnabled: member.twoFactor?.enabledAt !== undefined,
+	};
 }
 
 export function toPublicInvite(invite: Invite): PublicInvite {
@@ -238,17 +246,15 @@ export class MemberService {
 		if (patch.email && patch.email !== current.email) {
 			await this.assertEmailAvailable(patch.email);
 		}
-		const next: Member = {
-			...current,
-			email: patch.email ?? current.email,
-			name: patch.name ?? current.name,
-			role: patch.role ?? current.role,
-			passwordHash: patch.password
-				? await hashPassword(patch.password)
-				: current.passwordHash,
-			updatedAt: iso(this.ctx.now()),
-		};
-		await this.ctx.store.update("members", next);
+		const passwordHash = patch.password
+			? await hashPassword(patch.password)
+			: undefined;
+		const next = await this.save(id, (member) => ({
+			email: patch.email ?? member.email,
+			name: patch.name ?? member.name,
+			role: patch.role ?? member.role,
+			passwordHash: passwordHash ?? member.passwordHash,
+		}));
 		if (patch.password) {
 			await this.sessions.destroyForMember(id);
 			await this.oauth.disconnectMember(id);
@@ -270,11 +276,8 @@ export class MemberService {
 			throw new ValidationError("Current password is incorrect");
 		}
 		parse(updateMemberSchema, { password: newPassword });
-		await this.ctx.store.update("members", {
-			...member,
-			passwordHash: await hashPassword(newPassword),
-			updatedAt: iso(this.ctx.now()),
-		});
+		const passwordHash = await hashPassword(newPassword);
+		await this.save(member.id, () => ({ passwordHash }));
 	}
 
 	async delete(actor: Actor, id: string): Promise<void> {
@@ -307,8 +310,9 @@ export class MemberService {
 		) {
 			return undefined;
 		}
-		const next = { ...member, lastLoginAt: iso(this.ctx.now()) };
-		await this.ctx.store.update("members", next);
+		const next = await this.save(member.id, () => ({
+			lastLoginAt: iso(this.ctx.now()),
+		}));
 		return toPublicMember(next);
 	}
 
@@ -322,6 +326,7 @@ export class MemberService {
 			name: data.name,
 			role: data.role,
 			passwordHash: await hashPassword(data.password),
+			revision: 1,
 			createdAt: now,
 			updatedAt: now,
 		};
@@ -338,6 +343,35 @@ export class MemberService {
 			limit: 1,
 		});
 		return invite;
+	}
+
+	/**
+	 * Saves a member when the stored revision still matches the read.
+	 * A lost race reads the member again and applies the same change.
+	 */
+	private async save(
+		id: string,
+		patch: (member: Member) => Partial<Member>,
+	): Promise<Member> {
+		for (let attempt = 0; attempt < 5; attempt++) {
+			const member = await this.load(id);
+			const next: Member = {
+				...member,
+				...patch(member),
+				id: member.id,
+				revision: (member.revision ?? 0) + 1,
+				updatedAt: iso(this.ctx.now()),
+			};
+			const saved = await this.ctx.store.update("members", next, {
+				where: [
+					{ field: "revision", op: "eq", value: member.revision ?? null },
+				],
+			});
+			if (saved) {
+				return saved;
+			}
+		}
+		throw new ConflictError("That change conflicts with the current data.");
 	}
 
 	private async load(id: string): Promise<Member> {

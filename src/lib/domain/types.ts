@@ -102,6 +102,11 @@ export interface Settings {
 	customCss?: string;
 	/** When false, the public pages do not show "Powered by Incident Command". */
 	showPoweredBy: boolean;
+	/**
+	 * When true, a member must turn on an authenticator before the portal opens.
+	 * The value starts as true.
+	 */
+	requireTwoFactor: boolean;
 	uptimeDays: number;
 	/** Set when an admin uploads a logo. The image is at /brand/logo. */
 	logoUpdatedAt?: string;
@@ -257,19 +262,41 @@ export interface Incident {
 	updatedAt: string;
 }
 
+/** Authenticator data for one member. APIs and pages do not receive this object. */
+export interface MemberTwoFactor {
+	/** The TOTP secret. The value is `plain:` or an encrypted SecretBox value. */
+	secret: string;
+	/** The time step of the last accepted authenticator code. */
+	lastStep?: number;
+	/** SHA-256 hashes of the recovery codes that are still unused. */
+	recoveryCodeHashes: string[];
+	/** Plaintext recovery codes until the member hides them. */
+	recoveryReveal?: string[];
+	/** Set when the member confirms the first authenticator code. */
+	enabledAt?: string;
+}
+
 export interface Member {
 	id: string;
 	email: string;
 	name: string;
 	role: Role;
 	passwordHash: string;
+	twoFactor?: MemberTwoFactor;
 	lastLoginAt?: string;
+	/** Incremented on every write so two saves cannot drop a code. */
+	revision?: number;
 	createdAt: string;
 	updatedAt: string;
 }
 
 /** A member without secrets, safe to return from APIs and render. */
-export type PublicMember = Omit<Member, "passwordHash">;
+export type PublicMember = Omit<
+	Member,
+	"passwordHash" | "twoFactor" | "revision"
+> & {
+	twoFactorEnabled: boolean;
+};
 
 /** A one-time link that lets a person create their own member account. */
 export interface Invite {
@@ -285,11 +312,18 @@ export interface Invite {
 /** An invite without secrets, safe to return from APIs and render. */
 export type PublicInvite = Omit<Invite, "tokenHash">;
 
+/** `totp` waits for a code. `enroll` waits until the member turns an authenticator on. */
+export type SessionPurpose = "totp" | "enroll";
+
 export interface Session {
 	id: string;
 	memberId: string;
 	expiresAt: string;
 	createdAt: string;
+	/** A full session has no purpose. A challenge session has one of these values. */
+	purpose?: SessionPurpose;
+	/** Failed code attempts for a challenge. A full session has no attempts. */
+	attempts?: number;
 }
 
 /** An agent. API tokens and OAuth grants are credentials for this record. */

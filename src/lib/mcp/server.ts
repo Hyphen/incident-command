@@ -1008,6 +1008,12 @@ export function createMcpServer(
 						'Set to false to remove "Powered by Incident Command" from the public pages',
 					),
 				uptimeDays: z.number().int().optional(),
+				requireTwoFactor: z
+					.boolean()
+					.optional()
+					.describe(
+						"When true, each member must turn on an authenticator. The value starts as true.",
+					),
 			},
 		},
 		async (args) => settingsView(await services.settings.update(actor, args)),

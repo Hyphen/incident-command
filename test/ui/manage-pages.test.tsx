@@ -1953,6 +1953,11 @@ describe("admin pages", () => {
 			within(tabs).getByRole("link", { name: "Notifications" }),
 		).toHaveAttribute("href", "/manage/settings/notifications");
 		expect(screen.getByLabelText("Uptime window (days)")).toHaveValue(30);
+		expect(
+			screen.getByRole("checkbox", {
+				name: "Require two-factor authentication",
+			}),
+		).toBeChecked();
 		expect(screen.queryByLabelText("Custom CSS")).not.toBeInTheDocument();
 	});
 

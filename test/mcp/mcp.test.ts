@@ -552,6 +552,9 @@ describe("MCP handler", () => {
 			showPoweredBy: false,
 		});
 		expect((await call("get_settings")).data.siteName).toBe("Acme Status");
+		expect((await call("get_settings")).data.requireTwoFactor).toBe(true);
+		await call("update_settings", { requireTwoFactor: false });
+		expect((await call("get_settings")).data.requireTwoFactor).toBe(false);
 		await call("update_settings", { siteUrl: "https://status.acme.dev" });
 		expect(
 			(await call("invite_member", { email: "later@acme.dev" })).data.inviteUrl,

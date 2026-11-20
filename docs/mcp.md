@@ -173,7 +173,7 @@ Delete a region and its incidents move to Global.
 | `list_agent_activity`         | `agents.read`         | Recent activity for one agent.                                                                  |
 | `get_settings`                | `settings.read`       | Status page settings and branding, with `logoUrl` and `faviconUrl`.                             |
 | `get_design_guide`            | `settings.write`      | The theme presets, design tokens, CSS selectors, rules and limits for a design.                 |
-| `update_settings`             | `settings.write`      | Change name, URLs, theme, CSS, uptime and the "Powered by" line.                                |
+| `update_settings`             | `settings.write`      | Change name, URLs, theme, CSS, uptime, the "Powered by" line and the two-factor requirement.    |
 | `upload_brand_asset`          | `settings.write`      | Store the logo or the favicon. It replaces the stored file.                                     |
 | `remove_brand_asset`          | `settings.write`      | Remove the stored logo or favicon.                                                              |
 | `get_notification_settings`   | `channels.read`       | The webhook, email and text messaging channels and their providers. No credentials.             |

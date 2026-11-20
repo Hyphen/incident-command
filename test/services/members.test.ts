@@ -1,3 +1,4 @@
+import { verifyPassword } from "@/lib/crypto";
 import type { Actor, Role } from "@/lib/domain/types";
 import {
 	ConflictError,
@@ -435,10 +436,27 @@ describe("MemberService and SessionService", () => {
 			name: "n",
 			role: "editor" as const,
 			passwordHash: "secret",
+			twoFactor: {
+				secret: "plain:SECRET",
+				recoveryCodeHashes: ["hash"],
+				recoveryReveal: ["abcd-efgh"],
+				enabledAt: "2026-11-02T12:00:00.000Z",
+			},
 			createdAt: "",
 			updatedAt: "",
 		};
+		expect(toPublicMember(member)).toEqual({
+			id: "m",
+			email: "e",
+			name: "n",
+			role: "editor",
+			twoFactorEnabled: true,
+			createdAt: "",
+			updatedAt: "",
+		});
 		expect(toPublicMember(member)).not.toHaveProperty("passwordHash");
+		expect(toPublicMember(member)).not.toHaveProperty("twoFactor");
+		expect(toPublicMember(member)).not.toHaveProperty("revision");
 		expect(memberActor(member)).toEqual({
 			type: "member",
 			id: "m",
@@ -446,5 +464,44 @@ describe("MemberService and SessionService", () => {
 			role: "editor",
 		});
 		expect(ADMIN.role).toBe("admin");
+	});
+
+	it("keeps a name change and a password change that overlap", async () => {
+		const admin = await t.services.members.setup({
+			email: "ada@acme.dev",
+			name: "Ada",
+			password: "password123",
+		});
+		const actor = memberActor(admin);
+		const stored = await t.store.get("members", admin.id);
+		if (!stored) {
+			throw new Error("Member missing");
+		}
+		const { revision: _revision, ...legacy } = stored;
+		await t.store.update("members", legacy);
+		await Promise.all([
+			t.services.members.update(actor, admin.id, { name: "Ada Lovelace" }),
+			t.services.members.changePassword(actor, "password123", "password456"),
+		]);
+		const saved = await t.store.get("members", admin.id);
+		expect(saved?.name).toBe("Ada Lovelace");
+		expect(saved?.revision).toBe(2);
+		await expect(
+			verifyPassword("password456", saved?.passwordHash ?? ""),
+		).resolves.toBe(true);
+	});
+
+	it("stops when the member record keeps changing", async () => {
+		const admin = await t.services.members.setup({
+			email: "ada@acme.dev",
+			name: "Ada",
+			password: "password123",
+		});
+		const update = vi.spyOn(t.store, "update").mockResolvedValue(undefined);
+		await expect(
+			t.services.members.update(memberActor(admin), admin.id, { name: "New" }),
+		).rejects.toBeInstanceOf(ConflictError);
+		expect(update).toHaveBeenCalledTimes(5);
+		update.mockRestore();
 	});
 });

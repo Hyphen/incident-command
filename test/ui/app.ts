@@ -2,6 +2,7 @@ import { type App, createApp, setApp } from "@/lib/app";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { loadConfig } from "@/lib/config";
 import { pkceChallenge } from "@/lib/crypto";
+import { totpAt } from "@/lib/domain/totp";
 import type { Actor, Role } from "@/lib/domain/types";
 import { type FlashKind, readFlash } from "@/lib/flash";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
@@ -21,7 +22,11 @@ export async function setupApp(env: Record<string, string> = {}) {
 	return { app, clock, notifier, services: app.services };
 }
 
-export async function signIn(app: App, role: Role = "admin") {
+export async function signIn(
+	app: App,
+	role: Role = "admin",
+	options?: { twoFactor?: boolean },
+) {
 	const invite = await app.services.members.invite(SYSTEM_ACTOR, {
 		email: `${role}-${Math.random().toString(36).slice(2)}@test.dev`,
 		role,
@@ -30,9 +35,25 @@ export async function signIn(app: App, role: Role = "admin") {
 		name: `${role[0]?.toUpperCase()}${role.slice(1)} User`,
 		password: "password123",
 	});
+	if (options?.twoFactor !== false) {
+		const settings = await app.services.settings.get();
+		const started = await app.services.twoFactor.begin(
+			member.id,
+			settings.siteName,
+		);
+		await app.services.twoFactor.confirm(
+			member.id,
+			totpAt(started.secret, app.now().getTime()),
+		);
+		await app.services.twoFactor.acknowledge(memberActor(member));
+	}
 	const { token } = await app.services.sessions.create(member.id);
 	cookieJar.set(SESSION_COOKIE, token);
-	return { member, actor: memberActor(member) };
+	const current = await app.services.members.get(member.id);
+	if (!current) {
+		throw new Error("Member missing after sign-in");
+	}
+	return { member: current, actor: memberActor(current) };
 }
 
 export const AGENT_REDIRECT = "http://localhost:4567/callback";

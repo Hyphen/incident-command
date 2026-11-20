@@ -13,6 +13,7 @@ import { SessionService } from "./sessions";
 import { SettingsService } from "./settings";
 import { StatusService } from "./status";
 import { SubscriberService } from "./subscribers";
+import { TwoFactorService } from "./two-factor";
 
 export interface Services {
 	settings: SettingsService;
@@ -28,6 +29,7 @@ export interface Services {
 	activity: ActivityService;
 	oauth: OAuthService;
 	subscribers: SubscriberService;
+	twoFactor: TwoFactorService;
 	/** Idempotent first-boot tasks, such as seeding demo data. */
 	bootstrap(): Promise<void>;
 }
@@ -57,6 +59,7 @@ export function createServices(ctx: ServiceContext): Services {
 	const sessions = new SessionService(ctx);
 	const oauth = new OAuthService(ctx, agents, activity);
 	const members = new MemberService(ctx, sessions, oauth);
+	const twoFactor = new TwoFactorService(ctx, sessions);
 
 	return {
 		settings,
@@ -72,6 +75,7 @@ export function createServices(ctx: ServiceContext): Services {
 		activity,
 		oauth,
 		subscribers,
+		twoFactor,
 		async bootstrap() {
 			await agents.migrate();
 			if (ctx.config.seedDemo && (await ctx.store.count("services")) === 0) {

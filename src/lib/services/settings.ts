@@ -54,6 +54,7 @@ export class SettingsService {
 			siteUrl: this.ctx.config.siteUrl,
 			theme: "default",
 			showPoweredBy: true,
+			requireTwoFactor: true,
 			uptimeDays: 90,
 			updatedAt: new Date(0).toISOString(),
 		};

@@ -5,13 +5,22 @@ import { redirect } from "next/navigation";
 import { type App, getApp } from "@/lib/app";
 import {
 	endSession,
+	failTwoFactor,
 	flash,
 	loginPath,
+	pendingLogin,
+	promoteSession,
 	requireMemberForAction,
 	returnPath,
+	startPendingSession,
 	startSession,
+	twoFactorPath,
 } from "@/lib/auth";
 import type { MoveDirection } from "@/lib/domain/schemas";
+import {
+	TWO_FACTOR_ALREADY_ON,
+	TWO_FACTOR_SECRET_UNREADABLE,
+} from "@/lib/domain/totp";
 import type {
 	DeliveryStrategy,
 	EventStatus,
@@ -23,6 +32,7 @@ import type {
 	ServiceStatus,
 } from "@/lib/domain/types";
 import { isAppError } from "@/lib/errors";
+import type { FlashCode } from "@/lib/flash";
 import {
 	attempt,
 	checkbox,
@@ -63,6 +73,37 @@ async function formState<T>(
 
 // ---- session ------------------------------------------------------------------
 
+/**
+ * Opens the portal, or sends the member to the authenticator page.
+ * A required setting sends a member with no authenticator to setup first.
+ */
+async function finishSignIn(
+	app: App,
+	memberId: string,
+	next: string,
+	notice?: FlashCode,
+): Promise<void> {
+	const settings = await app.services.settings.get();
+	const status = await app.services.twoFactor.status(
+		memberId,
+		settings.siteName,
+	);
+	if (status.enabled) {
+		await startPendingSession(app, memberId, "totp");
+		redirect(twoFactorPath(next));
+	}
+	if (settings.requireTwoFactor) {
+		if (!status.setup) {
+			await app.services.twoFactor.begin(memberId, settings.siteName);
+		}
+		await startPendingSession(app, memberId, "enroll");
+		const path = twoFactorPath(next);
+		redirect(notice ? flash(path, notice) : path);
+	}
+	await startSession(app, memberId);
+	redirect(notice ? flash(returnPath(next), notice) : returnPath(next));
+}
+
 export async function loginAction(form: FormData): Promise<void> {
 	const app = await getApp();
 	const member = await app.services.members.authenticate({
@@ -73,8 +114,7 @@ export async function loginAction(form: FormData): Promise<void> {
 	if (!member) {
 		redirect(flash(loginPath(next), "invalid_credentials"));
 	}
-	await startSession(app, member.id);
-	redirect(returnPath(next));
+	await finishSignIn(app, member.id, next);
 }
 
 export async function logoutAction(): Promise<void> {
@@ -94,8 +134,7 @@ export async function setupAction(form: FormData): Promise<void> {
 			nonEmpty(form, "token"),
 		),
 	);
-	await startSession(app, member.id);
-	redirect(flash("/manage", "welcome_admin"));
+	await finishSignIn(app, member.id, "/manage", "welcome_admin");
 }
 
 export async function acceptInviteAction(form: FormData): Promise<void> {
@@ -107,20 +146,140 @@ export async function acceptInviteAction(form: FormData): Promise<void> {
 			password: text(form, "password"),
 		}),
 	);
-	await startSession(app, member.id);
-	redirect(flash("/manage", "welcome_member"));
+	await finishSignIn(app, member.id, "/manage", "welcome_member");
+}
+
+const ACCOUNT = "/manage/account";
+const accountAccess = { allowMissingTwoFactor: true } as const;
+
+/** The account page, with a safe return path when the member has one. */
+function accountPath(next: string): string {
+	const path = returnPath(next);
+	return path === "/manage"
+		? ACCOUNT
+		: `${ACCOUNT}?next=${encodeURIComponent(path)}`;
 }
 
 export async function changePasswordAction(form: FormData): Promise<void> {
-	const { actor, services } = await requireMemberForAction();
-	await attempt("/manage/account", () =>
+	const { actor, services } = await requireMemberForAction(
+		"viewer",
+		accountAccess,
+	);
+	await attempt(ACCOUNT, () =>
 		services.members.changePassword(
 			actor,
 			text(form, "currentPassword"),
 			text(form, "newPassword"),
 		),
 	);
-	redirect(flash("/manage/account", "password_updated"));
+	redirect(flash(ACCOUNT, "password_updated"));
+}
+
+export async function beginTwoFactorAction(form: FormData): Promise<void> {
+	const { actor, services } = await requireMemberForAction(
+		"viewer",
+		accountAccess,
+	);
+	const path = accountPath(text(form, "next"));
+	const settings = await services.settings.get();
+	await attempt(path, () =>
+		services.twoFactor.begin(actor.id, settings.siteName),
+	);
+	redirect(path);
+}
+
+export async function confirmTwoFactorAction(form: FormData): Promise<void> {
+	const { actor, services } = await requireMemberForAction(
+		"viewer",
+		accountAccess,
+	);
+	const path = accountPath(text(form, "next"));
+	await attempt(path, () =>
+		services.twoFactor.confirm(actor.id, text(form, "code")),
+	);
+	redirect(flash(path, "two_factor_enabled"));
+}
+
+export async function acknowledgeRecoveryCodesAction(
+	form: FormData,
+): Promise<void> {
+	const { actor, services } = await requireMemberForAction(
+		"viewer",
+		accountAccess,
+	);
+	const path = accountPath(text(form, "next"));
+	await services.twoFactor.acknowledge(actor);
+	redirect(flash(path, "recovery_codes_saved"));
+}
+
+export async function regenerateRecoveryCodesAction(
+	form: FormData,
+): Promise<void> {
+	const { actor, services } = await requireMemberForAction(
+		"viewer",
+		accountAccess,
+	);
+	const path = accountPath(text(form, "next"));
+	await attempt(path, () =>
+		services.twoFactor.regenerate(actor, text(form, "password")),
+	);
+	redirect(flash(path, "recovery_codes_updated"));
+}
+
+export async function disableTwoFactorAction(form: FormData): Promise<void> {
+	const { actor, services } = await requireMemberForAction(
+		"viewer",
+		accountAccess,
+	);
+	const path = accountPath(text(form, "next"));
+	const settings = await services.settings.get();
+	await attempt(path, () =>
+		services.twoFactor.disable(
+			actor,
+			text(form, "password"),
+			text(form, "code"),
+			settings.requireTwoFactor,
+		),
+	);
+	redirect(flash(path, "two_factor_disabled"));
+}
+
+/** Checks an authenticator code or a recovery code, then opens the portal. */
+export async function submitTwoFactorAction(form: FormData): Promise<void> {
+	const app = await getApp();
+	const next = text(form, "next");
+	const pending = await pendingLogin(app);
+	if (!pending) {
+		redirect(loginPath(next));
+	}
+	const code = text(form, "code");
+	try {
+		if (pending.session.purpose === "enroll") {
+			try {
+				await app.services.twoFactor.confirm(pending.member.id, code);
+			} catch (error) {
+				if (!isAppError(error) || error.message !== TWO_FACTOR_ALREADY_ON) {
+					throw error;
+				}
+				await app.services.twoFactor.verify(pending.member.id, code);
+			}
+		} else {
+			await app.services.twoFactor.verify(pending.member.id, code);
+		}
+	} catch (error) {
+		if (!isAppError(error)) {
+			throw error;
+		}
+		if (error.message === TWO_FACTOR_SECRET_UNREADABLE) {
+			redirect(flash(twoFactorPath(next), "two_factor_secret_unreadable"));
+		}
+		await failTwoFactor(app, next);
+	}
+	await promoteSession(app);
+	if (pending.session.purpose === "enroll") {
+		redirect(flash(accountPath(next), "two_factor_enabled"));
+	}
+	redirect(returnPath(next));
 }
 
 // ---- incidents ------------------------------------------------------------------
@@ -607,6 +766,7 @@ export async function updateGeneralSettingsAction(
 			siteUrl: optionalText(form, "siteUrl"),
 			supportUrl: optionalText(form, "supportUrl"),
 			uptimeDays: integer(form, "uptimeDays"),
+			requireTwoFactor: checkbox(form, "requireTwoFactor"),
 		}),
 	);
 	// The root layout and the portal layout show the settings.

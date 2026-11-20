@@ -1,6 +1,8 @@
 import {
+	failTwoFactor,
 	flash,
 	getMemberContext,
+	promoteSession,
 	requireMember,
 	requireMemberForAction,
 	SESSION_COOKIE,
@@ -28,6 +30,7 @@ import {
 } from "@/lib/manage/forms";
 import { publicOrigin } from "@/lib/manage/origin";
 import { EncryptionKeyMissingError } from "@/lib/secrets";
+import { SYSTEM_ACTOR } from "@/lib/services/context";
 import { NOTIFICATION_SETTINGS_CHANGED } from "@/lib/services/notification-settings";
 import {
 	expectFlashRedirect,
@@ -147,6 +150,42 @@ describe("auth helpers", () => {
 		await expect(requireMember()).resolves.toBeDefined();
 		expect(await redirectOf(requireMemberForAction())).toBe("/manage/login");
 		expect(await redirectOf(requireMember())).toBe("/manage/login");
+	});
+
+	it("sends a member without an authenticator to account setup", async () => {
+		const { app } = await setupApp();
+		await signIn(app, "editor", { twoFactor: false });
+		expectFlashRedirect(
+			await redirectOf(requireMember()),
+			"/manage/account",
+			"error",
+			"Set up two-factor authentication to continue.",
+		);
+		expectFlashRedirect(
+			await redirectOf(requireMemberForAction()),
+			"/manage/account",
+			"error",
+			"Set up two-factor authentication to continue.",
+		);
+		await expect(
+			requireMember("viewer", undefined, { allowMissingTwoFactor: true }),
+		).resolves.toBeDefined();
+		await app.services.settings.update(SYSTEM_ACTOR, {
+			requireTwoFactor: false,
+		});
+		await expect(requireMember()).resolves.toBeDefined();
+		await expect(requireMemberForAction()).resolves.toBeDefined();
+	});
+
+	it("refuses to promote a cookie that is not a challenge", async () => {
+		const { app } = await setupApp();
+		expect(await redirectOf(promoteSession(app))).toBe("/manage/login");
+		await signIn(app, "viewer");
+		expect(await redirectOf(promoteSession(app))).toBe("/manage/login");
+		cookieJar.delete(SESSION_COOKIE);
+		expect(await redirectOf(failTwoFactor(app, "/manage/drafts/drf_1"))).toBe(
+			"/manage/login?next=/manage/drafts/drf_1",
+		);
 	});
 });
 
