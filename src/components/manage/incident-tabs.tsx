@@ -18,7 +18,11 @@ function tabHref(id: string, tab: IncidentTab): string {
 	return tab === "dashboard" ? path : `${path}?tab=${tab}`;
 }
 
-/** The section links at the top of an incident page. */
+/**
+ * The section links at the top of an incident page. The border is on
+ * the outer element. The nav overlaps that border, so horizontal scroll
+ * does not show a vertical scrollbar.
+ */
 export function IncidentTabs({
 	id,
 	active,
@@ -27,24 +31,26 @@ export function IncidentTabs({
 	active: IncidentTab;
 }) {
 	return (
-		<nav
-			aria-label="Incident"
-			className="flex gap-1 overflow-x-auto border-b border-border"
-		>
-			{TABS.map((tab) => (
-				<Link
-					key={tab.key}
-					href={tabHref(id, tab.key)}
-					aria-current={tab.key === active ? "page" : undefined}
-					className={`-mb-px border-b-2 px-3 py-2 text-sm whitespace-nowrap ${
-						tab.key === active
-							? "border-brand font-medium text-fg"
-							: "border-transparent text-muted hover:text-fg"
-					}`}
-				>
-					{tab.label}
-				</Link>
-			))}
-		</nav>
+		<div className="border-b border-border">
+			<nav
+				aria-label="Incident"
+				className="-mb-px flex gap-1 overflow-x-auto overflow-y-hidden"
+			>
+				{TABS.map((tab) => (
+					<Link
+						key={tab.key}
+						href={tabHref(id, tab.key)}
+						aria-current={tab.key === active ? "page" : undefined}
+						className={`border-b-2 px-3 py-2 text-sm whitespace-nowrap ${
+							tab.key === active
+								? "border-brand font-medium text-fg"
+								: "border-transparent text-muted hover:text-fg"
+						}`}
+					>
+						{tab.label}
+					</Link>
+				))}
+			</nav>
+		</div>
 	);
 }
