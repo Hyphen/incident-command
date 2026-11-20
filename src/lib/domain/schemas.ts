@@ -120,6 +120,8 @@ export const createIncidentSchema = z.object({
 export type CreateIncidentInput = z.input<typeof createIncidentSchema>;
 
 export const incidentUpdateSchema = z.object({
+	title: z.string().trim().min(1).max(200).optional(),
+	impact: impactSchema.optional(),
 	status: eventStatusSchema.optional(),
 	message: z.string().trim().min(1).max(10_000),
 	/** Services to add. This does not remove a service. */
@@ -131,8 +133,6 @@ export const incidentUpdateSchema = z.object({
 export type IncidentUpdateInput = z.input<typeof incidentUpdateSchema>;
 
 export const editIncidentSchema = z.object({
-	title: z.string().trim().min(1).max(200).optional(),
-	impact: impactSchema.optional(),
 	serviceIds: z.array(z.string().min(1)).max(100).optional(),
 	scheduledStart: isoDate.optional(),
 	scheduledEnd: isoDate.optional(),

@@ -255,7 +255,12 @@ describe("incident Markdown pages", () => {
 			serviceIds: [api.id, hidden.id],
 		});
 		clock.advance(95 * 60_000);
-		await services.incidents.resolve(SYSTEM_ACTOR, incident.id, "All good");
+		await services.incidents.postUpdate(SYSTEM_ACTOR, incident.id, {
+			status: "resolved",
+			title: "API restored",
+			impact: "minor",
+			message: "All good",
+		});
 
 		const response = await incidentRequest(
 			incident.id,
@@ -265,13 +270,13 @@ describe("incident Markdown pages", () => {
 		expect(response.headers.get("content-type")).toBe(
 			"text/markdown; charset=utf-8",
 		);
-		expect(await response.text()).toBe(`# API errors
+		expect(await response.text()).toBe(`# API restored
 
 > An incident on the status page of Status.
 
 - Type: Incident
 - Status: Resolved
-- Impact: Critical
+- Impact: Minor
 - Started: Nov 2, 2026, 12:00 UTC
 - Resolved: Nov 2, 2026, 13:35 UTC
 - Duration: 1h 35m
@@ -283,9 +288,15 @@ Newest first.
 
 ### Resolved, Nov 2, 2026, 13:35 UTC
 
+- Title: API restored
+- Impact: Minor
+
 > All good
 
 ### Investigating, Nov 2, 2026, 12:00 UTC
+
+- Title: API errors
+- Impact: Critical
 
 > Investigating
 >

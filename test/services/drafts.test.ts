@@ -276,7 +276,7 @@ describe("DraftService", () => {
 				message: "x",
 			}),
 		).rejects.toThrow(
-			"kind, title: only a new incident or maintenance uses these fields",
+			"kind: only a new incident or maintenance uses these fields",
 		);
 		await expect(
 			t.services.drafts.create(VIEWER, { title: "Errors", message: "x" }),
@@ -690,6 +690,62 @@ describe("DraftService", () => {
 		await expect(t.services.drafts.get("drf_missing")).rejects.toBeInstanceOf(
 			NotFoundError,
 		);
+	});
+
+	it("changes the title and the impact when a person approves an update draft", async () => {
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "API errors",
+			message: "Investigating",
+			impact: "minor",
+			notify: false,
+		});
+		const changed = await t.services.drafts.create(AGENT, {
+			incidentId: incident.id,
+			message: "Wider",
+			title: "API outage",
+			impact: "major",
+		});
+		expect(changed.content).toMatchObject({
+			title: "API outage",
+			impact: "major",
+		});
+		const { incident: published } = await t.services.drafts.approve(
+			EDITOR,
+			changed.id,
+			changed.content,
+		);
+		expect(published).toMatchObject({ title: "API outage", impact: "major" });
+		expect(published.updates[0]).toMatchObject({
+			title: "API errors",
+			impact: "minor",
+		});
+		expect(published.updates.at(-1)).toMatchObject({
+			title: "API outage",
+			impact: "major",
+		});
+
+		const same = await t.services.drafts.create(AGENT, {
+			incidentId: incident.id,
+			message: "Same",
+			title: "API outage",
+			impact: "major",
+		});
+		expect(same.content.title).toBeUndefined();
+		expect(same.content.impact).toBeUndefined();
+
+		await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			title: "API restored",
+			message: "Name changed",
+			notify: false,
+		});
+		const { incident: kept } = await t.services.drafts.approve(
+			EDITOR,
+			same.id,
+			{ message: "Same" },
+		);
+		expect(kept.title).toBe("API restored");
+		expect(kept.impact).toBe("major");
+		expect(kept.updates.at(-1)?.title).toBe("API restored");
 	});
 
 	it("keeps a region on a new draft and rejects it on an update", async () => {

@@ -23,6 +23,7 @@ import {
 	type Service,
 	type ServiceStatus,
 	type ServiceStatusOverride,
+	type StoredIncident,
 } from "../domain/types";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import type { NotificationEvent } from "../notifications/templates";
@@ -146,6 +147,21 @@ function assertWindow(start?: string, end?: string): void {
 	}
 }
 
+/**
+ * Gives each post a title and an impact. A post that omits a field gets the
+ * value of the incident. The next write stores those values.
+ */
+function withPostFields(stored: StoredIncident): Incident {
+	return {
+		...stored,
+		updates: stored.updates.map((update) => ({
+			...update,
+			title: update.title ?? stored.title,
+			impact: update.impact ?? stored.impact,
+		})),
+	};
+}
+
 export class IncidentService {
 	private readonly ctx: ServiceContext;
 	private readonly catalog: ServiceCatalog;
@@ -188,15 +204,17 @@ export class IncidentService {
 		if (options.before) {
 			where.push({ field: "createdAt", op: "lt", value: options.before });
 		}
-		return this.ctx.store.find("incidents", {
+		const stored = await this.ctx.store.find("incidents", {
 			where,
 			sort: [{ field: options.orderBy ?? "createdAt", direction: "desc" }],
 			limit: options.limit,
 		});
+		return stored.map((incident) => withPostFields(incident));
 	}
 
 	async find(id: string, options?: ReadOptions): Promise<Incident | undefined> {
-		return this.ctx.store.get("incidents", id, options);
+		const stored = await this.ctx.store.get("incidents", id, options);
+		return stored ? withPostFields(stored) : undefined;
 	}
 
 	async get(id: string): Promise<Incident> {
@@ -275,8 +293,11 @@ export class IncidentService {
 		const serviceIds = data.serviceIds;
 		const now = iso(this.ctx.now());
 		const author = authorRef(actor);
+		const impact = data.impact ?? (kind === "incident" ? "minor" : "none");
 		const update: IncidentUpdate = {
 			id: createId("upd"),
+			title: data.title,
+			impact,
 			status,
 			message: data.message,
 			author,
@@ -288,7 +309,7 @@ export class IncidentService {
 			kind,
 			title: data.title,
 			status,
-			impact: data.impact ?? (kind === "incident" ? "minor" : "none"),
+			impact,
 			serviceIds,
 			updates: [update],
 			startedAt: data.scheduledStart ?? now,
@@ -322,7 +343,7 @@ export class IncidentService {
 		return incident;
 	}
 
-	/** Posts a timeline update. It can change the status and add services. */
+	/** Posts a timeline update. It can change the title, the impact and the status. It can add services. */
 	async postUpdate(
 		actor: Actor,
 		id: string,
@@ -337,18 +358,24 @@ export class IncidentService {
 		const updateId = options.id ?? createId("upd");
 		const { current, next } = await this.mutate(id, (current) => {
 			const status = data.status ?? current.status;
+			const title = data.title ?? current.title;
+			const impact = data.impact ?? current.impact;
 			assertStatusForKind(current.kind, status);
 			const serviceIds = mergeServiceIds(current.serviceIds, addIds);
 			assertAffected(serviceIds, data.serviceStatuses);
 			const now = iso(this.ctx.now());
 			const next: Incident = {
 				...current,
+				title,
+				impact,
 				status,
 				serviceIds,
 				updates: [
 					...current.updates,
 					{
 						id: updateId,
+						title,
+						impact,
 						status,
 						message: data.message,
 						author,
@@ -429,8 +456,6 @@ export class IncidentService {
 		const { next } = await this.mutate(id, (current) => {
 			const next: Incident = {
 				...current,
-				title: patch.title ?? current.title,
-				impact: patch.impact ?? current.impact,
 				serviceIds: serviceIds ?? current.serviceIds,
 				updatedAt: iso(this.ctx.now()),
 			};
@@ -466,9 +491,7 @@ export class IncidentService {
 	}
 
 	private async load(id: string): Promise<Incident> {
-		const incident = await this.ctx.store.get("incidents", id, {
-			consistent: true,
-		});
+		const incident = await this.find(id, { consistent: true });
 		if (!incident) {
 			throw new NotFoundError("Incident", id);
 		}

@@ -6,6 +6,7 @@ import {
 	ServicePicker,
 	ServiceStatusSelect,
 	StatusSelect,
+	TitleField,
 	WindowFields,
 } from "@/components/manage/incident-fields";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
@@ -46,19 +47,7 @@ export default async function NewIncidentPage({
 			<Card>
 				<form action={createIncidentAction} className="space-y-5">
 					<input type="hidden" name="kind" value={kind} />
-					<Field
-						label="Title"
-						htmlFor="title"
-						hint="Short and customer-facing, e.g. “Elevated API error rates”."
-					>
-						<input
-							id="title"
-							name="title"
-							required
-							maxLength={200}
-							className={inputClass}
-						/>
-					</Field>
+					<TitleField hint="Short and customer-facing, e.g. “Elevated API error rates”." />
 					<div className="grid gap-4 sm:grid-cols-2">
 						<StatusSelect kind={kind} />
 						{isIncident && <ImpactSelect />}

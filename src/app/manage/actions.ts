@@ -359,6 +359,8 @@ export async function postIncidentUpdateAction(form: FormData): Promise<void> {
 	const tab = text(form, "tab");
 	await attempt(postedPath(id, tab, true), () =>
 		services.incidents.postUpdate(actor, id, {
+			title: nonEmpty(form, "title"),
+			impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
 			status: nonEmpty(form, "status") as EventStatus | undefined,
 			message: text(form, "message"),
 			serviceIds: list(form, "addServiceIds"),
@@ -377,8 +379,6 @@ export async function editIncidentAction(form: FormData): Promise<void> {
 	const id = text(form, "id");
 	await attempt(`/manage/incidents/${id}`, () =>
 		services.incidents.edit(actor, id, {
-			title: text(form, "title"),
-			impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
 			scheduledStart: dateTime(form, "scheduledStart"),
 			scheduledEnd: dateTime(form, "scheduledEnd"),
 			regionId: form.has("regionId")

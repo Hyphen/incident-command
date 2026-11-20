@@ -15,6 +15,7 @@ import {
 	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
+	TitleField,
 	WindowFields,
 } from "@/components/manage/incident-fields";
 import {
@@ -84,7 +85,19 @@ function PostForm({
 		>
 			<input type="hidden" name="id" value={incident.id} />
 			{tab === "posts" && <input type="hidden" name="tab" value="posts" />}
-			<StatusSelect kind={incident.kind} value={incident.status} />
+			<TitleField
+				value={incident.title}
+				hint="This post records the title. The incident shows the title of the latest post."
+			/>
+			<div className="grid gap-4 sm:grid-cols-2">
+				<StatusSelect kind={incident.kind} value={incident.status} />
+				{incident.kind === "incident" && (
+					<ImpactSelect
+						value={incident.impact}
+						hint="This post records the impact. A new impact does not change the status of the affected services. Set their status below."
+					/>
+				)}
+			</div>
 			<Field label="Message" htmlFor="message">
 				<textarea
 					id="message"
@@ -286,32 +299,23 @@ export default async function ManageIncidentPage({
 				/>
 				{canEdit && (
 					<div className="space-y-6">
-						<Card title="Details">
-							<form action={editIncidentAction} className="space-y-4">
-								<input type="hidden" name="id" value={incident.id} />
-								<Field label="Title" htmlFor="edit-title">
-									<input
-										id="edit-title"
-										name="title"
-										defaultValue={incident.title}
-										required
-										className={inputClass}
-									/>
-								</Field>
-								{isIncident ? (
-									<ImpactSelect value={incident.impact} id="edit-impact" />
-								) : (
-									<WindowFields
-										start={incident.scheduledStart}
-										end={incident.scheduledEnd}
-									/>
-								)}
-								<RegionSelect regions={regions} value={incident.regionId} />
-								<SubmitButton className={buttonClass.secondary}>
-									Save details
-								</SubmitButton>
-							</form>
-						</Card>
+						{(!isIncident || regions.length > 0) && (
+							<Card title={isIncident ? "Region" : "Maintenance window"}>
+								<form action={editIncidentAction} className="space-y-4">
+									<input type="hidden" name="id" value={incident.id} />
+									{!isIncident && (
+										<WindowFields
+											start={incident.scheduledStart}
+											end={incident.scheduledEnd}
+										/>
+									)}
+									<RegionSelect regions={regions} value={incident.regionId} />
+									<SubmitButton className={buttonClass.secondary}>
+										{isIncident ? "Save region" : "Save window"}
+									</SubmitButton>
+								</form>
+							</Card>
+						)}
 						<form action={deleteIncidentAction}>
 							<input type="hidden" name="id" value={incident.id} />
 							<ConfirmButton message="Delete this incident permanently? This cannot be undone.">

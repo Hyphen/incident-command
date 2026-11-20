@@ -45,6 +45,13 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
 - To add a service on an update, pass serviceIds to post_incident_update or draft_notification.
   The update adds those services. A service that is already affected stays. The new service gets
   the status of that update. edit_incident replaces the service list and does not set a status.
+  It does not change the title or the impact.
+- Each update records the title and the impact. To change them, pass title or impact to
+  post_incident_update or draft_notification. An update without them keeps the current values.
+  The incident shows the values of the latest update.
+- A new impact on an update does not change the status of a service that is already affected.
+  Use serviceStatus or serviceStatuses for that. A service that the update adds gets the status
+  for the new impact.
 - Schedule planned work with schedule_maintenance (statuses: scheduled -> in_progress -> verifying -> completed).
 - By default an incident uses Global. Call list_regions before you set a region.
   Pass regionId to create_incident, schedule_maintenance, draft_notification, or edit_incident.
@@ -385,7 +392,8 @@ export function createMcpServer(
 		"get_incident",
 		{
 			title: "Get incident",
-			description: "An incident or maintenance with its full update timeline.",
+			description:
+				"An incident or maintenance with its full update timeline. Each update has the title and the impact.",
 			inputSchema: { id },
 			readOnly: true,
 		},
@@ -556,10 +564,21 @@ export function createMcpServer(
 		{
 			title: "Post incident update",
 			description:
-				"Adds a timeline update to an incident or maintenance. It can change the status, add services, and set the status of each service.",
+				"Adds a timeline update to an incident or maintenance. The update records the title and the impact, and it can change them. It can change the status, add services, and set the status of each service.",
 			inputSchema: {
 				id,
 				message: z.string(),
+				title: z
+					.string()
+					.optional()
+					.describe(
+						"The new customer-facing title. Omit it to keep the current title.",
+					),
+				impact: impactSchema
+					.optional()
+					.describe(
+						"none | minor | major | critical. Omit it to keep the current impact. It does not change the status of a service that is already affected.",
+					),
 				status: eventStatusSchema.optional(),
 				serviceIds: z
 					.array(z.string())
@@ -595,11 +614,9 @@ export function createMcpServer(
 		{
 			title: "Edit incident",
 			description:
-				"Edits incident metadata (title, impact, services, maintenance window) without posting an update.",
+				"Replaces the service list or changes the maintenance window or the region. It does not post an update. It does not change the title or the impact. Use post_incident_update for those.",
 			inputSchema: {
 				id,
-				title: z.string().optional(),
-				impact: impactSchema.optional(),
 				serviceIds: z.array(z.string()).optional(),
 				scheduledStart: isoDate.optional(),
 				scheduledEnd: isoDate.optional(),
@@ -687,7 +704,9 @@ export function createMcpServer(
 				title: z
 					.string()
 					.optional()
-					.describe("New events only: short customer-facing title"),
+					.describe(
+						"The customer-facing title. On an update, this is the new title. Omit it to keep the current title.",
+					),
 				message: z
 					.string()
 					.describe("The public message that subscribers receive"),
@@ -699,7 +718,7 @@ export function createMcpServer(
 				impact: impactSchema
 					.optional()
 					.describe(
-						"New incidents only: none | minor | major | critical (default minor)",
+						"none | minor | major | critical. On a new incident, the default is minor. On an update, this is the new impact. Omit it to keep the current impact. It does not change the status of a service that is already affected.",
 					),
 				serviceIds: z
 					.array(z.string())

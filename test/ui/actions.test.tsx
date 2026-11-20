@@ -323,6 +323,8 @@ describe("incident actions", () => {
 				postIncidentUpdateAction(
 					form({
 						id: incident?.id ?? "",
+						title: "API outage",
+						impact: "major",
 						status: "resolved",
 						message: "Fixed",
 						serviceStatus: "",
@@ -331,6 +333,13 @@ describe("incident actions", () => {
 			),
 			`/manage/incidents/${incident?.id}?notice=Update posted`,
 		);
+		expect(await services.incidents.get(incident?.id ?? "")).toMatchObject({
+			title: "API outage",
+			impact: "major",
+		});
+		expect(
+			(await services.incidents.get(incident?.id ?? "")).updates.at(-1),
+		).toMatchObject({ title: "API outage", impact: "major" });
 		expectSameFlash(
 			await redirectOf(
 				postIncidentUpdateAction(
@@ -346,23 +355,6 @@ describe("incident actions", () => {
 		expect((await services.incidents.get(incident?.id ?? "")).status).toBe(
 			"resolved",
 		);
-
-		expectSameFlash(
-			await redirectOf(
-				editIncidentAction(
-					form({
-						id: incident?.id ?? "",
-						title: "API outage",
-						impact: "major",
-					}),
-				),
-			),
-			`/manage/incidents/${incident?.id}?notice=Incident saved`,
-		);
-		expect(await services.incidents.get(incident?.id ?? "")).toMatchObject({
-			title: "API outage",
-			serviceIds: [api.id],
-		});
 
 		expectSameFlash(
 			await redirectOf(deleteIncidentAction(form({ id: incident?.id ?? "" }))),
@@ -466,8 +458,25 @@ describe("incident actions", () => {
 		const [maintenance] = await services.incidents.list();
 		expect(maintenance).toMatchObject({
 			kind: "maintenance",
+			title: "Upgrade",
 			scheduledStart: "2026-11-05T02:00:00.000Z",
 			scheduledEnd: "2026-11-05T03:00:00.000Z",
+		});
+		expectSameFlash(
+			await redirectOf(
+				editIncidentAction(
+					form({
+						id: maintenance?.id ?? "",
+						title: "Ignored",
+						scheduledEnd: "2026-11-05T04:00",
+					}),
+				),
+			),
+			`/manage/incidents/${maintenance?.id}?notice=Incident saved`,
+		);
+		expect(await services.incidents.get(maintenance?.id ?? "")).toMatchObject({
+			title: "Upgrade",
+			scheduledEnd: "2026-11-05T04:00:00.000Z",
 		});
 	});
 
@@ -585,12 +594,14 @@ describe("notification draft actions", () => {
 			incidentId: incident?.id ?? "",
 			message: "y",
 		});
-		// The form of an update has no title, impact or window. It can add a service.
+		// An update can change the title and the impact. It can add a service.
 		expectSameFlash(
 			await redirectOf(
 				saveDraftAction(
 					form({
 						id: update.id,
+						title: "API outage",
+						impact: "critical",
 						status: "monitoring",
 						message: "Edited",
 						addServiceIds: ["", web.id],
@@ -603,6 +614,8 @@ describe("notification draft actions", () => {
 			`/manage/drafts/${update.id}?notice=Draft saved`,
 		);
 		expect((await services.drafts.get(update.id)).content).toMatchObject({
+			title: "API outage",
+			impact: "critical",
 			status: "monitoring",
 			message: "Edited",
 			serviceIds: [web.id],

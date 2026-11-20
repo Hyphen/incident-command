@@ -3,7 +3,6 @@ import type {
 	AgentActivity,
 	AgentToken,
 	BrandAsset,
-	Incident,
 	Invite,
 	Member,
 	NotificationChannelSettings,
@@ -16,6 +15,7 @@ import type {
 	ServiceStatusChange,
 	Session,
 	Settings,
+	StoredIncident,
 	Subscriber,
 } from "../domain/types";
 
@@ -26,7 +26,7 @@ export interface CollectionMap {
 	services: Service;
 	regions: Region;
 	service_status_changes: ServiceStatusChange;
-	incidents: Incident;
+	incidents: StoredIncident;
 	members: Member;
 	invites: Invite;
 	sessions: Session;

@@ -1,4 +1,4 @@
-import type { Incident } from "@/lib/domain/types";
+import type { StoredIncident } from "@/lib/domain/types";
 import {
 	ConflictError,
 	ForbiddenError,
@@ -104,7 +104,9 @@ describe("RegionService", () => {
 		).rejects.toBeInstanceOf(NotFoundError);
 	});
 
-	function replaceUpdate(change: (current: Incident) => Promise<void>): void {
+	function replaceUpdate(
+		change: (current: StoredIncident) => Promise<void>,
+	): void {
 		const update = t.store.update.bind(t.store);
 		let raced = false;
 		t.store.update = (async (collection, doc, options) => {
@@ -135,6 +137,8 @@ describe("RegionService", () => {
 					...current.updates,
 					{
 						id: "upd_race",
+						title: current.title,
+						impact: current.impact,
 						status: current.status,
 						message: "Posted during the delete",
 						author: current.createdBy,
@@ -206,12 +210,14 @@ describe("RegionService", () => {
 			regionId: region.id,
 		});
 		replaceUpdate(async (current) => {
-			const next: Incident = {
+			const next: StoredIncident = {
 				...current,
 				updates: [
 					...current.updates,
 					{
 						id: "upd_race",
+						title: current.title,
+						impact: current.impact,
 						status: current.status,
 						message: "Cleared first",
 						author: current.createdBy,

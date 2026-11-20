@@ -232,6 +232,8 @@ describe("API routes", () => {
 			serviceIds: [api.id, hidden.id],
 		});
 		await services.incidents.postUpdate(SYSTEM_ACTOR, incident.id, {
+			title: "Still down",
+			impact: "major",
 			message: "Still looking",
 		});
 		await services.incidents.create(SYSTEM_ACTOR, {
@@ -269,14 +271,24 @@ describe("API routes", () => {
 			},
 		]);
 		expect(body.incidents[0]).toMatchObject({
-			title: "Down",
+			title: "Still down",
+			impact: "major",
 			services: [api.id],
 			resolvedAt: null,
 			scheduledStart: null,
 		});
-		expect(
-			body.incidents[0].updates.map((u: { message: string }) => u.message),
-		).toEqual(["Still looking", "Looking"]);
+		expect(body.incidents[0].updates).toEqual([
+			expect.objectContaining({
+				title: "Still down",
+				impact: "major",
+				message: "Still looking",
+			}),
+			expect.objectContaining({
+				title: "Down",
+				impact: "critical",
+				message: "Looking",
+			}),
+		]);
 		expect(body.maintenance.upcoming[0]).toMatchObject({
 			title: "Upgrade",
 			scheduledStart: "2026-11-05T00:00:00.000Z",
@@ -431,7 +443,11 @@ describe("API routes", () => {
 			message: "Still looking",
 		});
 		clock.advance(60_000);
-		await services.incidents.resolve(SYSTEM_ACTOR, old.id, "Fixed");
+		await services.incidents.postUpdate(SYSTEM_ACTOR, old.id, {
+			status: "resolved",
+			title: "Long outage over",
+			message: "Fixed",
+		});
 		const xml = await (
 			await feed(
 				new Request("http://internal/feed.xml", {
@@ -441,7 +457,7 @@ describe("API routes", () => {
 		).text();
 		const items = xml.split("<item>").slice(1);
 		expect(items).toHaveLength(FEED_ITEM_LIMIT);
-		expect(items[0]).toContain("<title>Resolved: Long outage</title>");
+		expect(items[0]).toContain("<title>Resolved: Long outage over</title>");
 		expect(items[0]).toContain(
 			`<link>https://status.acme.dev/incidents/${old.id}</link>`,
 		);

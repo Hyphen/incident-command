@@ -10,7 +10,7 @@ export interface DraftItem {
 	title: string;
 }
 
-/** Adds a title to each draft. A new event uses its title. An update uses the incident title. */
+/** Adds a title to each draft. A new event uses its title. An update uses its title, or the incident title. */
 export async function draftItems(
 	services: Services,
 	drafts: NotificationDraft[],

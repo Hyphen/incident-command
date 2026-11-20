@@ -365,12 +365,19 @@ describe("incident page", () => {
 			serviceIds: [api.id, hidden.id],
 		});
 		clock.advance(95 * 60_000);
-		await services.incidents.resolve(SYSTEM_ACTOR, incident.id, "All good");
+		await services.incidents.postUpdate(SYSTEM_ACTOR, incident.id, {
+			status: "resolved",
+			title: "API restored",
+			impact: "minor",
+			message: "All good",
+		});
 		render(await IncidentPage({ params: params({ id: incident.id }) }));
 		expect(
-			screen.getByRole("heading", { level: 1, name: "API errors" }),
+			screen.getByRole("heading", { level: 1, name: "API restored" }),
 		).toBeInTheDocument();
-		expect(screen.getByText("Critical impact")).toBeInTheDocument();
+		expect(screen.getByText("API errors")).toBeInTheDocument();
+		expect(screen.getAllByText("Critical impact")).toHaveLength(1);
+		expect(screen.getAllByText("Minor impact").length).toBeGreaterThan(1);
 		expect(
 			screen.getByText("Resolved", { selector: "dt" }),
 		).toBeInTheDocument();
@@ -393,7 +400,7 @@ describe("incident page", () => {
 		expect(
 			await incidentMetadata({ params: params({ id: incident.id }) }),
 		).toEqual({
-			title: "API errors",
+			title: "API restored",
 			alternates: {
 				types: {
 					"application/rss+xml": "/feed.xml",

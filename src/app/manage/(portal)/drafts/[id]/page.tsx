@@ -16,6 +16,7 @@ import {
 	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
+	TitleField,
 	WindowFields,
 } from "@/components/manage/incident-fields";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
@@ -92,18 +93,14 @@ function ReviewForm({
 		>
 			<form action={saveDraftAction} className="space-y-5">
 				<input type="hidden" name="id" value={draft.id} />
-				{isCreate && (
-					<Field label="Title" htmlFor="title">
-						<input
-							id="title"
-							name="title"
-							defaultValue={content.title}
-							required
-							maxLength={200}
-							className={inputClass}
-						/>
-					</Field>
-				)}
+				<TitleField
+					value={isCreate ? content.title : (content.title ?? incident?.title)}
+					hint={
+						isCreate
+							? "Short and customer-facing, e.g. “Elevated API error rates”."
+							: "This post records the title. The incident shows the title of the latest post."
+					}
+				/>
 				<div className="grid gap-4 sm:grid-cols-2">
 					<StatusSelect
 						kind={draft.kind}
@@ -114,7 +111,18 @@ function ReviewForm({
 								: `Keep current status (${EVENT_STATUS_LABELS[(incident as Incident).status]})`
 						}
 					/>
-					{isCreate && isIncident && <ImpactSelect value={content.impact} />}
+					{isIncident && (
+						<ImpactSelect
+							value={
+								isCreate ? content.impact : (content.impact ?? incident?.impact)
+							}
+							hint={
+								isCreate
+									? undefined
+									: "This post records the impact. A new impact does not change the status of the affected services. Set their status below."
+							}
+						/>
+					)}
 				</div>
 				{isCreate && (
 					<RegionSelect regions={regions} value={content.regionId} />
@@ -217,6 +225,7 @@ function DraftSummary({
 	return (
 		<Card title="Notification">
 			<dl className="space-y-4 text-sm">
+				{content.title && <Item label="Incident Title">{content.title}</Item>}
 				{content.status && (
 					<Item label="Status">{EVENT_STATUS_LABELS[content.status]}</Item>
 				)}
