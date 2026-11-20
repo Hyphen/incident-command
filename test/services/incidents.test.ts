@@ -47,6 +47,7 @@ describe("IncidentService", () => {
 		expect(incident.id).toMatch(/^inc_/);
 		expect(incident.updates).toHaveLength(1);
 		expect(incident.updates[0]?.message).toBe("Investigating elevated errors");
+		expect(incident.updates[0]?.notified).toBe(true);
 		expect(await statusOf(api)).toBe("major_outage");
 		expect(await statusOf(web)).toBe("operational");
 		expect(t.notifier.incidents).toHaveLength(1);
@@ -80,6 +81,7 @@ describe("IncidentService", () => {
 			notify: false,
 		});
 		expect(incident.impact).toBe("minor");
+		expect(incident.updates[0]?.notified).toBe(false);
 		expect(await statusOf(web)).toBe("partial_outage");
 		expect(t.notifier.incidents).toHaveLength(0);
 	});
@@ -122,7 +124,14 @@ describe("IncidentService", () => {
 			notify: false,
 		});
 		expect(t.notifier.incidents).toHaveLength(0);
-		await t.services.incidents.resolve(publisher, quiet.id, "Done", false);
+		expect(quiet.updates[0]?.notified).toBe(false);
+		const resolved = await t.services.incidents.resolve(
+			publisher,
+			quiet.id,
+			"Done",
+			false,
+		);
+		expect(resolved.updates.at(-1)?.notified).toBe(false);
 		expect(t.notifier.incidents).toHaveLength(0);
 		await expect(
 			t.services.incidents.resolve(publisher, quiet.id, "Again"),

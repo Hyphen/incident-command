@@ -436,6 +436,9 @@ describe("incident actions", () => {
 		expect(new URL(missingUpdate, "http://localhost").pathname).toBe(
 			"/manage/incidents/nope",
 		);
+		expect(
+			new URL(missingUpdate, "http://localhost").searchParams.get("post"),
+		).toBe("1");
 		expect(flashMessage(missingUpdate, "error")).toBeTruthy();
 		const missingEdit = await redirectOf(
 			editIncidentAction(form({ id: "nope", title: "x" })),
@@ -557,7 +560,7 @@ describe("notification draft actions", () => {
 		});
 		expectSameFlash(
 			await redirectOf(discardDraftAction(form({ id: later.id }))),
-			"/manage/drafts?notice=Draft discarded",
+			"/manage/incidents?notice=Draft discarded",
 		);
 		expectSameFlash(
 			await redirectOf(discardDraftAction(form({ id: later.id }))),

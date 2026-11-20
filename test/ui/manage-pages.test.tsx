@@ -1,4 +1,11 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import AccountPage from "@/app/manage/(portal)/account/page";
 import AgentPage from "@/app/manage/(portal)/agents/[id]/page";
 import AgentsLoading from "@/app/manage/(portal)/agents/loading";
@@ -304,6 +311,7 @@ describe("portal layout", () => {
 		expect(nav.getByRole("link", { name: "Incidents" })).not.toHaveAttribute(
 			"aria-current",
 		);
+		expect(nav.queryByRole("link", { name: "Drafts" })).not.toBeInTheDocument();
 		expect(
 			nav.queryByRole("link", { name: "Members" }),
 		).not.toBeInTheDocument();
@@ -487,7 +495,7 @@ describe("dashboard", () => {
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole("link", { name: "Review drafts →" }),
-		).toHaveAttribute("href", "/manage/drafts");
+		).toHaveAttribute("href", "/manage/incidents");
 		const row = screen.getByRole("row", { name: /^API/ });
 		expect(row).toHaveTextContent("Major outage");
 		// The service has no history before this instant.
@@ -627,7 +635,7 @@ describe("incident pages", () => {
 		});
 		render(await IncidentsPage(flash()));
 		expect(screen.getByRole("link", { name: "Open one" })).toBeInTheDocument();
-		expect(screen.getByText(/2 updates/)).toBeInTheDocument();
+		expect(screen.getByText(/2 posts/)).toBeInTheDocument();
 		expect(
 			screen.getByRole("link", { name: "Closed one" }),
 		).toBeInTheDocument();
@@ -645,6 +653,9 @@ describe("incident pages", () => {
 			screen.getByText("No open incidents or maintenance."),
 		).toBeInTheDocument();
 		expect(screen.getByText("Nothing resolved yet.")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("heading", { name: "Drafts" }),
+		).not.toBeInTheDocument();
 		expect(
 			screen.queryByRole("link", { name: "Declare incident" }),
 		).not.toBeInTheDocument();
@@ -723,13 +734,67 @@ describe("incident pages", () => {
 			message: "Looking",
 			serviceIds: [api.id],
 		});
-		const page = render(
+		const dashboard = render(
 			await IncidentPage({
 				params: params({ id: incident.id }),
 				searchParams: params({}),
 			}),
 		);
+		expect(
+			screen.getByRole("heading", { level: 1, name: "API errors" }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "View public page" }),
+		).toHaveAttribute("href", `/incidents/${incident.id}`);
+		expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		expect(screen.getByRole("link", { name: "Timeline" })).toHaveAttribute(
+			"href",
+			`/manage/incidents/${incident.id}?tab=timeline`,
+		);
+		expect(screen.getByRole("link", { name: "Posts" })).toHaveAttribute(
+			"href",
+			`/manage/incidents/${incident.id}?tab=posts`,
+		);
+		expect(
+			screen.getByRole("heading", { name: "Status of the affected services" }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "Create a post" })).toHaveAttribute(
+			"href",
+			`/manage/incidents/${incident.id}?post=1`,
+		);
+		expect(
+			screen.queryByRole("button", { name: "Post update" }),
+		).not.toBeInTheDocument();
+		expect(screen.getByText("Looking")).toBeInTheDocument();
+		expect(
+			screen.getByText("System posted this and chose to notify subscribers."),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("heading", { name: "Drafts" }),
+		).not.toBeInTheDocument();
+		expect(screen.getByDisplayValue("API errors")).toBeInTheDocument();
+		const detailsForm = screen
+			.getByRole("button", { name: "Save details" })
+			.closest("form") as HTMLElement;
+		expect(
+			within(detailsForm).queryByText("Affected services"),
+		).not.toBeInTheDocument();
+		expect(within(detailsForm).queryByRole("checkbox")).not.toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "Delete incident" }),
+		).toBeInTheDocument();
+		dashboard.unmount();
+
 		// The update form sets a status for each affected service and can add another.
+		const form = render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ post: "1" }),
+			}),
+		);
 		const updateForm = screen
 			.getByRole("button", { name: "Post update" })
 			.closest("form") as HTMLElement;
@@ -754,27 +819,16 @@ describe("incident pages", () => {
 			within(updateForm).queryByRole("checkbox", { name: /API/ }),
 		).not.toBeInTheDocument();
 		expect(
-			screen.getByRole("heading", { level: 1, name: "API errors" }),
-		).toBeInTheDocument();
-		expect(
-			screen.getByRole("link", { name: "View public page" }),
-		).toHaveAttribute("href", `/incidents/${incident.id}`);
-		expect(
 			screen.getByRole("button", { name: "Post update" }),
 		).toBeInTheDocument();
-		expect(screen.getByDisplayValue("API errors")).toBeInTheDocument();
-		const detailsForm = screen
-			.getByRole("button", { name: "Save details" })
-			.closest("form") as HTMLElement;
+		expect(screen.getByRole("link", { name: "Cancel" })).toHaveAttribute(
+			"href",
+			`/manage/incidents/${incident.id}`,
+		);
 		expect(
-			within(detailsForm).queryByText("Affected services"),
+			screen.queryByRole("link", { name: "Create a post" }),
 		).not.toBeInTheDocument();
-		expect(within(detailsForm).queryByRole("checkbox")).not.toBeInTheDocument();
-		expect(screen.getByText(/System \(system\)/)).toBeInTheDocument();
-		expect(
-			screen.getByRole("button", { name: "Delete incident" }),
-		).toBeInTheDocument();
-		page.unmount();
+		form.unmount();
 
 		const covered = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "Both",
@@ -782,10 +836,10 @@ describe("incident pages", () => {
 			serviceIds: [api.id, web.id],
 			notify: false,
 		});
-		render(
+		const coveredPage = render(
 			await IncidentPage({
 				params: params({ id: covered.id }),
-				searchParams: params({}),
+				searchParams: params({ post: "1" }),
 			}),
 		);
 		const fullForm = screen
@@ -794,6 +848,123 @@ describe("incident pages", () => {
 		expect(
 			within(fullForm).getByText("Every service is on this incident."),
 		).toBeInTheDocument();
+		coveredPage.unmount();
+
+		render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "timeline" }),
+			}),
+		);
+		expect(screen.getByRole("link", { name: "Timeline" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		expect(screen.getByText(/System \(system\)/)).toBeInTheDocument();
+		expect(screen.getByText("Looking")).toBeInTheDocument();
+	});
+
+	it("shows pending drafts and who approved each post", async () => {
+		const { app, services } = await setupApp();
+		const { actor } = await signIn(app, "editor");
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Looking",
+			serviceIds: [api.id],
+		});
+		await services.incidents.postUpdate(actor, incident.id, {
+			message: "Quiet note",
+			notify: false,
+		});
+		await services.incidents.postUpdate(actor, incident.id, {
+			message: "Legacy",
+		});
+		const stored = await services.incidents.get(incident.id);
+		const legacy = stored.updates.find((update) => update.message === "Legacy");
+		delete legacy?.notified;
+		await app.store.update("incidents", stored);
+		const agentDraft = await services.drafts.create(AGENT, {
+			incidentId: incident.id,
+			message: "Agent note",
+		});
+		await services.drafts.approve(actor, agentDraft.id, agentDraft.content);
+		const ownDraft = await services.drafts.create(actor, {
+			incidentId: incident.id,
+			message: "Own note",
+		});
+		await services.drafts.approve(actor, ownDraft.id, ownDraft.content);
+		await services.incidents.postUpdate(actor, incident.id, {
+			message: "Sixth",
+		});
+		const pending = await services.drafts.create(AGENT, {
+			incidentId: incident.id,
+			message: "Please review this.",
+		});
+		const discarded = await services.drafts.create(AGENT, {
+			incidentId: incident.id,
+			message: "Drop this.",
+		});
+		await services.drafts.discard(actor, discarded.id);
+
+		const dashboard = render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({}),
+			}),
+		);
+		expect(
+			screen.getByText("These are the latest 5 of 6 posts."),
+		).toBeInTheDocument();
+		expect(screen.queryByText("Looking")).not.toBeInTheDocument();
+		expect(screen.getByText("Sixth")).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: /^Please review this/ }),
+		).toHaveAttribute("href", `/manage/drafts/${pending.id}`);
+		expect(screen.queryByText("Drop this.")).not.toBeInTheDocument();
+		dashboard.unmount();
+
+		render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "posts" }),
+			}),
+		);
+		expect(screen.getByRole("link", { name: "Posts" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		expect(screen.getByText("Looking")).toBeInTheDocument();
+		expect(
+			screen.getByText("System posted this and chose to notify subscribers."),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"Editor User posted this and chose not to notify subscribers.",
+			),
+		).toBeInTheDocument();
+		expect(screen.getByText("Editor User posted this.")).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"Test agent wrote this post. Editor User approved this post and chose to notify subscribers.",
+			),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"Editor User approved this post and chose to notify subscribers.",
+			),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"Editor User posted this and chose to notify subscribers.",
+			),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByText("These are the latest 5 of 6 posts."),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("heading", { name: "Drafts" }),
+		).not.toBeInTheDocument();
 	});
 
 	it("renders maintenance details and read-only views", async () => {
@@ -815,7 +986,31 @@ describe("incident pages", () => {
 		expect(screen.getByLabelText("Starts (UTC)")).toHaveValue(
 			"2026-11-05T00:00",
 		);
+		expect(
+			screen.queryByRole("heading", {
+				name: "Status of the affected services",
+			}),
+		).not.toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
 		editor.unmount();
+
+		// Maintenance with no services has no status for each service.
+		const form = render(
+			await IncidentPage({
+				params: params({ id: maintenance.id }),
+				searchParams: params({ post: "1" }),
+			}),
+		);
+		expect(
+			screen.getByRole("button", { name: "Post update" }),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByText("Status of each service"),
+		).not.toBeInTheDocument();
+		form.unmount();
 
 		const { app: viewerApp, services: viewerServices } = await setupApp();
 		await signIn(viewerApp, "viewer");
@@ -826,15 +1021,21 @@ describe("incident pages", () => {
 		render(
 			await IncidentPage({
 				params: params({ id: incident.id }),
-				searchParams: params({}),
+				searchParams: params({ post: "1" }),
 			}),
 		);
 		expect(
 			screen.queryByRole("button", { name: "Post update" }),
 		).not.toBeInTheDocument();
 		expect(
+			screen.queryByRole("link", { name: "Create a post" }),
+		).not.toBeInTheDocument();
+		expect(
 			screen.queryByRole("button", { name: "Delete incident" }),
 		).not.toBeInTheDocument();
+		expect(
+			screen.getByText("System posted this and chose to notify subscribers."),
+		).toBeInTheDocument();
 	});
 
 	it("shows a region on the incident forms", async () => {
@@ -885,7 +1086,7 @@ describe("notification draft pages", () => {
 	const draftPage = (id: string) =>
 		DraftPage({ params: params({ id }), searchParams: params({}) });
 
-	it("lists drafts that wait for review and reviewed drafts", async () => {
+	it("lists pending drafts under open incidents", async () => {
 		const { app, services } = await setupApp();
 		const { actor } = await signIn(app, "editor");
 		const incident = await services.incidents.create(SYSTEM_ACTOR, {
@@ -920,15 +1121,22 @@ describe("notification draft pages", () => {
 		});
 		await services.drafts.discard(actor, discarded.id);
 
-		render(await DraftsPage(flash({ notice: "draft_discarded" })));
+		render(await IncidentsPage(flash({ notice: "draft_discarded" })));
 		expect(screen.getByRole("status")).toHaveTextContent("Draft discarded");
 		expect(screen.getByRole("link", { name: /^API errors/ })).toHaveAttribute(
 			"href",
 			`/manage/drafts/${created.id}`,
 		);
 		expect(
-			screen.getByRole("link", { name: /^Database slow/ }),
-		).toHaveAttribute("href", `/manage/drafts/${update.id}`);
+			screen
+				.getAllByRole("link", { name: /^Database slow/ })
+				.map((link) => link.getAttribute("href")),
+		).toEqual(
+			expect.arrayContaining([
+				`/manage/incidents/${incident.id}`,
+				`/manage/drafts/${update.id}`,
+			]),
+		);
 		expect(
 			screen.getByRole("link", { name: /^Deleted incident/ }),
 		).toBeInTheDocument();
@@ -936,21 +1144,21 @@ describe("notification draft pages", () => {
 			screen.getAllByText(/New incident · Drafted by Test agent/),
 		).toHaveLength(1);
 		expect(screen.getAllByText(/Incident update · Drafted by/)).toHaveLength(2);
-		expect(
-			screen.getByRole("heading", { name: "Waiting for review" }),
-		).toBeInTheDocument();
-		expect(screen.getAllByText("Waiting for review")).toHaveLength(1);
 		expect(screen.getAllByText("Review")).toHaveLength(3);
-		expect(screen.getByText("Discarded by Editor User")).toBeInTheDocument();
-		expect(screen.getByText(/New maintenance/)).toBeInTheDocument();
+		expect(
+			screen.queryByText("Discarded by Editor User"),
+		).not.toBeInTheDocument();
+		expect(screen.queryByText(/New maintenance/)).not.toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"These drafts wait for review. An editor approves a draft before the status page shows it.",
+			),
+		).toBeInTheDocument();
 	});
 
-	it("shows empty states", async () => {
-		const { app } = await setupApp();
-		await signIn(app, "viewer");
-		render(await DraftsPage(flash()));
-		expect(screen.getByText("No drafts wait for review.")).toBeInTheDocument();
-		expect(screen.getByText("No reviewed drafts yet.")).toBeInTheDocument();
+	it("sends the old drafts list to the incidents page", async () => {
+		await setupApp();
+		expect(await redirectOf(DraftsPage())).toBe("/manage/incidents");
 	});
 
 	it("sends a visitor to sign-in and back to the draft", async () => {
@@ -1840,6 +2048,9 @@ describe("admin pages", () => {
 		expect(
 			webhooks.queryByRole("heading", { name: "Providers" }),
 		).not.toBeInTheDocument();
+		expect(
+			webhooks.queryByRole("button", { name: /Add provider/ }),
+		).not.toBeInTheDocument();
 		// Only the webhook channel has the private network switch, and it starts off.
 		expect(
 			webhooks.getByLabelText("Allow private network addresses"),
@@ -1857,12 +2068,19 @@ describe("admin pages", () => {
 				"No providers yet. Until you add one, this channel uses SendGrid (environment variables).",
 			),
 		).toBeInTheDocument();
-		expect(email.getByLabelText("API key")).toBeDisabled();
+		// The add form stays in a dialog until the admin opens it.
+		expect(email.queryByRole("dialog")).not.toBeInTheDocument();
 		expect(
-			email.getAllByText(
-				"Set ENCRYPTION_KEY on the server to save credentials.",
-			),
-		).toHaveLength(2);
+			email.queryByRole("heading", { name: "Add a provider" }),
+		).not.toBeInTheDocument();
+		const addEmail = email.getByRole("button", {
+			name: "Add provider for Email",
+		});
+		expect(
+			addEmail.compareDocumentPosition(
+				email.getByRole("heading", { name: "Providers" }),
+			) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
 		expect(email.getByRole("radio", { name: /Active\/passive/ })).toBeChecked();
 		expect(email.getByLabelText("Default from address")).toHaveAttribute(
 			"placeholder",
@@ -1872,18 +2090,122 @@ describe("admin pages", () => {
 			email.getByText(/Leave empty to use status@test.dev \(EMAIL_FROM\)\./),
 		).toBeInTheDocument();
 
+		const user = userEvent.setup();
+		await user.click(addEmail);
+		const emailDialog = email.getByRole("dialog", { name: "Add a provider" });
+		expect(
+			within(emailDialog).getByRole("radio", { name: /SendGrid/ }),
+		).toBeChecked();
+		expect(within(emailDialog).getByLabelText("API key")).toBeDisabled();
+		expect(
+			within(emailDialog).getByText(
+				"Set ENCRYPTION_KEY on the server to save credentials.",
+			),
+		).toBeInTheDocument();
+		expect(
+			within(emailDialog).queryByLabelText("Secret access key"),
+		).not.toBeInTheDocument();
+		// A click inside the dialog keeps it open. The choice changes the fields.
+		await user.click(
+			within(emailDialog).getByRole("radio", { name: /Amazon SES/ }),
+		);
+		expect(email.getByRole("dialog")).toBeInTheDocument();
+		expect(within(emailDialog).getByLabelText("Region")).toBeRequired();
+		expect(
+			within(emailDialog).getByLabelText("Secret access key"),
+		).toBeDisabled();
+		expect(
+			within(emailDialog).queryByLabelText("API key"),
+		).not.toBeInTheDocument();
+		expect(emailDialog.querySelector('input[name="type"]')).toHaveValue("ses");
+		await user.click(
+			within(emailDialog).getByRole("button", { name: "Cancel" }),
+		);
+		expect(email.queryByRole("dialog")).not.toBeInTheDocument();
+
+		await user.click(addEmail);
+		const reopened = email.getByRole("dialog", { name: "Add a provider" });
+		expect(
+			within(reopened).getByRole("radio", { name: /SendGrid/ }),
+		).toBeChecked();
+		const name = within(reopened).getByLabelText("Name");
+		expect(name).toHaveValue("SendGrid");
+		await user.clear(name);
+		await user.type(name, "Primary");
+		await user.click(within(reopened).getByRole("button", { name: "Cancel" }));
+		expect(email.queryByRole("dialog")).not.toBeInTheDocument();
+		await user.click(addEmail);
+		expect(
+			within(
+				email.getByRole("dialog", { name: "Add a provider" }),
+			).getByLabelText("Name"),
+		).toHaveValue("SendGrid");
+		await user.click(
+			within(email.getByRole("dialog")).getByRole("button", { name: "Close" }),
+		);
+		expect(email.queryByRole("dialog")).not.toBeInTheDocument();
+
 		const sms = within(card("Text messaging"));
 		expect(sms.getByText("Not ready")).toBeInTheDocument();
 		expect(
 			sms.getByText("Add a provider so this channel can send."),
 		).toBeInTheDocument();
+		expect(sms.getByText("No providers yet.")).toBeInTheDocument();
 		expect(
-			sms.getByText("No providers yet. Add one below."),
-		).toBeInTheDocument();
-		expect(sms.getByRole("button", { name: "Add Twilio" })).toBeInTheDocument();
+			sms.queryByRole("button", { name: "Add Twilio" }),
+		).not.toBeInTheDocument();
+		const addSms = sms.getByRole("button", {
+			name: "Add provider for Text messaging",
+		});
 		expect(
-			sms.getByRole("button", { name: "Add Amazon SNS" }),
+			addSms.compareDocumentPosition(
+				sms.getByRole("heading", { name: "Providers" }),
+			) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+		await user.click(addSms);
+		const smsDialog = sms.getByRole("dialog", { name: "Add a provider" });
+		expect(
+			within(smsDialog).getByRole("button", { name: "Add Twilio" }),
 		).toBeInTheDocument();
+		expect(within(smsDialog).getByLabelText("Account SID")).toBeRequired();
+		await user.click(
+			within(smsDialog).getByRole("radio", { name: /Amazon SNS/ }),
+		);
+		expect(
+			within(smsDialog).getByRole("button", { name: "Add Amazon SNS" }),
+		).toBeInTheDocument();
+		expect(
+			within(smsDialog).queryByLabelText("Account SID"),
+		).not.toBeInTheDocument();
+		expect(smsDialog.querySelector('input[name="type"]')).toHaveValue("sns");
+		await user.click(within(smsDialog).getByRole("button", { name: "Close" }));
+		expect(sms.queryByRole("dialog")).not.toBeInTheDocument();
+	});
+
+	it("closes the add dialog after submit", async () => {
+		const { app } = await setupApp();
+		await signIn(app, "admin");
+		render(await NotificationsSettingsPage(flash()));
+		const user = userEvent.setup();
+		const email = within(
+			screen
+				.getByRole("heading", { name: "Email" })
+				.closest("section") as HTMLElement,
+		);
+		await user.click(
+			email.getByRole("button", { name: "Add provider for Email" }),
+		);
+		const dialog = email.getByRole("dialog", { name: "Add a provider" });
+		expect(dialog).toBeInTheDocument();
+		const close = vi.spyOn(HTMLDialogElement.prototype, "close");
+		// This server has no encryption key. The action returns an error.
+		// The dialog must close. The error is on the page.
+		await user.click(email.getByRole("button", { name: "Add SendGrid" }));
+		await waitFor(() => {
+			expect(close).toHaveBeenCalled();
+		});
+		expect(dialog).not.toHaveAttribute("open");
+		close.mockRestore();
 	});
 
 	it("renders providers in order with their roles and saved credentials", async () => {

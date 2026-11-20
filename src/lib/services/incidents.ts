@@ -280,6 +280,7 @@ export class IncidentService {
 			status,
 			message: data.message,
 			author,
+			notified: data.notify !== false,
 			createdAt: now,
 		};
 		const incident: Incident = {
@@ -351,6 +352,7 @@ export class IncidentService {
 						status,
 						message: data.message,
 						author,
+						notified: data.notify !== false,
 						createdAt: now,
 					},
 				],

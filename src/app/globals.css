@@ -135,4 +135,32 @@
 			color: var(--ic-brand);
 		}
 	}
+
+	/*
+	 * A modal dialog. The browser pins the dialog to the start of the page.
+	 * This rule puts the dialog in the center.
+	 */
+	dialog.ic-dialog {
+		position: fixed;
+		inset: auto;
+		top: 50%;
+		left: 50%;
+		translate: -50% -50%;
+		width: min(42rem, calc(100vw - 2rem));
+		max-height: calc(100dvh - 2rem);
+		margin: 0;
+		overflow: auto;
+		border: 1px solid var(--ic-border);
+		border-radius: var(--ic-radius);
+		background: var(--ic-surface);
+		color: var(--ic-fg);
+		padding: 0;
+		box-shadow:
+			0 1px 2px rgb(0 0 0 / 0.08),
+			0 24px 48px -16px rgb(0 0 0 / 0.45);
+	}
+
+	dialog.ic-dialog::backdrop {
+		background: rgb(0 0 0 / 0.45);
+	}
 }
