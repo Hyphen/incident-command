@@ -408,16 +408,11 @@ describe("status components", () => {
 		).toBeInTheDocument();
 		expect(screen.getByText("Outage")).toBeInTheDocument();
 		expect(screen.getByText(/50% uptime/)).toBeInTheDocument();
-		for (const item of screen.getAllByRole("listitem", { name: /2026/ })) {
-			const tip = item.querySelector(".absolute");
-			expect(tip).toHaveClass("left-1/2");
-			expect(tip).not.toHaveClass("right-0");
-		}
 	});
 
-	it("keeps a tooltip at either end of a long row inside the row", () => {
-		const days = Array.from({ length: 25 }, (_, index) => ({
-			date: `2026-10-${String(index + 1).padStart(2, "0")}`,
+	it("keeps a tooltip inside the visible uptime row", () => {
+		const days = Array.from({ length: 90 }, (_, index) => ({
+			date: new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10),
 			status: "operational" as const,
 			uptime: 1,
 			trackedMs: 86_400_000,
@@ -426,13 +421,16 @@ describe("status components", () => {
 		}));
 		const { container } = render(<UptimeBars days={days} />);
 		const tips = [...container.querySelectorAll(".ic-uptime-day .absolute")];
-		expect(tips).toHaveLength(25);
-		expect(tips[0]).toHaveClass("left-0");
-		expect(tips[11]).toHaveClass("left-0");
-		expect(tips[12]).toHaveClass("left-1/2", "-translate-x-1/2");
-		expect(tips[13]).toHaveClass("right-0");
-		expect(tips[24]).toHaveClass("right-0");
-		expect(tips[24]).not.toHaveClass("left-1/2");
+		const center = (item: number, count: number) =>
+			`${((item + 0.5) / count) * 100}%`;
+		const narrow = tips[78] as HTMLElement;
+		expect(narrow.style.getPropertyValue("--tip")).toBe(center(18, 30));
+		expect(narrow.style.getPropertyValue("--tip-sm")).toBe(center(78, 90));
+		expect(narrow.className).toContain("clamp(0px,calc(var(--tip)");
+		expect(narrow.className).not.toContain("right-0");
+		const hidden = tips[0] as HTMLElement;
+		expect(hidden.style.getPropertyValue("--tip")).toBe("0%");
+		expect(hidden.style.getPropertyValue("--tip-sm")).toBe(center(0, 90));
 	});
 
 	it("renders the minute timeline of each service", () => {
