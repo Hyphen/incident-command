@@ -251,4 +251,97 @@ describe("two-factor authentication", () => {
 			t.services.sessions.resolvePending(pendingGone.token),
 		).resolves.toBeUndefined();
 	});
+
+	it("accepts one use of a code when two checks run together", async () => {
+		const t = createTestContext();
+		const { member } = await owner(t);
+		const started = await t.services.twoFactor.begin(member.id, "Acme");
+		const codes = await t.services.twoFactor.confirm(
+			member.id,
+			totpAt(started.secret, t.clock.now().getTime()),
+		);
+		const stored = await t.store.get("members", member.id);
+		if (!stored) {
+			throw new Error("Member missing");
+		}
+		const { revision: _revision, ...legacy } = stored;
+		await t.store.update("members", legacy);
+
+		const same = await Promise.allSettled([
+			t.services.twoFactor.verify(member.id, codes[0] ?? ""),
+			t.services.twoFactor.verify(member.id, codes[0] ?? ""),
+		]);
+		expect(same.filter((result) => result.status === "fulfilled")).toHaveLength(
+			1,
+		);
+		expect(
+			(await t.services.twoFactor.status(member.id, "Acme"))
+				.recoveryCodesRemaining,
+		).toBe(9);
+
+		const pair = await Promise.allSettled([
+			t.services.twoFactor.verify(member.id, codes[1] ?? ""),
+			t.services.twoFactor.verify(member.id, codes[2] ?? ""),
+		]);
+		expect(pair.every((result) => result.status === "fulfilled")).toBe(true);
+		expect(
+			(await t.services.twoFactor.status(member.id, "Acme"))
+				.recoveryCodesRemaining,
+		).toBe(7);
+
+		t.clock.advance(30_000);
+		const code = totpAt(started.secret, t.clock.now().getTime());
+		const steps = await Promise.allSettled([
+			t.services.twoFactor.verify(member.id, code),
+			t.services.twoFactor.verify(member.id, code),
+		]);
+		expect(
+			steps.filter((result) => result.status === "fulfilled"),
+		).toHaveLength(1);
+		expect((await t.store.get("members", member.id))?.revision).toBeGreaterThan(
+			0,
+		);
+	});
+
+	it("accepts a recovery code when the authenticator secret cannot be read", async () => {
+		const first = createTestContext({
+			env: { ENCRYPTION_KEY: "a".repeat(32) },
+		});
+		const { member } = await owner(first);
+		const started = await first.services.twoFactor.begin(member.id, "Acme");
+		const codes = await first.services.twoFactor.confirm(
+			member.id,
+			totpAt(started.secret, first.clock.now().getTime()),
+		);
+		const second = createTestContext({
+			env: { ENCRYPTION_KEY: "b".repeat(32) },
+			store: first.store,
+		});
+		await expect(
+			second.services.twoFactor.verify(member.id, "123456"),
+		).rejects.toThrow(
+			"The server cannot read the authenticator secret. Check ENCRYPTION_KEY.",
+		);
+		await second.services.twoFactor.verify(member.id, codes[0] ?? "");
+		expect(
+			(await second.services.twoFactor.status(member.id, "Acme"))
+				.recoveryCodesRemaining,
+		).toBe(9);
+	});
+
+	it("stops when the member record keeps changing", async () => {
+		const t = createTestContext();
+		const { member } = await owner(t);
+		const started = await t.services.twoFactor.begin(member.id, "Acme");
+		const codes = await t.services.twoFactor.confirm(
+			member.id,
+			totpAt(started.secret, t.clock.now().getTime()),
+		);
+		const update = vi.spyOn(t.store, "update").mockResolvedValue(undefined);
+		await expect(
+			t.services.twoFactor.verify(member.id, codes[0] ?? ""),
+		).rejects.toBeInstanceOf(ConflictError);
+		expect(update).toHaveBeenCalledTimes(5);
+		update.mockRestore();
+	});
 });

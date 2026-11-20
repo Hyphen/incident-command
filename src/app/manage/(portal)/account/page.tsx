@@ -69,6 +69,7 @@ export default async function AccountPage({
 					setup={twoFactor.setup}
 					recoveryCodes={twoFactor.recoveryCodes}
 					recoveryCodesRemaining={twoFactor.recoveryCodesRemaining}
+					next={next ?? ""}
 				/>
 			</Card>
 			<Card title="Change password">
@@ -117,6 +118,7 @@ function TwoFactorSection({
 	setup,
 	recoveryCodes,
 	recoveryCodesRemaining,
+	next,
 }: {
 	enabled: boolean;
 	required: boolean;
@@ -124,6 +126,7 @@ function TwoFactorSection({
 	setup?: { secret: string; uri: string };
 	recoveryCodes?: string[];
 	recoveryCodesRemaining: number;
+	next: string;
 }) {
 	if (unreadable) {
 		return (
@@ -135,6 +138,7 @@ function TwoFactorSection({
 	if (setup) {
 		return (
 			<form action={confirmTwoFactorAction} className="max-w-sm space-y-4">
+				<input type="hidden" name="next" value={next} />
 				<TwoFactorSetup secret={setup.secret} uri={setup.uri} />
 				<Field label="Code from the app" htmlFor="code">
 					<input
@@ -154,6 +158,7 @@ function TwoFactorSection({
 	if (!enabled) {
 		return (
 			<form action={beginTwoFactorAction} className="space-y-4">
+				<input type="hidden" name="next" value={next} />
 				<p className="text-sm text-muted">
 					Add a code from your password manager at each sign-in.
 					{required ? " An admin requires two-factor authentication." : ""}
@@ -182,6 +187,7 @@ function TwoFactorSection({
 						))}
 					</ul>
 					<form action={acknowledgeRecoveryCodesAction}>
+						<input type="hidden" name="next" value={next} />
 						<SubmitButton className={buttonClass.secondary}>
 							Hide recovery codes
 						</SubmitButton>
@@ -192,6 +198,7 @@ function TwoFactorSection({
 				action={regenerateRecoveryCodesAction}
 				className="max-w-sm space-y-4"
 			>
+				<input type="hidden" name="next" value={next} />
 				<Field
 					label="Current password"
 					htmlFor="regeneratePassword"
@@ -216,6 +223,7 @@ function TwoFactorSection({
 				</p>
 			) : (
 				<form action={disableTwoFactorAction} className="max-w-sm space-y-4">
+					<input type="hidden" name="next" value={next} />
 					<Field label="Current password" htmlFor="disablePassword">
 						<input
 							id="disablePassword"

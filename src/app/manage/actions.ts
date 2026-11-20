@@ -152,6 +152,14 @@ export async function acceptInviteAction(form: FormData): Promise<void> {
 const ACCOUNT = "/manage/account";
 const accountAccess = { allowMissingTwoFactor: true } as const;
 
+/** The account page, with a safe return path when the member has one. */
+function accountPath(next: string): string {
+	const path = returnPath(next);
+	return path === "/manage"
+		? ACCOUNT
+		: `${ACCOUNT}?next=${encodeURIComponent(path)}`;
+}
+
 export async function changePasswordAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction(
 		"viewer",
@@ -167,16 +175,17 @@ export async function changePasswordAction(form: FormData): Promise<void> {
 	redirect(flash(ACCOUNT, "password_updated"));
 }
 
-export async function beginTwoFactorAction(): Promise<void> {
+export async function beginTwoFactorAction(form: FormData): Promise<void> {
 	const { actor, services } = await requireMemberForAction(
 		"viewer",
 		accountAccess,
 	);
+	const path = accountPath(text(form, "next"));
 	const settings = await services.settings.get();
-	await attempt(ACCOUNT, () =>
+	await attempt(path, () =>
 		services.twoFactor.begin(actor.id, settings.siteName),
 	);
-	redirect(ACCOUNT);
+	redirect(path);
 }
 
 export async function confirmTwoFactorAction(form: FormData): Promise<void> {
@@ -184,19 +193,23 @@ export async function confirmTwoFactorAction(form: FormData): Promise<void> {
 		"viewer",
 		accountAccess,
 	);
-	await attempt(ACCOUNT, () =>
+	const path = accountPath(text(form, "next"));
+	await attempt(path, () =>
 		services.twoFactor.confirm(actor.id, text(form, "code")),
 	);
-	redirect(flash(ACCOUNT, "two_factor_enabled"));
+	redirect(flash(path, "two_factor_enabled"));
 }
 
-export async function acknowledgeRecoveryCodesAction(): Promise<void> {
+export async function acknowledgeRecoveryCodesAction(
+	form: FormData,
+): Promise<void> {
 	const { actor, services } = await requireMemberForAction(
 		"viewer",
 		accountAccess,
 	);
+	const path = accountPath(text(form, "next"));
 	await services.twoFactor.acknowledge(actor);
-	redirect(flash(ACCOUNT, "recovery_codes_saved"));
+	redirect(flash(path, "recovery_codes_saved"));
 }
 
 export async function regenerateRecoveryCodesAction(
@@ -206,10 +219,11 @@ export async function regenerateRecoveryCodesAction(
 		"viewer",
 		accountAccess,
 	);
-	await attempt(ACCOUNT, () =>
+	const path = accountPath(text(form, "next"));
+	await attempt(path, () =>
 		services.twoFactor.regenerate(actor, text(form, "password")),
 	);
-	redirect(flash(ACCOUNT, "recovery_codes_updated"));
+	redirect(flash(path, "recovery_codes_updated"));
 }
 
 export async function disableTwoFactorAction(form: FormData): Promise<void> {
@@ -217,8 +231,9 @@ export async function disableTwoFactorAction(form: FormData): Promise<void> {
 		"viewer",
 		accountAccess,
 	);
+	const path = accountPath(text(form, "next"));
 	const settings = await services.settings.get();
-	await attempt(ACCOUNT, () =>
+	await attempt(path, () =>
 		services.twoFactor.disable(
 			actor,
 			text(form, "password"),
@@ -226,7 +241,7 @@ export async function disableTwoFactorAction(form: FormData): Promise<void> {
 			settings.requireTwoFactor,
 		),
 	);
-	redirect(flash(ACCOUNT, "two_factor_disabled"));
+	redirect(flash(path, "two_factor_disabled"));
 }
 
 /** Checks an authenticator code or a recovery code, then opens the portal. */
@@ -237,25 +252,23 @@ export async function submitTwoFactorAction(form: FormData): Promise<void> {
 	if (!pending) {
 		redirect(loginPath(next));
 	}
+	const code = text(form, "code");
 	try {
 		if (pending.session.purpose === "enroll") {
-			await app.services.twoFactor.confirm(
-				pending.member.id,
-				text(form, "code"),
-			);
+			try {
+				await app.services.twoFactor.confirm(pending.member.id, code);
+			} catch (error) {
+				if (!isAppError(error) || error.message !== TWO_FACTOR_ALREADY_ON) {
+					throw error;
+				}
+				await app.services.twoFactor.verify(pending.member.id, code);
+			}
 		} else {
-			await app.services.twoFactor.verify(
-				pending.member.id,
-				text(form, "code"),
-			);
+			await app.services.twoFactor.verify(pending.member.id, code);
 		}
 	} catch (error) {
 		if (!isAppError(error)) {
 			throw error;
-		}
-		if (error.message === TWO_FACTOR_ALREADY_ON) {
-			await promoteSession(app);
-			redirect(flash(ACCOUNT, "two_factor_enabled"));
 		}
 		if (error.message === TWO_FACTOR_SECRET_UNREADABLE) {
 			redirect(flash(twoFactorPath(next), "two_factor_secret_unreadable"));
@@ -264,12 +277,7 @@ export async function submitTwoFactorAction(form: FormData): Promise<void> {
 	}
 	await promoteSession(app);
 	if (pending.session.purpose === "enroll") {
-		const path = returnPath(next);
-		const account =
-			path === "/manage"
-				? ACCOUNT
-				: `${ACCOUNT}?next=${encodeURIComponent(path)}`;
-		redirect(flash(account, "two_factor_enabled"));
+		redirect(flash(accountPath(next), "two_factor_enabled"));
 	}
 	redirect(returnPath(next));
 }

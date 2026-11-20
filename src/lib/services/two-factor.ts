@@ -24,6 +24,9 @@ import { SecretBox } from "../secrets";
 import { iso, type ServiceContext } from "./context";
 import type { SessionService } from "./sessions";
 
+/** The change leaves the stored authenticator record as it is. */
+const KEEP: unique symbol = Symbol("keep");
+
 /** What the account page and the sign-in page may show. */
 export interface TwoFactorView {
 	enabled: boolean;
@@ -61,47 +64,52 @@ export class TwoFactorService {
 		memberId: string,
 		issuer: string,
 	): Promise<{ secret: string; uri: string }> {
-		const member = await this.load(memberId);
-		if (member.twoFactor?.enabledAt) {
-			throw new ConflictError(TWO_FACTOR_ALREADY_ON);
-		}
-		const pending = member.twoFactor?.secret;
-		if (pending) {
-			try {
-				return this.link(member, this.open(member.id, pending), issuer);
-			} catch {
-				// A secret that does not decrypt is replaced below.
+		let secret = "";
+		await this.commit(memberId, (member) => {
+			if (member.twoFactor?.enabledAt) {
+				throw new ConflictError(TWO_FACTOR_ALREADY_ON);
 			}
-		}
-		const secret = generateTotpSecret();
-		await this.write(member, {
-			secret: this.seal(member.id, secret),
-			recoveryCodeHashes: [],
+			const pending = member.twoFactor?.secret;
+			if (pending) {
+				try {
+					secret = this.open(member.id, pending);
+					return KEEP;
+				} catch {
+					// A secret that does not decrypt is replaced below.
+				}
+			}
+			secret = generateTotpSecret();
+			return {
+				secret: this.seal(member.id, secret),
+				recoveryCodeHashes: [],
+			};
 		});
-		return this.link(member, secret, issuer);
+		return this.link(await this.load(memberId), secret, issuer);
 	}
 
 	/** Confirms the first authenticator code and returns the recovery codes. */
 	async confirm(memberId: string, code: string): Promise<string[]> {
-		const member = await this.load(memberId);
-		if (member.twoFactor?.enabledAt) {
-			throw new ConflictError(TWO_FACTOR_ALREADY_ON);
-		}
-		if (!member.twoFactor?.secret) {
-			throw new ValidationError(TWO_FACTOR_NOT_READY);
-		}
-		const secret = this.open(member.id, member.twoFactor.secret);
-		const result = verifyTotp(secret, code, this.ctx.now().getTime());
-		if (!result.ok) {
-			throw new ValidationError(INVALID_TWO_FACTOR_CODE);
-		}
-		const recoveryCodes = generateRecoveryCodes();
-		await this.write(member, {
-			secret: this.seal(member.id, secret),
-			enabledAt: iso(this.ctx.now()),
-			lastStep: result.step,
-			recoveryCodeHashes: recoveryCodes.map(hashRecoveryCode),
-			recoveryReveal: recoveryCodes,
+		let recoveryCodes: string[] = [];
+		await this.commit(memberId, (member) => {
+			if (member.twoFactor?.enabledAt) {
+				throw new ConflictError(TWO_FACTOR_ALREADY_ON);
+			}
+			if (!member.twoFactor?.secret) {
+				throw new ValidationError(TWO_FACTOR_NOT_READY);
+			}
+			const secret = this.open(member.id, member.twoFactor.secret);
+			const result = verifyTotp(secret, code, this.ctx.now().getTime());
+			if (!result.ok) {
+				throw new ValidationError(INVALID_TWO_FACTOR_CODE);
+			}
+			recoveryCodes = generateRecoveryCodes();
+			return {
+				secret: this.seal(member.id, secret),
+				enabledAt: iso(this.ctx.now()),
+				lastStep: result.step,
+				recoveryCodeHashes: recoveryCodes.map(hashRecoveryCode),
+				recoveryReveal: recoveryCodes,
+			};
 		});
 		return recoveryCodes;
 	}
@@ -111,56 +119,24 @@ export class TwoFactorService {
 	 * The same authenticator step cannot succeed twice.
 	 */
 	async verify(memberId: string, code: string): Promise<void> {
-		const member = await this.load(memberId);
-		const record = member.twoFactor;
-		if (!record?.enabledAt) {
-			throw new ValidationError(TWO_FACTOR_ALREADY_OFF);
-		}
-		const secret = this.open(member.id, record.secret);
-		const trimmed = code.trim();
-		if (/^\d{6}$/.test(trimmed)) {
-			const result = verifyTotp(
-				secret,
-				trimmed,
-				this.ctx.now().getTime(),
-				record.lastStep,
-			);
-			if (result.ok) {
-				await this.write(member, { ...record, lastStep: result.step });
-				return;
-			}
-		}
-		const normalized = normalizeRecoveryCode(trimmed);
-		if (normalized.length !== 8) {
-			throw new ValidationError(INVALID_TWO_FACTOR_CODE);
-		}
-		const hash = hashRecoveryCode(trimmed);
-		const index = record.recoveryCodeHashes.findIndex((item) =>
-			safeEqual(item, hash),
-		);
-		if (index < 0) {
-			throw new ValidationError(INVALID_TWO_FACTOR_CODE);
-		}
-		await this.write(member, {
-			...record,
-			recoveryCodeHashes: record.recoveryCodeHashes.filter(
-				(_, item) => item !== index,
-			),
-		});
+		await this.commit(memberId, (member) => this.nextRecord(member, code));
 	}
 
 	/** Replaces every recovery code. The member must confirm the password. */
 	async regenerate(actor: Actor, password: string): Promise<string[]> {
 		const member = await this.member(actor);
 		await this.checkPassword(member, password);
-		if (!member.twoFactor?.enabledAt) {
-			throw new ValidationError(TWO_FACTOR_ALREADY_OFF);
-		}
-		const recoveryCodes = generateRecoveryCodes();
-		await this.write(member, {
-			...member.twoFactor,
-			recoveryCodeHashes: recoveryCodes.map(hashRecoveryCode),
-			recoveryReveal: recoveryCodes,
+		let recoveryCodes: string[] = [];
+		await this.commit(member.id, (current) => {
+			if (!current.twoFactor?.enabledAt) {
+				throw new ValidationError(TWO_FACTOR_ALREADY_OFF);
+			}
+			recoveryCodes = generateRecoveryCodes();
+			return {
+				...current.twoFactor,
+				recoveryCodeHashes: recoveryCodes.map(hashRecoveryCode),
+				recoveryReveal: recoveryCodes,
+			};
 		});
 		return recoveryCodes;
 	}
@@ -168,11 +144,13 @@ export class TwoFactorService {
 	/** Removes the plaintext recovery codes after the member saves them. */
 	async acknowledge(actor: Actor): Promise<void> {
 		const member = await this.member(actor);
-		if (!member.twoFactor?.recoveryReveal) {
-			return;
-		}
-		const { recoveryReveal: _reveal, ...rest } = member.twoFactor;
-		await this.write(member, rest);
+		await this.commit(member.id, (current) => {
+			if (!current.twoFactor?.recoveryReveal) {
+				return KEEP;
+			}
+			const { recoveryReveal: _reveal, ...rest } = current.twoFactor;
+			return rest;
+		});
 	}
 
 	/** Turns authenticator sign-in off when the organization allows it. */
@@ -187,8 +165,51 @@ export class TwoFactorService {
 			throw new ConflictError(TWO_FACTOR_REQUIRED_BY_ADMIN);
 		}
 		await this.checkPassword(member, password);
-		await this.verify(member.id, code);
-		await this.write(await this.load(member.id), null);
+		await this.commit(member.id, (current) => {
+			this.nextRecord(current, code);
+			return null;
+		});
+	}
+
+	/**
+	 * The next authenticator record after a valid code.
+	 * A recovery code does not read the authenticator secret.
+	 */
+	private nextRecord(member: Member, code: string): MemberTwoFactor {
+		const record = member.twoFactor;
+		if (!record?.enabledAt) {
+			throw new ValidationError(TWO_FACTOR_ALREADY_OFF);
+		}
+		const trimmed = code.trim();
+		if (/^\d{6}$/.test(trimmed)) {
+			const secret = this.open(member.id, record.secret);
+			const result = verifyTotp(
+				secret,
+				trimmed,
+				this.ctx.now().getTime(),
+				record.lastStep,
+			);
+			if (result.ok) {
+				return { ...record, lastStep: result.step };
+			}
+		}
+		const normalized = normalizeRecoveryCode(trimmed);
+		if (normalized.length !== 8) {
+			throw new ValidationError(INVALID_TWO_FACTOR_CODE);
+		}
+		const hash = hashRecoveryCode(trimmed);
+		const index = record.recoveryCodeHashes.findIndex((item) =>
+			safeEqual(item, hash),
+		);
+		if (index < 0) {
+			throw new ValidationError(INVALID_TWO_FACTOR_CODE);
+		}
+		return {
+			...record,
+			recoveryCodeHashes: record.recoveryCodeHashes.filter(
+				(_, item) => item !== index,
+			),
+		};
 	}
 
 	private view(member: Member, issuer: string): TwoFactorView {
@@ -271,17 +292,40 @@ export class TwoFactorService {
 		return member;
 	}
 
-	private async write(
-		member: Member,
-		twoFactor: MemberTwoFactor | null,
+	/**
+	 * Saves the authenticator record when the stored revision still matches.
+	 * A lost race reads the member again and applies the check again.
+	 */
+	private async commit(
+		memberId: string,
+		change: (member: Member) => MemberTwoFactor | null | typeof KEEP,
 	): Promise<void> {
-		const next: Member = { ...member, updatedAt: iso(this.ctx.now()) };
-		if (twoFactor) {
-			next.twoFactor = twoFactor;
-		} else {
-			delete next.twoFactor;
+		for (let attempt = 0; attempt < 5; attempt++) {
+			const member = await this.load(memberId);
+			const twoFactor = change(member);
+			if (twoFactor === KEEP) {
+				return;
+			}
+			const next: Member = {
+				...member,
+				revision: (member.revision ?? 0) + 1,
+				updatedAt: iso(this.ctx.now()),
+			};
+			if (twoFactor) {
+				next.twoFactor = twoFactor;
+			} else {
+				delete next.twoFactor;
+			}
+			const saved = await this.ctx.store.update("members", next, {
+				where: [
+					{ field: "revision", op: "eq", value: member.revision ?? null },
+				],
+			});
+			if (saved) {
+				await this.sessions.invalidate();
+				return;
+			}
 		}
-		await this.ctx.store.update("members", next);
-		await this.sessions.invalidate();
+		throw new ConflictError("That change conflicts with the current data.");
 	}
 }

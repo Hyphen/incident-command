@@ -268,12 +268,17 @@ export interface Member {
 	passwordHash: string;
 	twoFactor?: MemberTwoFactor;
 	lastLoginAt?: string;
+	/** Incremented on every write so two saves cannot drop a code. */
+	revision?: number;
 	createdAt: string;
 	updatedAt: string;
 }
 
 /** A member without secrets, safe to return from APIs and render. */
-export type PublicMember = Omit<Member, "passwordHash" | "twoFactor"> & {
+export type PublicMember = Omit<
+	Member,
+	"passwordHash" | "twoFactor" | "revision"
+> & {
 	twoFactorEnabled: boolean;
 };
 

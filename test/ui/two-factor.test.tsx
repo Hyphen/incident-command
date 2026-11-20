@@ -110,6 +110,16 @@ describe("two-factor sign-in", () => {
 				.recoveryCodes ?? [];
 		expect(screen.getByText(codes[0] ?? "")).toBeInTheDocument();
 		enrolled.unmount();
+		expectSameFlash(
+			await redirectOf(acknowledgeRecoveryCodesAction(form({ next }))),
+			`/manage/account?next=${next}&notice=The recovery codes are hidden.`,
+		);
+		expectSameFlash(
+			await redirectOf(
+				acknowledgeRecoveryCodesAction(form({ next: "https://evil.example" })),
+			),
+			"/manage/account?notice=The recovery codes are hidden.",
+		);
 
 		await redirectOf(logoutAction());
 		expect(
@@ -174,7 +184,7 @@ describe("two-factor sign-in", () => {
 			member.id,
 			settings.siteName,
 		);
-		await services.twoFactor.confirm(
+		const codes = await services.twoFactor.confirm(
 			member.id,
 			totpAt(started.secret, clock.now().getTime()),
 		);
@@ -184,6 +194,10 @@ describe("two-factor sign-in", () => {
 		cookieJar.set(SESSION_COOKIE, token);
 		expectSameFlash(
 			await redirectOf(submitTwoFactorAction(form({ code: "000000" }))),
+			"/manage/login/two-factor?error=That code is not valid.",
+		);
+		expectSameFlash(
+			await redirectOf(submitTwoFactorAction(form({ code: codes[0] ?? "" }))),
 			"/manage/account?notice=Two-factor authentication is on. Save your recovery codes.",
 		);
 		await expect(services.sessions.resolve(token)).resolves.toBeDefined();
@@ -286,7 +300,7 @@ describe("account authenticator", () => {
 		).not.toBeInTheDocument();
 		first.unmount();
 
-		await redirectOf(beginTwoFactorAction());
+		await redirectOf(beginTwoFactorAction(form({})));
 		const pending = render(await AccountPage(flash()));
 		const started = await services.twoFactor.status(
 			member.id,
@@ -318,7 +332,7 @@ describe("account authenticator", () => {
 		expect(screen.getByText(/Recovery codes left: 10/)).toBeInTheDocument();
 		codes.unmount();
 		expectSameFlash(
-			await redirectOf(acknowledgeRecoveryCodesAction()),
+			await redirectOf(acknowledgeRecoveryCodesAction(form({}))),
 			"/manage/account?notice=The recovery codes are hidden.",
 		);
 		const hidden = render(await AccountPage(flash()));
@@ -392,7 +406,7 @@ describe("account authenticator", () => {
 			"An admin requires two-factor authentication.",
 		);
 		expectFlashRedirect(
-			await redirectOf(beginTwoFactorAction()),
+			await redirectOf(beginTwoFactorAction(form({}))),
 			"/manage/account",
 			"error",
 			"Two-factor authentication is already on.",
