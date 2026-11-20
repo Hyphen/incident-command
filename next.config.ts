@@ -45,13 +45,20 @@ const nextConfig: NextConfig = {
 	},
 	// Node loads these packages from node_modules. airhorn is in the list
 	// because the provider packages load it too, and one copy must load, not two.
+	// qrbit loads a native addon from its package.
 	serverExternalPackages: [
 		"mongodb",
 		"pg",
 		"airhorn",
 		"@airhornjs/aws",
 		"@airhornjs/twilio",
+		"qrbit",
 	],
+	// The standalone build must copy the qrbit addon. The loader picks the file by platform.
+	outputFileTracingIncludes: {
+		"/manage/account": ["./node_modules/qrbit/**/*"],
+		"/manage/login/two-factor": ["./node_modules/qrbit/**/*"],
+	},
 };
 
 export default nextConfig;

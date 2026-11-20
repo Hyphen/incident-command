@@ -13,6 +13,7 @@ import {
 	returnPath,
 } from "@/lib/auth";
 import { resolveFlash } from "@/lib/flash";
+import { otpQrSvg } from "@/lib/otp-qr";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Two-factor authentication" };
@@ -54,7 +55,11 @@ export default async function TwoFactorLoginPage({
 						ENCRYPTION_KEY.
 					</p>
 				) : view?.setup ? (
-					<TwoFactorSetup secret={view.setup.secret} uri={view.setup.uri} />
+					<TwoFactorSetup
+						secret={view.setup.secret}
+						uri={view.setup.uri}
+						qrSvg={await otpQrSvg(view.setup.uri)}
+					/>
 				) : enroll ? (
 					<p className="text-sm text-muted">
 						Start again from the sign-in page.

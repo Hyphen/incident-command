@@ -16,6 +16,7 @@ import { createApp, setApp } from "@/lib/app";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { loadConfig } from "@/lib/config";
 import { totpAt } from "@/lib/domain/totp";
+import { otpQrSvg } from "@/lib/otp-qr";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import {
 	expectFlashRedirect,
@@ -86,6 +87,15 @@ describe("two-factor sign-in", () => {
 			"That code is not valid.",
 		);
 		expect(screen.getByText(second.setup?.secret ?? "")).toBeInTheDocument();
+		const qr = screen.getByRole("img", {
+			name: "QR code for your authenticator app",
+		});
+		const src = qr.getAttribute("src") ?? "";
+		expect(
+			decodeURIComponent(
+				src.replace(/^data:image\/svg\+xml;charset=utf-8,/, ""),
+			),
+		).toBe(await otpQrSvg(second.setup?.uri ?? ""));
 		expect(
 			screen.getByRole("button", { name: "Turn on and continue" }),
 		).toBeInTheDocument();

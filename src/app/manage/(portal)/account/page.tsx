@@ -16,6 +16,7 @@ import { buttonClass, Card, Field, inputClass } from "@/components/manage/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember, returnPath } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/domain/status";
+import { otpQrSvg } from "@/lib/otp-qr";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Account" };
@@ -62,15 +63,17 @@ export default async function AccountPage({
 				title="Two-factor authentication"
 				description="Use an authenticator app or a password manager."
 			>
-				<TwoFactorSection
-					enabled={twoFactor.enabled}
-					required={settings.requireTwoFactor}
-					unreadable={twoFactor.unreadable === true}
-					setup={twoFactor.setup}
-					recoveryCodes={twoFactor.recoveryCodes}
-					recoveryCodesRemaining={twoFactor.recoveryCodesRemaining}
-					next={next ?? ""}
-				/>
+				{
+					await TwoFactorSection({
+						enabled: twoFactor.enabled,
+						required: settings.requireTwoFactor,
+						unreadable: twoFactor.unreadable === true,
+						setup: twoFactor.setup,
+						recoveryCodes: twoFactor.recoveryCodes,
+						recoveryCodesRemaining: twoFactor.recoveryCodesRemaining,
+						next: next ?? "",
+					})
+				}
 			</Card>
 			<Card title="Change password">
 				<form action={changePasswordAction} className="max-w-sm space-y-4">
@@ -111,7 +114,7 @@ export default async function AccountPage({
 	);
 }
 
-function TwoFactorSection({
+async function TwoFactorSection({
 	enabled,
 	required,
 	unreadable,
@@ -139,7 +142,11 @@ function TwoFactorSection({
 		return (
 			<form action={confirmTwoFactorAction} className="max-w-sm space-y-4">
 				<input type="hidden" name="next" value={next} />
-				<TwoFactorSetup secret={setup.secret} uri={setup.uri} />
+				<TwoFactorSetup
+					secret={setup.secret}
+					uri={setup.uri}
+					qrSvg={await otpQrSvg(setup.uri)}
+				/>
 				<Field label="Code from the app" htmlFor="code">
 					<input
 						id="code"
