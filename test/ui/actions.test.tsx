@@ -293,9 +293,10 @@ describe("incident actions", () => {
 			),
 			`/manage/incidents/${incident?.id}?notice=Incident saved`,
 		);
-		expect((await services.incidents.get(incident?.id ?? "")).title).toBe(
-			"API outage",
-		);
+		expect(await services.incidents.get(incident?.id ?? "")).toMatchObject({
+			title: "API outage",
+			serviceIds: [api.id],
+		});
 
 		expectSameFlash(
 			await redirectOf(deleteIncidentAction(form({ id: incident?.id ?? "" }))),
@@ -342,7 +343,7 @@ describe("incident actions", () => {
 		expect(await statusOf(web?.id)).toBe("major_outage");
 		expect(await statusOf(db?.id)).toBe("operational");
 
-		// The update form has no picker. Each status with a value counts.
+		// The update form has no full picker. Each status with a value counts.
 		await redirectOf(
 			postIncidentUpdateAction(
 				form({
@@ -357,6 +358,28 @@ describe("incident actions", () => {
 		);
 		expect(await statusOf(api?.id)).toBe("partial_outage");
 		expect(await statusOf(web?.id)).toBe("degraded_performance");
+
+		// The update form can add a service. A status for a service that is not selected has no effect.
+		const added = await redirectOf(
+			postIncidentUpdateAction(
+				form({
+					id: incident?.id ?? "",
+					message: "DB is down",
+					addServiceIds: ["", db?.id ?? ""],
+					addServiceCandidate: [db?.id ?? "", "left-out"],
+					[`serviceStatus:${api?.id}`]: "degraded_performance",
+					[`serviceStatus:${db?.id}`]: "major_outage",
+					"serviceStatus:left-out": "partial_outage",
+				}),
+			),
+		);
+		expect(flashMessage(added, "notice")).toBe("Update posted");
+		expect(
+			(await services.incidents.get(incident?.id ?? "")).serviceIds,
+		).toEqual([api?.id, web?.id, db?.id]);
+		expect(await statusOf(api?.id)).toBe("degraded_performance");
+		expect(await statusOf(web?.id)).toBe("degraded_performance");
+		expect(await statusOf(db?.id)).toBe("major_outage");
 	});
 
 	it("schedules maintenance from datetime-local inputs", async () => {
@@ -474,11 +497,12 @@ describe("notification draft actions", () => {
 			`/manage/drafts/${draft.id}?error=This draft was already approved`,
 		);
 
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		const update = await services.drafts.create(AGENT, {
 			incidentId: incident?.id ?? "",
 			message: "y",
 		});
-		// The form of an update has no title, impact, services or window.
+		// The form of an update has no title, impact or window. It can add a service.
 		expectSameFlash(
 			await redirectOf(
 				saveDraftAction(
@@ -486,7 +510,10 @@ describe("notification draft actions", () => {
 						id: update.id,
 						status: "monitoring",
 						message: "Edited",
+						addServiceIds: ["", web.id],
+						addServiceCandidate: [web.id],
 						[`serviceStatus:${api.id}`]: "degraded_performance",
+						[`serviceStatus:${web.id}`]: "major_outage",
 					}),
 				),
 			),
@@ -495,15 +522,41 @@ describe("notification draft actions", () => {
 		expect((await services.drafts.get(update.id)).content).toMatchObject({
 			status: "monitoring",
 			message: "Edited",
-			serviceStatuses: [{ serviceId: api.id, status: "degraded_performance" }],
+			serviceIds: [web.id],
+			serviceStatuses: [
+				{ serviceId: api.id, status: "degraded_performance" },
+				{ serviceId: web.id, status: "major_outage" },
+			],
+		});
+		const approvedUpdate = await redirectOf(
+			approveDraftAction(
+				form({
+					id: update.id,
+					status: "monitoring",
+					message: "Edited",
+					addServiceIds: [web.id],
+					addServiceCandidate: [web.id],
+					[`serviceStatus:${api.id}`]: "degraded_performance",
+					[`serviceStatus:${web.id}`]: "major_outage",
+				}),
+			),
+		);
+		expect(flashMessage(approvedUpdate, "notice")).toContain("Draft approved");
+		expect(await services.incidents.get(incident?.id ?? "")).toMatchObject({
+			serviceIds: [api.id, web.id],
+		});
+		expect((await services.catalog.get(web.id)).status).toBe("major_outage");
+		const later = await services.drafts.create(AGENT, {
+			incidentId: incident?.id ?? "",
+			message: "y",
 		});
 		expectSameFlash(
-			await redirectOf(discardDraftAction(form({ id: update.id }))),
+			await redirectOf(discardDraftAction(form({ id: later.id }))),
 			"/manage/drafts?notice=Draft discarded",
 		);
 		expectSameFlash(
-			await redirectOf(discardDraftAction(form({ id: update.id }))),
-			`/manage/drafts/${update.id}?error=This draft was already discarded`,
+			await redirectOf(discardDraftAction(form({ id: later.id }))),
+			`/manage/drafts/${later.id}?error=This draft was already discarded`,
 		);
 	});
 

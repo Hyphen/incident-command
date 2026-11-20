@@ -141,6 +141,10 @@ const OWN_STATUS_HINT =
 const PICKER_STATUS_HINT =
 	"Select a service to give it its own status. That status replaces the status for all affected services, for that service only.";
 
+/** The hint for the control that adds a service during an update. */
+const ADD_SERVICE_HINT =
+	"Select a service to add it. Its status replaces the status for all affected services, for that service only.";
+
 /**
  * A status select for each affected service of an incident. It also shows
  * the current status of each service.
@@ -187,6 +191,12 @@ export function ServicePicker({
 	selected = [],
 	withStatus = false,
 	statuses = [],
+	legend = "Affected services",
+	emptyLabel = "No services yet.",
+	name = "serviceIds",
+	candidateName,
+	showCurrent = false,
+	hint = PICKER_STATUS_HINT,
 }: {
 	services: Service[];
 	selected?: string[];
@@ -194,15 +204,24 @@ export function ServicePicker({
 	withStatus?: boolean;
 	/** The saved status of each service, for `withStatus`. */
 	statuses?: readonly ServiceStatusOverride[];
+	legend?: string;
+	emptyLabel?: string;
+	/** The checkbox field name. */
+	name?: string;
+	/** When set, the form sends this field for every service in the list. */
+	candidateName?: string;
+	/** Shows the current status of each service. */
+	showCurrent?: boolean;
+	hint?: string;
 }) {
 	return (
 		<fieldset className="space-y-2">
-			<legend className="text-sm font-medium">Affected services</legend>
-			{/* The form sends `serviceIds` also when no service is selected. A
+			<legend className="text-sm font-medium">{legend}</legend>
+			{/* The form sends the field also when no service is selected. A
 			    server action then knows that the form has this picker. */}
-			<input type="hidden" name="serviceIds" value="" />
+			<input type="hidden" name={name} value="" />
 			{services.length === 0 ? (
-				<p className="text-sm text-muted">No services yet.</p>
+				<p className="text-sm text-muted">{emptyLabel}</p>
 			) : (
 				<div
 					className={withStatus ? "grid gap-2" : "grid gap-2 sm:grid-cols-2"}
@@ -212,15 +231,25 @@ export function ServicePicker({
 							key={service.id}
 							className="group flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm sm:flex-nowrap"
 						>
+							{candidateName && (
+								<input type="hidden" name={candidateName} value={service.id} />
+							)}
 							<label className="flex min-w-0 flex-1 items-center gap-2">
 								<input
 									type="checkbox"
-									name="serviceIds"
+									name={name}
 									value={service.id}
 									defaultChecked={selected.includes(service.id)}
 									className="size-4 accent-brand"
 								/>
-								<span className="min-w-0 flex-1 truncate">{service.name}</span>
+								<span className="min-w-0 flex-1">
+									<span className="block truncate">{service.name}</span>
+									{showCurrent && (
+										<span className="block text-xs text-muted">
+											Now: {SERVICE_STATUS_LABELS[service.status]}
+										</span>
+									)}
+								</span>
 								{service.group && (
 									<span className="shrink-0 text-xs text-muted">
 										{service.group}
@@ -241,9 +270,47 @@ export function ServicePicker({
 				</div>
 			)}
 			{withStatus && services.length > 0 && (
-				<p className="text-xs text-muted">{PICKER_STATUS_HINT}</p>
+				<p className="text-xs text-muted">{hint}</p>
 			)}
 		</fieldset>
+	);
+}
+
+/**
+ * Services that an update can add. Services that the incident already
+ * affects are not in this list. A selected service is added. The others stay.
+ */
+export function AddServices({
+	catalog,
+	affectedIds,
+	selected = [],
+	statuses = [],
+}: {
+	catalog: Service[];
+	affectedIds: readonly string[];
+	selected?: readonly string[];
+	statuses?: readonly ServiceStatusOverride[];
+}) {
+	const available = catalog.filter(
+		(service) => !affectedIds.includes(service.id),
+	);
+	return (
+		<ServicePicker
+			legend="Add a service"
+			services={available}
+			selected={[...selected]}
+			withStatus
+			statuses={statuses}
+			name="addServiceIds"
+			candidateName="addServiceCandidate"
+			showCurrent
+			emptyLabel={
+				catalog.length === 0
+					? "No services yet."
+					: "Every service is on this incident."
+			}
+			hint={ADD_SERVICE_HINT}
+		/>
 	);
 }
 

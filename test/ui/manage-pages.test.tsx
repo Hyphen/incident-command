@@ -636,25 +636,41 @@ describe("incident pages", () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "editor");
 		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
-		await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		const incident = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "API errors",
 			message: "Looking",
 			serviceIds: [api.id],
 		});
-		render(
+		const page = render(
 			await IncidentPage({
 				params: params({ id: incident.id }),
 				searchParams: params({}),
 			}),
 		);
-		// The update form offers a status for each affected service only.
-		const own = screen.getByRole("combobox", { name: "Status of API" });
+		// The update form sets a status for each affected service and can add another.
+		const updateForm = screen
+			.getByRole("button", { name: "Post update" })
+			.closest("form") as HTMLElement;
+		const own = within(updateForm).getByRole("combobox", {
+			name: "Status of API",
+		});
 		expect(own).toHaveAttribute("name", `serviceStatus:${api.id}`);
 		expect(own).toHaveValue("");
-		expect(screen.getByText("Now: Degraded performance")).toBeInTheDocument();
 		expect(
-			screen.queryByRole("combobox", { name: "Status of Web" }),
+			within(updateForm).getByText("Now: Degraded performance"),
+		).toBeInTheDocument();
+		expect(
+			within(updateForm).getByRole("checkbox", { name: /Web/ }),
+		).not.toBeChecked();
+		expect(
+			within(updateForm).getByRole("combobox", { name: "Status of Web" }),
+		).toHaveValue("");
+		expect(
+			within(updateForm).getByText("Now: Operational"),
+		).toBeInTheDocument();
+		expect(
+			within(updateForm).queryByRole("checkbox", { name: /API/ }),
 		).not.toBeInTheDocument();
 		expect(
 			screen.getByRole("heading", { level: 1, name: "API errors" }),
@@ -666,10 +682,36 @@ describe("incident pages", () => {
 			screen.getByRole("button", { name: "Post update" }),
 		).toBeInTheDocument();
 		expect(screen.getByDisplayValue("API errors")).toBeInTheDocument();
-		expect(screen.getByRole("checkbox", { name: /API/ })).toBeChecked();
+		const detailsForm = screen
+			.getByRole("button", { name: "Save details" })
+			.closest("form") as HTMLElement;
+		expect(
+			within(detailsForm).queryByText("Affected services"),
+		).not.toBeInTheDocument();
+		expect(within(detailsForm).queryByRole("checkbox")).not.toBeInTheDocument();
 		expect(screen.getByText(/System \(system\)/)).toBeInTheDocument();
 		expect(
 			screen.getByRole("button", { name: "Delete incident" }),
+		).toBeInTheDocument();
+		page.unmount();
+
+		const covered = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Both",
+			message: "x",
+			serviceIds: [api.id, web.id],
+			notify: false,
+		});
+		render(
+			await IncidentPage({
+				params: params({ id: covered.id }),
+				searchParams: params({}),
+			}),
+		);
+		const fullForm = screen
+			.getByRole("button", { name: "Post update" })
+			.closest("form") as HTMLElement;
+		expect(
+			within(fullForm).getByText("Every service is on this incident."),
 		).toBeInTheDocument();
 	});
 
@@ -874,7 +916,7 @@ describe("notification draft pages", () => {
 		page.unmount();
 
 		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
-		await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		const incident = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "API errors",
 			message: "x",
@@ -885,7 +927,11 @@ describe("notification draft pages", () => {
 		const update = await services.drafts.create(AGENT, {
 			incidentId: incident.id,
 			message: "A fix is ready.",
-			serviceStatuses: [{ serviceId: api.id, status: "partial_outage" }],
+			serviceIds: [web.id],
+			serviceStatuses: [
+				{ serviceId: api.id, status: "partial_outage" },
+				{ serviceId: web.id, status: "major_outage" },
+			],
 		});
 		render(await draftPage(update.id));
 		expect(
@@ -901,12 +947,17 @@ describe("notification draft pages", () => {
 		).toHaveValue("");
 		expect(screen.queryByLabelText("Title")).not.toBeInTheDocument();
 		expect(screen.queryByText("Affected services")).not.toBeInTheDocument();
-		// An update offers a status for each affected service of the incident.
+		expect(screen.getByText("Add a service")).toBeInTheDocument();
+		// An update offers a status for each affected service, and for a service to add.
 		expect(screen.getByRole("combobox", { name: "Status of API" })).toHaveValue(
 			"partial_outage",
 		);
+		expect(screen.getByRole("checkbox", { name: /Web/ })).toBeChecked();
+		expect(screen.getByRole("combobox", { name: "Status of Web" })).toHaveValue(
+			"major_outage",
+		);
 		expect(
-			screen.queryByRole("combobox", { name: "Status of Web" }),
+			screen.queryByRole("checkbox", { name: /API/ }),
 		).not.toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "View incident" })).toHaveAttribute(
 			"href",
@@ -967,9 +1018,11 @@ describe("notification draft pages", () => {
 		).not.toBeInTheDocument();
 		approved.unmount();
 
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		const update = await services.drafts.create(AGENT, {
 			incidentId: incident.id,
 			message: "Nothing to add.",
+			serviceIds: [web.id],
 		});
 		await services.drafts.discard(actor, update.id);
 		render(await draftPage(update.id));
@@ -979,6 +1032,8 @@ describe("notification draft pages", () => {
 			),
 		).toBeInTheDocument();
 		expect(screen.getByText("Nothing to add.")).toBeInTheDocument();
+		expect(screen.getByText("Services to add")).toBeInTheDocument();
+		expect(screen.getByText("Web")).toBeInTheDocument();
 		expect(
 			screen.queryByText("Status", { selector: "dt" }),
 		).not.toBeInTheDocument();

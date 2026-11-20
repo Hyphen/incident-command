@@ -425,7 +425,10 @@ export interface DraftContent {
 	title?: string;
 	/** The impact of a new incident. Not used by an update. */
 	impact?: IncidentImpact;
-	/** The affected services of a new incident or maintenance. Not used by an update. */
+	/**
+	 * The affected services of a new incident or maintenance.
+	 * On an update, the services to add. An update does not remove a service.
+	 */
 	serviceIds?: string[];
 	/** The window of new maintenance. Not used by an update. */
 	scheduledStart?: string;

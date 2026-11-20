@@ -8,8 +8,8 @@ import {
 } from "@/app/manage/actions";
 import { ConfirmButton } from "@/components/manage/confirm-button";
 import {
+	AddServices,
 	ImpactSelect,
-	ServicePicker,
 	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
@@ -93,6 +93,10 @@ export default async function ManageIncidentPage({
 								</Field>
 								<ServiceStatusSelect hint="Automatic restores services when resolving and starts maintenance mode when in progress." />
 								<ServiceStatusList services={affected} />
+								<AddServices
+									catalog={catalog}
+									affectedIds={incident.serviceIds}
+								/>
 								<Checkbox
 									name="notify"
 									label="Notify subscribers"
@@ -130,10 +134,6 @@ export default async function ManageIncidentPage({
 										end={incident.scheduledEnd}
 									/>
 								)}
-								<ServicePicker
-									services={catalog}
-									selected={incident.serviceIds}
-								/>
 								<SubmitButton className={buttonClass.secondary}>
 									Save details
 								</SubmitButton>
