@@ -320,6 +320,16 @@ describe("portal layout", () => {
 			"href",
 			"/manage/agents",
 		);
+		const statusPage = nav.getByRole("link", {
+			name: "View status page (opens in a new tab)",
+		});
+		expect(statusPage).toHaveAttribute("href", "/");
+		expect(statusPage).toHaveAttribute("target", "_blank");
+		expect(statusPage).toHaveAttribute("rel", "noreferrer");
+		expect(statusPage.querySelector("svg")).toHaveAttribute(
+			"aria-hidden",
+			"true",
+		);
 		expect(screen.getByRole("link", { name: "Acme Status" })).toHaveAttribute(
 			"href",
 			"/manage",
@@ -372,6 +382,11 @@ describe("portal layout", () => {
 			"aria-current",
 		);
 		expect(nav.getByRole("link", { name: "Members" })).toBeInTheDocument();
+		const hrefs = nav
+			.getAllByRole("link")
+			.map((link) => link.getAttribute("href"));
+		expect(hrefs.at(-2)).toBe("/manage/settings");
+		expect(hrefs.at(-1)).toBe("/");
 	});
 
 	it("opens My Profile from the user", async () => {
@@ -388,8 +403,8 @@ describe("portal layout", () => {
 		expect(profile).toHaveAttribute("href", "/manage/account");
 		expect(profile).not.toHaveAttribute("aria-current");
 		expect(
-			within(menu).getByRole("menuitem", { name: "View status page" }),
-		).toHaveAttribute("href", "/");
+			within(menu).queryByRole("menuitem", { name: /status page/i }),
+		).not.toBeInTheDocument();
 		expect(
 			within(menu).getByRole("menuitem", { name: "Sign out" }),
 		).toBeInTheDocument();
@@ -420,11 +435,6 @@ describe("portal layout", () => {
 
 		fireEvent.click(user);
 		fireEvent.click(screen.getByRole("menuitem", { name: "My Profile" }));
-		expect(
-			screen.queryByRole("menu", { name: "User" }),
-		).not.toBeInTheDocument();
-		fireEvent.click(user);
-		fireEvent.click(screen.getByRole("menuitem", { name: "View status page" }));
 		expect(
 			screen.queryByRole("menu", { name: "User" }),
 		).not.toBeInTheDocument();

@@ -4,14 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { logoutAction } from "@/app/manage/actions";
-import { ChevronDownIcon } from "@/components/icons";
+import { ChevronDownIcon, LogOutIcon } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { ROLE_LABELS } from "@/lib/domain/status";
 import type { PublicMember } from "@/lib/domain/types";
 
 /**
- * The signed-in member. A click opens the menu. The menu holds My Profile,
- * the status page, and sign out. Those actions stay out of the main navigation.
+ * The signed-in member. A click opens a small menu above the button on a
+ * large screen, and below it on a small screen. The menu holds My Profile
+ * and sign out.
  */
 export function UserMenu({ member }: { member: PublicMember }) {
 	const [open, setOpen] = useState(false);
@@ -46,71 +47,69 @@ export function UserMenu({ member }: { member: PublicMember }) {
 	const close = () => setOpen(false);
 
 	return (
-		<div
-			data-user-menu
-			className="relative border-t border-border px-3 py-3 lg:mt-6"
-		>
-			<button
-				ref={buttonRef}
-				type="button"
-				aria-expanded={open}
-				aria-haspopup="menu"
-				aria-controls={menuId}
-				onClick={() => setOpen((value) => !value)}
-				className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-surface-muted ${
-					onProfile ? "bg-surface-muted" : ""
-				}`}
-			>
-				<span className="min-w-0 flex-1">
-					<span className="block truncate text-sm font-medium">
-						{member.name}
-					</span>
-					<span className="block truncate text-xs text-muted">
-						{member.email} · {ROLE_LABELS[member.role]}
-					</span>
-				</span>
-				<ChevronDownIcon
-					className={`size-4 shrink-0 text-muted ${open ? "rotate-180" : ""}`}
-				/>
-			</button>
-			{open ? (
-				<div
-					id={menuId}
-					role="menu"
-					aria-label="User"
-					className="absolute top-full right-3 left-3 z-20 mt-1 rounded-lg border border-border bg-surface p-1 shadow-lg"
+		<div className="border-t border-border px-3 py-3 lg:mt-auto lg:shrink-0">
+			<div data-user-menu className="relative">
+				<button
+					ref={buttonRef}
+					type="button"
+					aria-expanded={open}
+					aria-haspopup="menu"
+					aria-controls={menuId}
+					onClick={() => setOpen((value) => !value)}
+					className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-surface-muted ${
+						open || onProfile ? "bg-surface-muted" : ""
+					}`}
 				>
-					<Link
-						role="menuitem"
-						href="/manage/account"
-						aria-current={onProfile ? "page" : undefined}
-						onClick={close}
-						className={`block rounded-lg px-3 py-2 text-sm ${
-							onProfile
-								? "bg-surface-muted font-medium text-fg"
-								: "text-muted hover:bg-surface-muted hover:text-fg"
+					<span className="min-w-0 flex-1">
+						<span className="block truncate text-sm font-medium">
+							{member.name}
+						</span>
+						<span className="block truncate text-xs text-muted">
+							{member.email} · {ROLE_LABELS[member.role]}
+						</span>
+					</span>
+					{/* The chevron points to the side where the menu opens. */}
+					<ChevronDownIcon
+						className={`size-4 shrink-0 text-muted ${
+							open ? "rotate-180 lg:rotate-0" : "lg:rotate-180"
 						}`}
+					/>
+				</button>
+				{open ? (
+					// The menu opens down on a small screen and up on a large screen.
+					<div
+						id={menuId}
+						role="menu"
+						aria-label="User"
+						className="absolute top-full right-0 z-20 mt-1 w-56 border border-border bg-surface-muted shadow-lg lg:top-auto lg:bottom-full lg:left-0 lg:mt-0 lg:mb-1 lg:w-auto"
 					>
-						My Profile
-					</Link>
-					<Link
-						role="menuitem"
-						href="/"
-						onClick={close}
-						className="block rounded-lg px-3 py-2 text-sm text-muted hover:bg-surface-muted hover:text-fg"
-					>
-						View status page
-					</Link>
-					<form action={logoutAction}>
-						<SubmitButton
+						<Link
 							role="menuitem"
-							className="flex w-full items-center gap-1 rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-surface-muted hover:text-fg disabled:opacity-50"
+							href="/manage/account"
+							aria-current={onProfile ? "page" : undefined}
+							onClick={close}
+							className={`block px-3 py-2 text-sm focus-visible:-outline-offset-2 ${
+								onProfile
+									? "bg-surface-muted font-medium text-fg"
+									: "text-fg hover:bg-surface"
+							}`}
 						>
-							Sign out
-						</SubmitButton>
-					</form>
-				</div>
-			) : null}
+							My Profile
+						</Link>
+						<hr className="my-0 border-border" />
+						<form action={logoutAction}>
+							<SubmitButton
+								role="menuitem"
+								className="group flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-fg hover:bg-surface focus-visible:-outline-offset-2 disabled:opacity-50"
+							>
+								<span className="order-first flex-1">Sign out</span>
+								{/* The spinner replaces the icon when the form is busy. */}
+								<LogOutIcon className="size-4 shrink-0 text-muted group-hover:text-fg group-aria-busy:hidden" />
+							</SubmitButton>
+						</form>
+					</div>
+				) : null}
+			</div>
 		</div>
 	);
 }

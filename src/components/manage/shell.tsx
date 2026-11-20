@@ -43,8 +43,8 @@ export function PortalFrame({
 	const logoSrc = publicLogoSrc(settings);
 	return (
 		<div className="min-h-dvh lg:grid lg:grid-cols-[240px_1fr]">
-			<aside className="border-b border-border bg-surface lg:min-h-dvh lg:border-r lg:border-b-0">
-				<div className="px-5 py-4">
+			<aside className="border-b border-border bg-surface lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:overflow-hidden lg:border-r lg:border-b-0">
+				<div className="px-5 py-4 lg:shrink-0">
 					<Link
 						href="/manage"
 						className="flex items-center gap-3 font-semibold tracking-tight"
@@ -60,9 +60,16 @@ export function PortalFrame({
 					</Link>
 				</div>
 				<PortalNav
-					items={NAV.filter((item) => hasRole(member.role, item.role)).map(
-						({ label, href }) => ({ label, href }),
-					)}
+					items={[
+						...NAV.filter((item) => hasRole(member.role, item.role)).map(
+							({ label, href }) => ({ label, href }),
+						),
+						{
+							label: "View status page",
+							href: "/",
+							external: true,
+						},
+					]}
 				/>
 				<UserMenu member={member} />
 			</aside>
