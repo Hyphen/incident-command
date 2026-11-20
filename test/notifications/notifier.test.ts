@@ -321,6 +321,13 @@ describe("templates", () => {
 		]);
 		expect(payload.page).toEqual({ name: "Acme Status", url: undefined });
 		expect(payload.update.message).toBe(update.message);
+		expect(payload.incident.regionId).toBeNull();
+		expect(
+			webhookPayload({
+				...notification,
+				incident: { ...incident, regionId: "reg_us" },
+			}).incident.regionId,
+		).toBe("reg_us");
 	});
 });
 

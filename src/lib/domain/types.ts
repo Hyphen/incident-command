@@ -199,6 +199,18 @@ export interface Service {
 	updatedAt: string;
 }
 
+/**
+ * A named region on the status page. Global is not a record.
+ * An incident with no region is global.
+ */
+export interface Region {
+	id: string;
+	name: string;
+	order: number;
+	createdAt: string;
+	updatedAt: string;
+}
+
 /** The status for one affected service of an incident or maintenance. */
 export interface ServiceStatusOverride {
 	serviceId: string;
@@ -229,6 +241,8 @@ export interface Incident {
 	status: EventStatus;
 	impact: IncidentImpact;
 	serviceIds: string[];
+	/** The region of this incident. Missing means Global. */
+	regionId?: string;
 	updates: IncidentUpdate[];
 	scheduledStart?: string;
 	scheduledEnd?: string;
@@ -430,6 +444,8 @@ export interface DraftContent {
 	 * On an update, the services to add. An update does not remove a service.
 	 */
 	serviceIds?: string[];
+	/** The region of a new incident or maintenance. Missing means Global. */
+	regionId?: string;
 	/** The window of new maintenance. Not used by an update. */
 	scheduledStart?: string;
 	scheduledEnd?: string;

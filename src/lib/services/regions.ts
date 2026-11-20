@@ -1,0 +1,117 @@
+import { createId } from "../crypto";
+import { GLOBAL_REGION_NAME } from "../domain/regions";
+import {
+	type CreateRegionInput,
+	createRegionSchema,
+	type UpdateRegionInput,
+	updateRegionSchema,
+} from "../domain/schemas";
+import type { Actor, Incident, Region } from "../domain/types";
+import { NotFoundError, ValidationError } from "../errors";
+import { iso, parse, requirePermission, type ServiceContext } from "./context";
+
+export class RegionService {
+	private readonly ctx: ServiceContext;
+
+	constructor(ctx: ServiceContext) {
+		this.ctx = ctx;
+	}
+
+	/** Regions in display order. Global is not in this list. */
+	async list(): Promise<Region[]> {
+		return this.ctx.store.find("regions", {
+			sort: [{ field: "order" }, { field: "createdAt" }],
+		});
+	}
+
+	async get(id: string): Promise<Region> {
+		const region = await this.ctx.store.get("regions", id);
+		if (!region) {
+			throw new NotFoundError("Region", id);
+		}
+		return region;
+	}
+
+	async create(actor: Actor, input: CreateRegionInput): Promise<Region> {
+		requirePermission(actor, "services.write");
+		const data = parse(createRegionSchema, input);
+		await this.assertName(data.name);
+		const now = iso(this.ctx.now());
+		const region: Region = {
+			id: createId("reg"),
+			name: data.name,
+			order: data.order ?? (await this.ctx.store.count("regions")),
+			createdAt: now,
+			updatedAt: now,
+		};
+		return this.ctx.store.insert("regions", region);
+	}
+
+	async update(
+		actor: Actor,
+		id: string,
+		input: UpdateRegionInput,
+	): Promise<Region> {
+		requirePermission(actor, "services.write");
+		const patch = parse(updateRegionSchema, input);
+		const current = await this.get(id);
+		if (patch.name !== undefined && patch.name !== current.name) {
+			await this.assertName(patch.name, id);
+		}
+		const next: Region = {
+			...current,
+			name: patch.name ?? current.name,
+			order: patch.order ?? current.order,
+			updatedAt: iso(this.ctx.now()),
+		};
+		await this.ctx.store.update("regions", next);
+		return next;
+	}
+
+	/**
+	 * Deletes a region. Each incident in that region becomes global.
+	 * Global incidents show on every region tab.
+	 */
+	async delete(actor: Actor, id: string): Promise<void> {
+		requirePermission(actor, "services.delete");
+		await this.get(id);
+		await this.clearIncidents(id);
+		await this.ctx.store.delete("regions", id);
+	}
+
+	private async assertName(name: string, exceptId?: string): Promise<void> {
+		if (name.toLowerCase() === GLOBAL_REGION_NAME.toLowerCase()) {
+			throw new ValidationError(
+				"Global is the default region. Choose another name.",
+			);
+		}
+		const regions = await this.ctx.store.find("regions");
+		const taken = regions.some(
+			(region) =>
+				region.id !== exceptId &&
+				region.name.toLowerCase() === name.toLowerCase(),
+		);
+		if (taken) {
+			throw new ValidationError("A region with that name already exists");
+		}
+	}
+
+	/** Removes the region from each incident that uses it. */
+	private async clearIncidents(regionId: string): Promise<void> {
+		const now = iso(this.ctx.now());
+		const incidents = await this.ctx.store.find(
+			"incidents",
+			{ where: [{ field: "regionId", op: "eq", value: regionId }] },
+			{ consistent: true },
+		);
+		for (const incident of incidents) {
+			const next: Incident = {
+				...incident,
+				revision: (incident.revision ?? 0) + 1,
+				updatedAt: now,
+			};
+			delete next.regionId;
+			await this.ctx.store.update("incidents", next);
+		}
+	}
+}

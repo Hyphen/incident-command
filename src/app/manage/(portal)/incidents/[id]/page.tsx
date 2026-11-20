@@ -10,6 +10,7 @@ import { ConfirmButton } from "@/components/manage/confirm-button";
 import {
 	AddServices,
 	ImpactSelect,
+	RegionSelect,
 	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
@@ -27,6 +28,7 @@ import { EventStatusBadge, ImpactBadge } from "@/components/status/badges";
 import { Timeline } from "@/components/status/timeline";
 import { SubmitButton } from "@/components/submit-button";
 import { requireMember } from "@/lib/auth";
+import { regionNameFor } from "@/lib/domain/regions";
 import { hasRole } from "@/lib/domain/status";
 
 export const dynamic = "force-dynamic";
@@ -47,12 +49,16 @@ export default async function ManageIncidentPage({
 	if (!incident) {
 		notFound();
 	}
-	const catalog = await services.catalog.list();
+	const [catalog, regions] = await Promise.all([
+		services.catalog.list(),
+		services.regions.list(),
+	]);
 	const affected = catalog.filter((service) =>
 		incident.serviceIds.includes(service.id),
 	);
 	const canEdit = hasRole(member.role, "editor");
 	const isIncident = incident.kind === "incident";
+	const regionName = regionNameFor(incident, regions);
 	return (
 		<ManagePage
 			title={incident.title}
@@ -74,6 +80,7 @@ export default async function ManageIncidentPage({
 					status={incident.status}
 				/>
 				{isIncident && <ImpactBadge impact={incident.impact} />}
+				{regionName && <span className="text-sm text-muted">{regionName}</span>}
 			</div>
 			<div className="grid gap-6 lg:grid-cols-[1fr_320px]">
 				<div className="space-y-6">
@@ -134,6 +141,7 @@ export default async function ManageIncidentPage({
 										end={incident.scheduledEnd}
 									/>
 								)}
+								<RegionSelect regions={regions} value={incident.regionId} />
 								<SubmitButton className={buttonClass.secondary}>
 									Save details
 								</SubmitButton>

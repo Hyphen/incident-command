@@ -1,3 +1,4 @@
+import { NotFoundError } from "@/lib/errors";
 import { ADMIN, createTestContext, EDITOR, type TestContext } from "../helpers";
 
 describe("StatusService", () => {
@@ -314,5 +315,124 @@ describe("StatusService", () => {
 		expect(latest.older).toBeNull();
 		expect(latest.newer).toBeNull();
 		expect(await t.services.status.history("2026-05")).toEqual(latest);
+	});
+
+	it("keeps Global complete and limits a region tab", async () => {
+		t.clock.set("2026-10-01T00:00:00.000Z");
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
+		const united = await t.services.regions.create(EDITOR, {
+			name: "United States",
+		});
+		const europe = await t.services.regions.create(EDITOR, { name: "Europe" });
+		t.clock.set("2026-11-01T10:00:00.000Z");
+		const regional = await t.services.incidents.create(EDITOR, {
+			title: "US down",
+			message: "Down",
+			impact: "critical",
+			serviceIds: [api.id],
+			regionId: united.id,
+		});
+		t.clock.set("2026-11-01T11:00:00.000Z");
+		await t.services.incidents.resolve(EDITOR, regional.id);
+		t.clock.set("2026-11-02T12:00:00.000Z");
+
+		const whole = await t.services.status.summary();
+		expect(whole.region).toBeUndefined();
+		expect(whole.services[0]?.status).toBe("operational");
+		expect(whole.services[0]?.uptime).toBeLessThan(1);
+		const europeView = await t.services.status.summary({ regionId: europe.id });
+		expect(europeView.region?.name).toBe("Europe");
+		expect(europeView.activeIncidents).toEqual([]);
+		expect(europeView.services[0]?.status).toBe("operational");
+		expect(europeView.services[0]?.uptime).toBe(1);
+		expect(europeView.recentIncidents).toEqual([]);
+
+		const open = await t.services.incidents.create(EDITOR, {
+			title: "US open",
+			message: "Still down",
+			impact: "critical",
+			serviceIds: [api.id],
+			regionId: united.id,
+		});
+		const during = await t.services.status.summary();
+		expect(during.services[0]?.status).toBe("major_outage");
+		const hidden = await t.services.status.summary({ regionId: europe.id });
+		expect(hidden.activeIncidents).toEqual([]);
+		expect(hidden.services[0]?.status).toBe("operational");
+		t.clock.advance(1000);
+		const everywhere = await t.services.incidents.create(EDITOR, {
+			title: "Everywhere",
+			message: "Wide",
+			impact: "major",
+			serviceIds: [api.id],
+		});
+		const globalView = await t.services.status.summary();
+		expect(globalView.services[0]?.status).toBe("partial_outage");
+		expect(globalView.activeIncidents.map((item) => item.id)).toEqual([
+			everywhere.id,
+			open.id,
+		]);
+		const usView = await t.services.status.summary({ regionId: united.id });
+		expect(usView.activeIncidents.map((item) => item.id)).toEqual([
+			everywhere.id,
+			open.id,
+		]);
+		expect(usView.services[0]?.status).toBe("partial_outage");
+		const euView = await t.services.status.summary({ regionId: europe.id });
+		expect(euView.activeIncidents.map((item) => item.id)).toEqual([
+			everywhere.id,
+		]);
+		expect(euView.services[0]?.status).toBe("partial_outage");
+		await expect(
+			t.services.status.summary({ regionId: "reg_missing" }),
+		).rejects.toBeInstanceOf(NotFoundError);
+	});
+
+	it("filters history by region and keeps the month range", async () => {
+		const united = await t.services.regions.create(EDITOR, {
+			name: "United States",
+		});
+		const europe = await t.services.regions.create(EDITOR, { name: "Europe" });
+		t.clock.set("2026-10-10T00:00:00.000Z");
+		const euOnly = await t.services.incidents.create(EDITOR, {
+			title: "EU only",
+			message: "x",
+			status: "resolved",
+			regionId: europe.id,
+		});
+		t.clock.set("2026-11-02T12:00:00.000Z");
+		const usOnly = await t.services.incidents.create(EDITOR, {
+			title: "US only",
+			message: "x",
+			status: "resolved",
+			regionId: united.id,
+		});
+		t.clock.advance(1000);
+		const global = await t.services.incidents.create(EDITOR, {
+			title: "Global",
+			message: "x",
+			status: "resolved",
+		});
+		const all = await t.services.status.history();
+		const us = await t.services.status.history(undefined, 3, united.id);
+		expect(us.months.map((month) => month.key)).toEqual(
+			all.months.map((month) => month.key),
+		);
+		expect(
+			us.months.find((month) => month.key === "2026-10")?.incidents,
+		).toEqual([]);
+		expect(
+			us.months
+				.find((month) => month.key === "2026-11")
+				?.incidents.map((item) => item.id),
+		).toEqual([global.id, usOnly.id]);
+		expect(
+			all.months
+				.find((month) => month.key === "2026-10")
+				?.incidents.map((item) => item.id),
+		).toEqual([euOnly.id]);
+		await expect(
+			t.services.status.history(undefined, 3, "reg_missing"),
+		).rejects.toBeInstanceOf(NotFoundError);
 	});
 });

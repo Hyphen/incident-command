@@ -15,6 +15,7 @@ export const DEFAULT_CACHED_COLLECTIONS: readonly CollectionName[] = [
 	// The public logo route reads the uploaded file.
 	"brand_assets",
 	"services",
+	"regions",
 	"service_status_changes",
 	"incidents",
 	// The public pages read it to decide which subscription channels to offer.

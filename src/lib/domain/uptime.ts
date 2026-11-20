@@ -110,6 +110,7 @@ function buildSegments(
 	service: Service,
 	changes: readonly ServiceStatusChange[],
 	window: Pick<UptimeWindow, "start" | "end">,
+	ignoreIncidentIds?: ReadonlySet<string>,
 ): Segment[] {
 	const sorted = [...changes]
 		.filter((change) => change.serviceId === service.id)
@@ -125,6 +126,9 @@ function buildSegments(
 		const at = new Date(change.createdAt).getTime();
 		if (at >= end) {
 			break;
+		}
+		if (change.incidentId && ignoreIncidentIds?.has(change.incidentId)) {
+			continue;
 		}
 		if (at > cursor) {
 			segments.push({ status, start: cursor, end: at });
@@ -148,8 +152,14 @@ export function computeUptime(
 	changes: readonly ServiceStatusChange[],
 	incidents: readonly Incident[],
 	window: UptimeWindow,
+	options?: { ignoreIncidentIds?: ReadonlySet<string> },
 ): UptimeResult {
-	const segments = buildSegments(service, changes, window);
+	const segments = buildSegments(
+		service,
+		changes,
+		window,
+		options?.ignoreIncidentIds,
+	);
 	const affecting = incidents.filter(
 		(incident) =>
 			incident.kind === "incident" && incident.serviceIds.includes(service.id),

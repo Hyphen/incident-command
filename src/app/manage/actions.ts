@@ -173,6 +173,7 @@ export async function createIncidentAction(form: FormData): Promise<void> {
 			serviceStatuses: serviceStatuses(form),
 			scheduledStart: dateTime(form, "scheduledStart"),
 			scheduledEnd: dateTime(form, "scheduledEnd"),
+			regionId: nonEmpty(form, "regionId"),
 			notify: checkbox(form, "notify"),
 		}),
 	);
@@ -211,6 +212,9 @@ export async function editIncidentAction(form: FormData): Promise<void> {
 			impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
 			scheduledStart: dateTime(form, "scheduledStart"),
 			scheduledEnd: dateTime(form, "scheduledEnd"),
+			regionId: form.has("regionId")
+				? (nonEmpty(form, "regionId") ?? null)
+				: undefined,
 		}),
 	);
 	redirect(flash(`/manage/incidents/${id}`, "incident_saved"));
@@ -240,6 +244,7 @@ function draftContent(form: FormData) {
 		message: text(form, "message"),
 		serviceStatus: nonEmpty(form, "serviceStatus") as ServiceStatus | undefined,
 		serviceStatuses: serviceStatuses(form),
+		regionId: form.has("regionId") ? nonEmpty(form, "regionId") : undefined,
 	};
 }
 
@@ -315,6 +320,38 @@ export async function deleteServiceAction(form: FormData): Promise<void> {
 		services.catalog.delete(actor, text(form, "id")),
 	);
 	redirect(flash("/manage/services", "service_deleted"));
+}
+
+// ---- regions -----------------------------------------------------------------------
+
+export async function createRegionAction(form: FormData): Promise<void> {
+	const { actor, services } = await requireMemberForAction("editor");
+	await attempt("/manage/regions", () =>
+		services.regions.create(actor, {
+			name: text(form, "name"),
+			order: integer(form, "order"),
+		}),
+	);
+	redirect(flash("/manage/regions", "region_created"));
+}
+
+export async function updateRegionAction(form: FormData): Promise<void> {
+	const { actor, services } = await requireMemberForAction("editor");
+	await attempt("/manage/regions", () =>
+		services.regions.update(actor, text(form, "id"), {
+			name: text(form, "name"),
+			order: integer(form, "order"),
+		}),
+	);
+	redirect(flash("/manage/regions", "region_saved"));
+}
+
+export async function deleteRegionAction(form: FormData): Promise<void> {
+	const { actor, services } = await requireMemberForAction("editor");
+	await attempt("/manage/regions", () =>
+		services.regions.delete(actor, text(form, "id")),
+	);
+	redirect(flash("/manage/regions", "region_deleted"));
 }
 
 // ---- members ----------------------------------------------------------------------

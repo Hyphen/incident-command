@@ -10,6 +10,7 @@ import {
 	type IncidentImpact,
 	type IncidentKind,
 	MAINTENANCE_STATUSES,
+	type Region,
 	SERVICE_STATUSES,
 	type Service,
 	type ServiceStatus,
@@ -45,6 +46,35 @@ export function StatusSelect({
 				{statusesFor(kind).map((status) => (
 					<option key={status} value={status}>
 						{EVENT_STATUS_LABELS[status]}
+					</option>
+				))}
+			</Select>
+		</Field>
+	);
+}
+
+/** The region of an incident. Renders nothing when no region exists. */
+export function RegionSelect({
+	regions,
+	value,
+}: {
+	regions: readonly Region[];
+	value?: string;
+}) {
+	if (regions.length === 0) {
+		return null;
+	}
+	return (
+		<Field
+			label="Region"
+			htmlFor="regionId"
+			hint="Global is the default. It shows on every region tab."
+		>
+			<Select id="regionId" name="regionId" defaultValue={value ?? ""}>
+				<option value="">Global</option>
+				{regions.map((region) => (
+					<option key={region.id} value={region.id}>
+						{region.name}
 					</option>
 				))}
 			</Select>

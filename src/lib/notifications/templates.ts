@@ -233,6 +233,7 @@ export function webhookPayload(notification: IncidentNotification) {
 			resolvedAt: incident.resolvedAt,
 			scheduledStart: incident.scheduledStart,
 			scheduledEnd: incident.scheduledEnd,
+			regionId: incident.regionId ?? null,
 		},
 		update: {
 			id: notification.update.id,

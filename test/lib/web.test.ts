@@ -236,7 +236,9 @@ describe("API routes", () => {
 			scheduledStart: "2026-11-05T00:00:00.000Z",
 			scheduledEnd: "2026-11-05T01:00:00.000Z",
 		});
-		const response = await status();
+		const response = await status(
+			new Request("http://localhost/api/v1/status"),
+		);
 		expect(response.headers.get("access-control-allow-origin")).toBe("*");
 		const body = await response.json();
 		expect(body.status).toEqual({
@@ -275,6 +277,53 @@ describe("API routes", () => {
 			scheduledStart: "2026-11-05T00:00:00.000Z",
 		});
 		expect(body.page).toEqual({ name: "Status", url: null });
+		expect(body.region).toBeNull();
+		expect(body.regions).toEqual([]);
+		expect(body.incidents[0].region).toBeNull();
+	});
+
+	it("serves one region and 404 for an unknown region", async () => {
+		const { app, services } = await setup();
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		const region = await services.regions.create(SYSTEM_ACTOR, {
+			name: "United States",
+		});
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Down",
+			message: "Looking",
+			impact: "critical",
+			serviceIds: [api.id],
+			regionId: region.id,
+		});
+		const response = await status(
+			new Request(`http://localhost/api/v1/status?region=${region.id}`),
+		);
+		const body = await response.json();
+		expect(body.region).toEqual({ id: region.id, name: "United States" });
+		expect(body.regions).toEqual([{ id: region.id, name: "United States" }]);
+		expect(body.incidents[0].region).toEqual({
+			id: region.id,
+			name: "United States",
+		});
+		const global = await status(
+			new Request("http://localhost/api/v1/status?region="),
+		);
+		expect((await global.json()).region).toBeNull();
+		const missing = await status(
+			new Request("http://localhost/api/v1/status?region=reg_missing"),
+		);
+		expect(missing.status).toBe(404);
+		expect(missing.headers.get("access-control-allow-origin")).toBe("*");
+		expect(await missing.json()).toEqual({
+			error: "That region was not found.",
+		});
+		await app.store.delete("regions", region.id);
+		const dangling = await (
+			await status(new Request("http://localhost/api/v1/status"))
+		).json();
+		expect(dangling.incidents[0].id).toBe(incident.id);
+		expect(dangling.incidents[0].region).toBeNull();
+		expect(dangling.regions).toEqual([]);
 	});
 
 	it("serves an rss feed with one item for each update", async () => {

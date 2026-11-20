@@ -13,6 +13,7 @@ import PortalLayout from "@/app/manage/(portal)/layout";
 import PortalLoading from "@/app/manage/(portal)/loading";
 import MembersPage from "@/app/manage/(portal)/members/page";
 import DashboardPage from "@/app/manage/(portal)/page";
+import RegionsPage from "@/app/manage/(portal)/regions/page";
 import ServicesPage from "@/app/manage/(portal)/services/page";
 import BrandingPage from "@/app/manage/(portal)/settings/branding/page";
 import NotificationsSettingsPage from "@/app/manage/(portal)/settings/notifications/page";
@@ -581,6 +582,7 @@ describe("incident pages", () => {
 		).toBeInTheDocument();
 		expect(screen.getByLabelText("Impact")).toBeInTheDocument();
 		expect(screen.getByText("No services yet.")).toBeInTheDocument();
+		expect(screen.queryByLabelText("Region")).not.toBeInTheDocument();
 		expect(screen.getByRole("alert")).toHaveTextContent(
 			"Check the form and try again.",
 		);
@@ -754,6 +756,38 @@ describe("incident pages", () => {
 		expect(
 			screen.queryByRole("button", { name: "Delete incident" }),
 		).not.toBeInTheDocument();
+	});
+
+	it("shows a region on the incident forms", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "editor");
+		const region = await services.regions.create(SYSTEM_ACTOR, {
+			name: "United States",
+		});
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "US down",
+			message: "Down",
+			regionId: region.id,
+		});
+		const list = render(await IncidentsPage(flash()));
+		expect(screen.getByText(/United States/)).toBeInTheDocument();
+		list.unmount();
+		const created = render(await NewIncidentPage(flash()));
+		expect(screen.getByLabelText("Region")).toHaveValue("");
+		expect(
+			within(screen.getByLabelText("Region")).getByRole("option", {
+				name: "United States",
+			}),
+		).toBeInTheDocument();
+		created.unmount();
+		render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({}),
+			}),
+		);
+		expect(screen.getAllByText("United States").length).toBeGreaterThan(0);
+		expect(screen.getByLabelText("Region")).toHaveValue(region.id);
 	});
 
 	it("404s for unknown incidents", async () => {
@@ -1067,6 +1101,34 @@ describe("notification draft pages", () => {
 		).toBeInTheDocument();
 	});
 
+	it("shows the region of a draft", async () => {
+		const { app, services } = await setupApp();
+		const region = await services.regions.create(SYSTEM_ACTOR, {
+			name: "United States",
+		});
+		const withRegion = await services.drafts.create(AGENT, {
+			title: "US errors",
+			message: "Looking",
+			regionId: region.id,
+		});
+		const global = await services.drafts.create(AGENT, {
+			title: "Global errors",
+			message: "Looking",
+		});
+		await signIn(app, "editor");
+		const editor = render(await draftPage(withRegion.id));
+		expect(screen.getByLabelText("Region")).toHaveValue(region.id);
+		editor.unmount();
+		await signIn(app, "viewer");
+		const named = render(await draftPage(withRegion.id));
+		expect(screen.getByText("United States")).toBeInTheDocument();
+		named.unmount();
+		render(await draftPage(global.id));
+		expect(
+			screen.queryByText("Region", { selector: "dt" }),
+		).not.toBeInTheDocument();
+	});
+
 	it("404s for unknown drafts", async () => {
 		const { app } = await setupApp();
 		await signIn(app, "viewer");
@@ -1113,6 +1175,40 @@ describe("services page", () => {
 		expect(
 			screen.queryByRole("button", { name: "Add service" }),
 		).not.toBeInTheDocument();
+	});
+});
+
+describe("regions page", () => {
+	it("lets editors manage regions", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "editor");
+		const region = await services.regions.create(SYSTEM_ACTOR, {
+			name: "United States",
+		});
+		render(await RegionsPage(flash()));
+		expect(screen.getByDisplayValue("United States")).toBeInTheDocument();
+		expect(screen.getByDisplayValue(String(region.order))).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "Add region" }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+	});
+
+	it("is read-only for viewers", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "viewer");
+		const empty = render(await RegionsPage(flash()));
+		expect(
+			screen.getByText("No regions yet. The status page stays one page."),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Add region" }),
+		).not.toBeInTheDocument();
+		empty.unmount();
+		await services.regions.create(SYSTEM_ACTOR, { name: "Europe" });
+		render(await RegionsPage(flash()));
+		expect(screen.getByText("Europe")).toBeInTheDocument();
+		expect(screen.getByText("order 0")).toBeInTheDocument();
 	});
 });
 

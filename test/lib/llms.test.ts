@@ -332,3 +332,55 @@ No incident has this id. See the [current status](http://internal/llms.txt).
 `);
 	});
 });
+
+describe("region markdown", () => {
+	it("names the region and rejects an unknown region", async () => {
+		const { services, clock } = await setup();
+		await services.settings.update(SYSTEM_ACTOR, {
+			siteUrl: "https://status.acme.dev",
+		});
+		const region = await services.regions.create(SYSTEM_ACTOR, {
+			name: "United States",
+		});
+		clock.set("2026-05-05T00:00:00.000Z");
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "US down",
+			message: "Looking",
+			regionId: region.id,
+			status: "resolved",
+		});
+		clock.set("2026-11-02T12:00:00.000Z");
+		await services.incidents.create(SYSTEM_ACTOR, {
+			title: "US open",
+			message: "Still down",
+			regionId: region.id,
+		});
+		const status = await llms(
+			new Request(`https://status.acme.dev/llms.txt?region=${region.id}`),
+		);
+		const statusText = await status.text();
+		expect(statusText).toContain("Region: United States.");
+		expect(statusText).toContain("- Region: United States");
+		const global = await llms(new Request("https://status.acme.dev/llms.txt"));
+		expect(await global.text()).toContain("Region: Global.");
+		const missing = await llms(
+			new Request("https://status.acme.dev/llms.txt?region=reg_missing"),
+		);
+		expect(missing.status).toBe(404);
+		const history = await historyMarkdown(
+			new Request(`https://status.acme.dev/history.md?region=${region.id}`),
+		);
+		const historyText = await history.text();
+		expect(historyText).toContain(
+			"Incidents for United States, newest month first.",
+		);
+		expect(historyText).toContain("Region: United States");
+		expect(historyText).toContain(`region=${region.id}`);
+		const historyMissing = await historyMarkdown(
+			new Request("https://status.acme.dev/history.md?region=reg_missing"),
+		);
+		expect(historyMissing.status).toBe(404);
+		const page = await incidentRequest(incident.id);
+		expect(await page.text()).toContain("- Region: United States");
+	});
+});

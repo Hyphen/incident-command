@@ -181,6 +181,27 @@ describe("computeUptime", () => {
 		expect(result.days[2]?.uptime).toBeCloseTo(0.5, 10);
 	});
 
+	it("ignores status changes from incidents outside the region", () => {
+		const outage = change(
+			"2026-11-01T10:00:00.000Z",
+			"operational",
+			"major_outage",
+		);
+		outage.incidentId = "inc_us";
+		const kept = change(
+			"2026-11-01T11:00:00.000Z",
+			"operational",
+			"partial_outage",
+		);
+		kept.incidentId = "inc_eu";
+		const ignored = computeUptime(service(), [outage, kept], [], window, {
+			ignoreIncidentIds: new Set(["inc_us"]),
+		});
+		expect(ignored.days[1]?.status).toBe("partial_outage");
+		const counted = computeUptime(service(), [outage], [], window);
+		expect(counted.days[1]?.status).toBe("major_outage");
+	});
+
 	it("handles changes at the window start and at now", () => {
 		const changes = [
 			change("2026-10-31T00:00:00.000Z", "major_outage", "partial_outage"),

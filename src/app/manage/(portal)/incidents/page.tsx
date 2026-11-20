@@ -5,17 +5,20 @@ import { ButtonLink, Card, EmptyState } from "@/components/manage/ui";
 import { EventStatusBadge } from "@/components/status/badges";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
+import { regionNameFor } from "@/lib/domain/regions";
 import { hasRole } from "@/lib/domain/status";
-import type { Incident } from "@/lib/domain/types";
+import type { Incident, Region } from "@/lib/domain/types";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Incidents" };
 
 function IncidentTable({
 	incidents,
+	regions,
 	empty,
 }: {
 	incidents: Incident[];
+	regions: readonly Region[];
 	empty: string;
 }) {
 	if (incidents.length === 0) {
@@ -36,9 +39,11 @@ function IncidentTable({
 							{incident.title}
 						</Link>
 						<p className="text-xs text-muted">
-							{incident.kind === "maintenance" ? "Maintenance" : "Incident"} ·{" "}
+							{incident.kind === "maintenance" ? "Maintenance" : "Incident"}
+							{regions.length > 0 && ` · ${regionNameFor(incident, regions)}`} ·{" "}
 							<LocalTime iso={incident.createdAt} /> · {incident.updates.length}{" "}
-							update{incident.updates.length === 1 ? "" : "s"}
+							update
+							{incident.updates.length === 1 ? "" : "s"}
 						</p>
 					</div>
 					<EventStatusBadge
@@ -59,9 +64,10 @@ export default async function IncidentsPage({
 }) {
 	const flash = await searchParams;
 	const { member, services, app } = await requireMember();
-	const [open, closed] = await Promise.all([
+	const [open, closed, regions] = await Promise.all([
 		services.incidents.list({ open: true }),
 		services.incidents.list({ open: false, limit: 50 }),
+		services.regions.list(),
 	]);
 	return (
 		<ManagePage
@@ -87,11 +93,16 @@ export default async function IncidentsPage({
 			<Card title="Open">
 				<IncidentTable
 					incidents={open}
+					regions={regions}
 					empty="No open incidents or maintenance."
 				/>
 			</Card>
 			<Card title="Resolved" description="The 50 most recent.">
-				<IncidentTable incidents={closed} empty="Nothing resolved yet." />
+				<IncidentTable
+					incidents={closed}
+					regions={regions}
+					empty="Nothing resolved yet."
+				/>
 			</Card>
 		</ManagePage>
 	);
