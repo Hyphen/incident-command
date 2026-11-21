@@ -78,7 +78,8 @@ An admin selects one queue in **Manage → Settings → Notifications**, or no q
 - With no queue, a window shows the status of each notification when you send.
 - With a queue, the incident dashboard shows a progress bar. The bar updates until the queue is done.
 - The providers are Redis, RabbitMQ and NATS. Select one.
-- Each provider keeps the tasks. NATS needs JetStream.
+- Each provider keeps the tasks.
+- NATS needs JetStream. Do not put a user or a password in the NATS URI.
 - The queue runs in the Node server. A Cloudflare Worker does not run the queue. The container does.
 - After a restart, the server continues a job that stopped.
 

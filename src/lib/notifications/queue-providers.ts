@@ -143,10 +143,27 @@ export async function createTransport(
 	switch (id) {
 		case "redis": {
 			const { RedisTaskProvider } = await import("@qified/redis");
-			return taskTransport(
-				await taskOf(new RedisTaskProvider(options), onError),
-				onError,
-			);
+			const provider = new RedisTaskProvider(options);
+			// getClient is private in the type, but the client needs an error listener.
+			const handle = provider as unknown as {
+				getClient(): Promise<object>;
+			};
+			const transport = taskTransport(await taskOf(provider, onError), onError);
+			return {
+				enqueue: (jobId) => transport.enqueue(jobId),
+				async consume(run) {
+					await transport.consume(run);
+					// A listener before the first connection retries a refused open.
+					listen(await handle.getClient(), onError);
+				},
+				async close() {
+					try {
+						await provider.disconnect(true);
+					} finally {
+						await transport.close();
+					}
+				},
+			};
 		}
 		case "rabbitmq": {
 			const { RabbitMqTaskProvider } = await import("@qified/rabbitmq");

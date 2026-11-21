@@ -10,15 +10,57 @@ import {
 const built = vi.hoisted(() => {
 	const items: { id: string; uri?: string }[] = [];
 	const loads = { redis: 0, rabbitmq: 0, nats: 0 };
+	const instances: {
+		client: {
+			on: (event: string, handler: (error: unknown) => void) => void;
+			fail: (error: unknown) => void;
+		};
+		disconnects: boolean[];
+	}[] = [];
 	function providerClass(id: "redis" | "rabbitmq" | "nats") {
 		return class {
+			readonly disconnects: boolean[] = [];
+			readonly client: {
+				on: (event: string, handler: (error: unknown) => void) => void;
+				fail: (error: unknown) => void;
+			};
 			constructor(options?: { uri?: string }) {
 				loads[id] += 1;
 				items.push({ id, uri: options?.uri });
+				const handlers: ((error: unknown) => void)[] = [];
+				this.client = {
+					on(event: string, handler: (error: unknown) => void) {
+						if (event === "error") {
+							handlers.push(handler);
+						}
+					},
+					fail(error: unknown) {
+						for (const handler of handlers) {
+							handler(error);
+						}
+					},
+				};
+				instances.push(this);
+			}
+			getClient(): Promise<object> {
+				return Promise.resolve(this.client);
+			}
+			dequeue(): Promise<void> {
+				return Promise.resolve();
+			}
+			enqueue(): Promise<string> {
+				return Promise.resolve("task-1");
+			}
+			unsubscribe(): Promise<void> {
+				return Promise.resolve();
+			}
+			disconnect(force?: boolean): Promise<void> {
+				this.disconnects.push(force === true);
+				return Promise.resolve();
 			}
 		};
 	}
-	return { items, loads, providerClass };
+	return { items, loads, instances, providerClass };
 });
 
 vi.mock("@qified/redis", () => ({
@@ -92,7 +134,30 @@ describe("queue transports", () => {
 		await transport.close();
 	});
 
+	it("listens for a Redis client error and closes that client", async () => {
+		const errors: Error[] = [];
+		const before = built.instances.length;
+		const transport = await createTransport(
+			"redis",
+			"redis://localhost:6379",
+			(error) => errors.push(error),
+		);
+		await transport.consume(async () => {});
+		await transport.enqueue("njb_1");
+		const provider = built.instances[before];
+		provider?.client.fail(new Error("SocketClosedUnexpectedlyError"));
+		expect(errors.map((error) => error.message)).toEqual([
+			"SocketClosedUnexpectedlyError",
+		]);
+		await transport.close();
+		expect(provider?.disconnects[0]).toBe(true);
+	});
+
 	it("builds only the selected broker", async () => {
+		built.loads.redis = 0;
+		built.loads.rabbitmq = 0;
+		built.loads.nats = 0;
+		built.items.length = 0;
 		const ignore = () => {};
 		await createTransport("redis", "redis://localhost:6379", ignore);
 		expect(built.loads).toEqual({ redis: 1, rabbitmq: 0, nats: 0 });

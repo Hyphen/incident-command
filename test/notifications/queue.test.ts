@@ -11,7 +11,8 @@ const state = vi.hoisted(() => ({
 		| "close-hang"
 		| "enqueue-string"
 		| "consume-hang"
-		| "consume-error",
+		| "consume-error"
+		| "throw-empty",
 	calls: 0,
 	closed: 0,
 }));
@@ -27,6 +28,11 @@ vi.mock("@/lib/notifications/queue-providers", () => ({
 		}
 		if (state.mode === "throw-error") {
 			throw new Error("redis://user:secret@localhost:6379 failed");
+		}
+		if (state.mode === "throw-empty") {
+			const error = new Error("");
+			error.name = "TimeoutError";
+			throw error;
 		}
 		return {
 			enqueue: () => {
@@ -182,6 +188,15 @@ describe("NotificationQueue", () => {
 		);
 		expect(errors.at(-1)?.message).toBe("redis://***@localhost:6379 failed");
 		expect(errors.at(-1)?.cause).toBeInstanceOf(Error);
+	});
+
+	it("logs the error name when the message is empty", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		state.mode = "throw-empty";
+		const queue = new NotificationQueue();
+		await expect(queue.open("redis", undefined, 1)).resolves.toBe("load");
+		expect(String(logged.mock.calls[0]?.[0])).toContain("TimeoutError");
+		logged.mockRestore();
 	});
 
 	it("reports a close failure and opens the next provider", async () => {

@@ -151,6 +151,79 @@ describe("NotificationJobService", () => {
 		).rejects.toBeInstanceOf(PermissionDeniedError);
 	});
 
+	it("sends a queued job when nobody opens the dashboard", async () => {
+		vi.useFakeTimers();
+		try {
+			vi.spyOn(NotificationQueue.prototype, "open").mockResolvedValue("ok");
+			vi.spyOn(NotificationQueue.prototype, "enqueue").mockResolvedValue("ok");
+			await t.services.notificationQueue.update(ADMIN, {
+				revision: 0,
+				provider: "redis",
+			});
+			await webhook(t);
+			const created = await incident(t);
+			await t.services.incidents.postUpdate(
+				ADMIN,
+				created.id,
+				{ message: "Queued", notify: true },
+				{ jobId: "njb_quiet" },
+			);
+			await t.services.incidents.postUpdate(
+				ADMIN,
+				created.id,
+				{ message: "Queued again", notify: true },
+				{ jobId: "njb_quiet_2" },
+			);
+			expect(t.notifier.incidents).toHaveLength(0);
+			t.clock.advance(15 * MINUTE);
+			await vi.advanceTimersByTimeAsync(15 * MINUTE);
+			expect(
+				(await t.services.notificationJobs.lookup(ADMIN, "njb_quiet"))?.state,
+			).toBe("done");
+			expect(
+				(await t.services.notificationJobs.lookup(ADMIN, "njb_quiet_2"))?.state,
+			).toBe("done");
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("runs the recovery timer after a recent progress request", async () => {
+		vi.useFakeTimers();
+		try {
+			const person = await webhook(t);
+			const created = await incident(t);
+			await t.store.insert(
+				"notification_jobs",
+				jobDocument(t, {
+					id: "njb_soon",
+					incidentId: created.id,
+					updateId: created.updates[0]?.id ?? "",
+					heartbeatAt: new Date(
+						t.clock.now().getTime() - 15 * MINUTE + 5000,
+					).toISOString(),
+				}),
+			);
+			await delivery(t, {
+				id: "ndl_soon",
+				jobId: "njb_soon",
+				subscriberId: person.id,
+				state: "pending",
+			});
+			await t.services.notificationJobs.incidentProgress(ADMIN, created.id);
+			expect((await t.store.get("notification_jobs", "njb_soon"))?.state).toBe(
+				"active",
+			);
+			t.clock.advance(5000);
+			await vi.advanceTimersByTimeAsync(5000);
+			expect((await t.store.get("notification_jobs", "njb_soon"))?.state).toBe(
+				"done",
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("returns before the queue sends the notifications", async () => {
 		vi.spyOn(NotificationQueue.prototype, "open").mockResolvedValue("ok");
 		vi.spyOn(NotificationQueue.prototype, "enqueue").mockResolvedValue("ok");
@@ -449,6 +522,97 @@ describe("NotificationJobService", () => {
 		expect(t.notifier.incidents[1]?.notification.incident).toMatchObject({
 			status: "resolved",
 			resolvedAt: resolved.updates.at(-1)?.createdAt,
+		});
+
+		const again = await t.services.incidents.postUpdate(ADMIN, created.id, {
+			status: "resolved",
+			message: "Fixed again",
+			notify: false,
+		});
+		t.clock.advance(MINUTE);
+		const follow = await t.services.incidents.postUpdate(ADMIN, created.id, {
+			status: "resolved",
+			message: "Still fixed",
+			notify: false,
+		});
+		const followId = follow.updates.at(-1)?.id ?? "";
+		await t.store.insert(
+			"notification_jobs",
+			jobDocument(t, {
+				id: "njb_follow",
+				incidentId: created.id,
+				updateId: followId,
+				event: "incident.updated",
+			}),
+		);
+		await delivery(t, {
+			id: "ndl_follow",
+			jobId: "njb_follow",
+			subscriberId: person.id,
+			state: "pending",
+		});
+		await t.services.notificationJobs.process("njb_follow");
+		expect(t.notifier.incidents[2]?.notification.incident.resolvedAt).toBe(
+			again.updates.at(-1)?.createdAt,
+		);
+		expect(t.notifier.incidents[2]?.notification.incident.resolvedAt).not.toBe(
+			follow.updates.at(-1)?.createdAt,
+		);
+	});
+
+	it("does not leave a job when a row insert fails", async () => {
+		await webhook(t, "https://hooks.example.com/a");
+		await webhook(t, "https://hooks.example.com/b");
+		const insert = t.store.insert.bind(t.store);
+		let rows = 0;
+		vi.spyOn(t.store, "insert").mockImplementation(async (...args) => {
+			if (args[0] === "notification_deliveries") {
+				rows += 1;
+				if (rows === 2) {
+					throw new Error("row failed");
+				}
+			}
+			return insert(...args);
+		});
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		await t.services.incidents.create(ADMIN, {
+			title: "API errors",
+			message: "Looking",
+			notify: true,
+		});
+		expect(await t.store.find("notification_jobs", {})).toEqual([]);
+		expect(t.notifier.incidents).toHaveLength(0);
+		expect(String(error.mock.calls.at(-1)?.[0])).toContain("row failed");
+		error.mockRestore();
+	});
+
+	it("writes a delivery result again when the first write fails", async () => {
+		await webhook(t);
+		const created = await incident(t);
+		const update = t.store.update.bind(t.store);
+		let thrown = false;
+		vi.spyOn(t.store, "update").mockImplementation(async (...args) => {
+			const doc = args[1] as { state?: string };
+			if (
+				!thrown &&
+				args[0] === "notification_deliveries" &&
+				doc.state === "sent"
+			) {
+				thrown = true;
+				throw new Error("store down");
+			}
+			return update(...args);
+		});
+		await t.services.incidents.postUpdate(
+			ADMIN,
+			created.id,
+			{ message: "Retry", notify: true },
+			{ jobId: "njb_retry" },
+		);
+		expect(t.notifier.incidents).toHaveLength(1);
+		expect(await t.store.get("notification_jobs", "njb_retry")).toMatchObject({
+			state: "done",
+			sent: 1,
 		});
 	});
 

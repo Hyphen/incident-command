@@ -375,7 +375,7 @@ function incidentInput(form: FormData) {
 async function createIncident(
 	form: FormData,
 	progress: boolean,
-): Promise<SendResult | undefined> {
+): Promise<SendResult> {
 	const { actor, services } = await requireMemberForAction("editor");
 	const input = incidentInput(form);
 	const jobId = createId("njb");
@@ -399,7 +399,7 @@ export async function createIncidentAction(form: FormData): Promise<void> {
 /** Declares an incident and returns the job so the status window can poll. */
 export async function createIncidentWithProgressAction(
 	form: FormData,
-): Promise<SendResult | undefined> {
+): Promise<SendResult> {
 	return createIncident(form, true);
 }
 
@@ -425,7 +425,7 @@ async function finishSend(
 	notice: FlashCode,
 	progress: boolean,
 	posts = false,
-): Promise<SendResult | undefined> {
+): Promise<SendResult> {
 	const job = await services.notificationJobs.lookup(actor, jobId);
 	// An id that is not an incident id does not become the redirect address.
 	if (!INCIDENT_ID.test(incidentId)) {
@@ -481,7 +481,7 @@ function updateInput(form: FormData) {
 async function postIncidentUpdate(
 	form: FormData,
 	progress: boolean,
-): Promise<SendResult | undefined> {
+): Promise<SendResult> {
 	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
 	const tab = text(form, "tab");
@@ -510,7 +510,7 @@ export async function postIncidentUpdateAction(form: FormData): Promise<void> {
 /** Posts an update and returns the job so the status window can poll. */
 export async function postIncidentUpdateWithProgressAction(
 	form: FormData,
-): Promise<SendResult | undefined> {
+): Promise<SendResult> {
 	return postIncidentUpdate(form, true);
 }
 
@@ -574,7 +574,7 @@ export async function saveDraftAction(form: FormData): Promise<void> {
 async function approveDraft(
 	form: FormData,
 	progress: boolean,
-): Promise<SendResult | undefined> {
+): Promise<SendResult> {
 	const { actor, services } = await requireMemberForAction("editor");
 	const id = text(form, "id");
 	const jobId = createId("njb");
@@ -601,7 +601,7 @@ export async function approveDraftAction(form: FormData): Promise<void> {
 /** Approves a draft and returns the job so the status window can poll. */
 export async function approveDraftWithProgressAction(
 	form: FormData,
-): Promise<SendResult | undefined> {
+): Promise<SendResult> {
 	return approveDraft(form, true);
 }
 

@@ -65,6 +65,7 @@ export class NotificationJobService {
 	private readonly ready = new Map<string, PreparedSend>();
 	private lastRecover = 0;
 	private lastPrune = 0;
+	private recoverDue = Number.POSITIVE_INFINITY;
 	private recoverTimer: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(
@@ -112,7 +113,7 @@ export class NotificationJobService {
 		if (provider) {
 			job.provider = provider;
 		}
-		await this.ctx.store.insert("notification_jobs", job);
+		// Rows go in first. A failed row then leaves no active job.
 		for (const [order, subscriber] of recipients.entries()) {
 			await this.ctx.store.insert("notification_deliveries", {
 				id: createId("ndl"),
@@ -126,6 +127,7 @@ export class NotificationJobService {
 				updatedAt: now,
 			});
 		}
+		await this.ctx.store.insert("notification_jobs", job);
 		this.ready.set(job.id, {
 			notification: input.notification,
 			subscribers: new Map(
@@ -137,19 +139,20 @@ export class NotificationJobService {
 		if (!provider) {
 			if (input.delivery === "background") {
 				void this.run(job.id);
+				this.arm(job);
 				return job;
 			}
 			await this.run(job.id);
-			return this.reload(job);
+			return this.arm(await this.reload(job));
 		}
 		const queued = await this.queue.enqueue(job.id);
 		if (queued === "ok") {
 			this.ready.delete(job.id);
-			return this.reload(job);
+			return this.arm(await this.reload(job));
 		}
 		await this.markFallback(job.id, queued);
 		void this.run(job.id);
-		return this.reload(job);
+		return this.arm(await this.reload(job));
 	}
 
 	/** Sends the open rows of one job. The queue consumer calls this. */
@@ -187,6 +190,7 @@ export class NotificationJobService {
 				return subscriber ? [subscriber] : [];
 			});
 			const reported = new Set<string>();
+			const deferred: DeferredWrite[] = [];
 			await this.ctx.notifier.notifyIncident(
 				prepared.notification,
 				subscribers,
@@ -199,17 +203,21 @@ export class NotificationJobService {
 					if (!row) {
 						return;
 					}
-					await this.writeState(
+					await this.recordResult(
 						row,
 						ok ? "sent" : "failed",
 						ok ? undefined : "provider",
+						deferred,
 					);
 				},
 			);
 			for (const row of claimed) {
 				if (!reported.has(row.subscriberId)) {
-					await this.writeState(row, "failed", "not_sent");
+					await this.recordResult(row, "failed", "not_sent", deferred);
 				}
+			}
+			for (const item of deferred) {
+				await this.writeState(item.row, item.state, item.error);
 			}
 			await this.touch(jobId);
 			if (keepAlive) {
@@ -288,15 +296,30 @@ export class NotificationJobService {
 			this.recoverTimer = undefined;
 		}
 		if (dueAt === undefined) {
+			this.recoverDue = Number.POSITIVE_INFINITY;
 			return;
 		}
 		const delay = Math.max(0, dueAt - this.ctx.now().getTime());
+		this.recoverDue = dueAt;
 		const timer = setTimeout(() => {
 			this.recoverTimer = undefined;
+			// A progress request must not cancel this pass.
+			this.lastRecover = 0;
 			void this.recover();
 		}, delay);
 		timer.unref?.();
 		this.recoverTimer = timer;
+	}
+
+	/** Plans recovery for one active job. An earlier timer stays. */
+	private arm(job: NotificationJob): NotificationJob {
+		if (job.state !== "active") {
+			return job;
+		}
+		const due = new Date(job.heartbeatAt).getTime() + staleAfter(job);
+		const next = this.recoverTimer ? Math.min(this.recoverDue, due) : due;
+		this.planRecover(next);
+		return job;
 	}
 
 	/** One job, or nothing when the id is unknown. */
@@ -469,6 +492,19 @@ export class NotificationJobService {
 		return claimed;
 	}
 
+	private async recordResult(
+		row: NotificationDelivery,
+		state: "sent" | "failed",
+		error: DeliveryFailure | undefined,
+		deferred: DeferredWrite[],
+	): Promise<void> {
+		try {
+			await this.writeState(row, state, error);
+		} catch {
+			deferred.push({ row, state, error });
+		}
+	}
+
 	private async writeState(
 		row: NotificationDelivery,
 		state: "sent" | "failed",
@@ -604,6 +640,12 @@ export class NotificationJobService {
 			where: [{ field: "createdAt", op: "lt", value: cutoff }],
 		});
 	}
+}
+
+interface DeferredWrite {
+	row: NotificationDelivery;
+	state: "sent" | "failed";
+	error: DeliveryFailure | undefined;
 }
 
 function staleAfter(job: NotificationJob): number {

@@ -50,7 +50,8 @@ export class NotificationQueue {
 			onError ??
 			((error: Error) => console.error(`[notifications] ${error.message}`));
 		this.report = (error) => {
-			log(new Error(redactUri(error.message), { cause: error }));
+			const message = redactUri(error.message) || error.name;
+			log(new Error(message, { cause: error }));
 		};
 	}
 

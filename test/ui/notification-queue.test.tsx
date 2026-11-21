@@ -320,69 +320,84 @@ describe("queue send actions", () => {
 	});
 
 	it("saves the queue and reports a bad URI", async () => {
-		const { app } = await setupApp({ ENCRYPTION_KEY: KEY });
-		await signIn(app, "admin");
-		expectFlashRedirect(
-			await redirectOf(
+		const open = vi
+			.spyOn(NotificationQueue.prototype, "open")
+			.mockResolvedValue("load");
+		try {
+			const { app } = await setupApp({ ENCRYPTION_KEY: KEY });
+			await signIn(app, "admin");
+			expectFlashRedirect(
+				await redirectOf(
+					updateNotificationQueueAction(
+						form({ revision: "0", provider: "redis" }),
+					),
+				),
+				"/manage/settings/notifications",
+				"error",
+				"The settings are saved, but the server cannot connect to the queue. The server sends notifications without the queue until the connection works.",
+			);
+			expectFlashRedirect(
+				await redirectOf(
+					updateNotificationQueueAction(
+						form({ revision: "1", provider: "redis", uri: "http://nope" }),
+					),
+				),
+				"/manage/settings/notifications",
+				"error",
+				"The connection URI is not correct for this provider.",
+			);
+			expectFlashRedirect(
+				await redirectOf(
+					updateNotificationQueueAction(
+						form({
+							revision: "1",
+							provider: "redis",
+							uri: "redis://localhost",
+						}),
+					),
+				),
+				"/manage/settings/notifications",
+				"error",
+				"The settings are saved, but the server cannot connect to the queue. The server sends notifications without the queue until the connection works.",
+			);
+			const { app: editorApp } = await setupApp();
+			await signIn(editorApp, "editor");
+			const refused = await redirectOf(
 				updateNotificationQueueAction(
 					form({ revision: "0", provider: "redis" }),
 				),
-			),
-			"/manage/settings/notifications",
-			"error",
-			"The settings are saved, but the server cannot connect to the queue. The server sends notifications without the queue until the connection works.",
-		);
-		expectFlashRedirect(
-			await redirectOf(
-				updateNotificationQueueAction(
-					form({ revision: "1", provider: "redis", uri: "http://nope" }),
-				),
-			),
-			"/manage/settings/notifications",
-			"error",
-			"The connection URI is not correct for this provider.",
-		);
-		expectFlashRedirect(
-			await redirectOf(
-				updateNotificationQueueAction(
-					form({ revision: "1", provider: "redis", uri: "redis://localhost" }),
-				),
-			),
-			"/manage/settings/notifications",
-			"error",
-			"The settings are saved, but the server cannot connect to the queue. The server sends notifications without the queue until the connection works.",
-		);
-		const { app: editorApp } = await setupApp();
-		await signIn(editorApp, "editor");
-		const refused = await redirectOf(
-			updateNotificationQueueAction(form({ revision: "0", provider: "redis" })),
-		);
-		expect(new URL(refused, "http://localhost").pathname).toBe("/manage");
+			);
+			expect(new URL(refused, "http://localhost").pathname).toBe("/manage");
 
-		const { app: clearApp } = await setupApp({ ENCRYPTION_KEY: KEY });
-		await signIn(clearApp, "admin");
-		expectFlashRedirect(
-			await redirectOf(
-				updateNotificationQueueAction(
-					form({ revision: "0", provider: "none" }),
+			const { app: clearApp } = await setupApp({ ENCRYPTION_KEY: KEY });
+			await signIn(clearApp, "admin");
+			expectFlashRedirect(
+				await redirectOf(
+					updateNotificationQueueAction(
+						form({ revision: "0", provider: "none" }),
+					),
 				),
-			),
-			"/manage/settings/notifications",
-			"notice",
-			"Queue saved",
-		);
-		expectFlashRedirect(
-			await redirectOf(updateNotificationQueueAction(form({ revision: "1" }))),
-			"/manage/settings/notifications",
-			"notice",
-			"Queue saved",
-		);
-		const missing = await redirectOf(
-			updateNotificationQueueAction(form({ provider: "redis" })),
-		);
-		expect(
-			new URL(missing, "http://localhost").searchParams.get("error"),
-		).toBeTruthy();
+				"/manage/settings/notifications",
+				"notice",
+				"Queue saved",
+			);
+			expectFlashRedirect(
+				await redirectOf(
+					updateNotificationQueueAction(form({ revision: "1" })),
+				),
+				"/manage/settings/notifications",
+				"notice",
+				"Queue saved",
+			);
+			const missing = await redirectOf(
+				updateNotificationQueueAction(form({ provider: "redis" })),
+			);
+			expect(
+				new URL(missing, "http://localhost").searchParams.get("error"),
+			).toBeTruthy();
+		} finally {
+			open.mockRestore();
+		}
 	});
 });
 
@@ -448,25 +463,6 @@ describe("send status window", () => {
 			"href",
 			"/manage/incidents/inc_1",
 		);
-	});
-
-	it("closes when there is no job", async () => {
-		const empty = vi.fn(async () => undefined);
-		render(
-			<form onSubmit={(event) => event.preventDefault()}>
-				<SendButton modal progressAction={empty} className="bg-brand">
-					Send
-				</SendButton>
-			</form>,
-		);
-		fireEvent.click(screen.getByRole("button", { name: "Send" }));
-		expect(document.querySelector("dialog")?.open).toBe(true);
-		await waitFor(() =>
-			expect(document.querySelector("dialog")?.open).toBe(false),
-		);
-		expect(
-			screen.queryByText("The server prepares the notifications."),
-		).not.toBeInTheDocument();
 	});
 
 	it("gives a failed send to the page and does not open a location", async () => {
@@ -562,19 +558,25 @@ describe("send status window", () => {
 		vi.useRealTimers();
 	});
 
-	it("submits the form action when a queue is saved", () => {
+	it("runs the button action when a queue is saved", async () => {
+		const save = vi.fn(async () => {});
+		const send = vi.fn(async () => {});
 		render(
-			<form>
-				<SendButton modal={false} progressAction={vi.fn()} className="bg-brand">
+			<form action={save}>
+				<SendButton
+					modal={false}
+					progressAction={vi.fn()}
+					formAction={send}
+					className="bg-brand"
+				>
 					Post update
 				</SendButton>
 			</form>,
 		);
 		expect(document.querySelector("dialog")).toBeNull();
-		expect(screen.getByRole("button", { name: "Post update" })).toHaveAttribute(
-			"type",
-			"submit",
-		);
+		fireEvent.click(screen.getByRole("button", { name: "Post update" }));
+		await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+		expect(save).not.toHaveBeenCalled();
 	});
 });
 

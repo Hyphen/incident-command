@@ -29,6 +29,9 @@ function context(env?: Record<string, string>) {
 
 describe("NotificationQueueService", () => {
 	it("saves one provider and keeps the URI encrypted", async () => {
+		const open = vi
+			.spyOn(NotificationQueue.prototype, "open")
+			.mockResolvedValue("load");
 		const t = context({ ENCRYPTION_KEY: KEY });
 		await expect(t.services.notificationQueue.provider()).resolves.toBe(
 			undefined,
@@ -58,9 +61,13 @@ describe("NotificationQueueService", () => {
 		const rotated = await t.store.get("notification_queue", "queue");
 		expect(rotated?.uri).toBe(stored?.uri);
 		expect(rotated?.uri).not.toContain("secret");
+		open.mockRestore();
 	});
 
 	it("drops the URI when the provider changes and rejects a bad URI", async () => {
+		const open = vi
+			.spyOn(NotificationQueue.prototype, "open")
+			.mockResolvedValue("load");
 		const t = context({ ENCRYPTION_KEY: KEY });
 		await t.services.notificationQueue.update(ADMIN, {
 			revision: 0,
@@ -97,6 +104,14 @@ describe("NotificationQueueService", () => {
 				uri: "bad uri",
 			}),
 		).rejects.toThrow(new ValidationError(QUEUE_URI_INVALID));
+		await expect(
+			t.services.notificationQueue.update(ADMIN, {
+				revision: 2,
+				provider: "nats",
+				uri: "nats://alice:secret@localhost:4222",
+			}),
+		).rejects.toThrow(new ValidationError(QUEUE_URI_INVALID));
+		open.mockRestore();
 	});
 
 	it("rejects a stale revision and a second save of the same revision", async () => {

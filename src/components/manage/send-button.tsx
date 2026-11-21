@@ -133,7 +133,7 @@ export function SendButton({
 	children,
 }: {
 	modal: boolean;
-	progressAction: (form: FormData) => Promise<SendResult | undefined>;
+	progressAction: (form: FormData) => Promise<SendResult>;
 	formAction?: (form: FormData) => void | Promise<void>;
 	className: string;
 	children: ReactNode;
@@ -162,11 +162,6 @@ export function SendButton({
 			const data = new FormData(form);
 			void progressAction(data).then(
 				(result) => {
-					if (!result) {
-						dialog.close();
-						setPrepare(false);
-						return;
-					}
 					setJobId(result.jobId);
 					setHref(result.href);
 				},

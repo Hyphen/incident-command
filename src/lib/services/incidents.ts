@@ -351,9 +351,18 @@ export function incidentAsOf(
 		impact: update.impact,
 		status: update.status,
 	};
-	// The time belongs to this post. A later post does not change it.
+	// A closed post uses the time of the first closed post in that run.
 	if (isClosedStatus(update.status)) {
-		snapshot.resolvedAt = update.createdAt;
+		let resolvedAt = update.createdAt;
+		const index = incident.updates.findIndex((item) => item.id === update.id);
+		for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+			const previous = incident.updates[cursor] as IncidentUpdate;
+			if (!isClosedStatus(previous.status)) {
+				break;
+			}
+			resolvedAt = previous.createdAt;
+		}
+		snapshot.resolvedAt = resolvedAt;
 	} else {
 		delete snapshot.resolvedAt;
 	}

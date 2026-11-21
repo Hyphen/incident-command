@@ -20,7 +20,7 @@ export const QUEUE_PROVIDERS: Record<QueueProviderId, QueueProviderDefinition> =
 		},
 		nats: {
 			label: "NATS",
-			hint: "JetStream must be on in the NATS server.",
-			uri: { default: "localhost:4222", pattern: "^\\S+$" },
+			hint: "JetStream must be on. Do not put a user or a password in the URI.",
+			uri: { default: "localhost:4222", pattern: "^[^\\s@]+$" },
 		},
 	};
