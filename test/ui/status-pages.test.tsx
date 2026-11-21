@@ -329,9 +329,13 @@ describe("status page", () => {
 			"page",
 		);
 		expect(screen.queryAllByText("US only")).toEqual([]);
-		expect(screen.getAllByText("Everywhere").length).toBeGreaterThan(0);
-		expect(screen.getAllByText("Partial outage").length).toBeGreaterThan(0);
+		expect(screen.queryAllByText("Everywhere")).toEqual([]);
+		expect(screen.getByText("We're fully operational")).toBeInTheDocument();
+		expect(screen.queryAllByText("Partial outage")).toEqual([]);
 		expect(screen.queryAllByText("Major outage")).toEqual([]);
+		expect(
+			screen.getByRole("link", { name: "View history →" }),
+		).toHaveAttribute("href", `/history?region=${europe.id}`);
 		expect(
 			(
 				await statusMetadata({
@@ -466,11 +470,22 @@ describe("incident page", () => {
 	});
 
 	it("404s for unknown incidents", async () => {
-		await setupApp();
+		const { services } = await setupApp();
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Hidden",
+			message: "x",
+		});
+		await services.incidents.delete(SYSTEM_ACTOR, incident.id, {
+			reason: "Duplicate",
+		});
 		await expectNotFound(IncidentPage({ params: params({ id: "nope" }) }));
+		await expectNotFound(IncidentPage({ params: params({ id: incident.id }) }));
 		expect(await incidentMetadata({ params: params({ id: "nope" }) })).toEqual({
 			title: "Incident not found",
 		});
+		expect(
+			await incidentMetadata({ params: params({ id: incident.id }) }),
+		).toEqual({ title: "Incident not found" });
 	});
 });
 
@@ -578,6 +593,9 @@ describe("history page", () => {
 			"href",
 			`/history?month=2026-08&region=${united.id}`,
 		);
+		expect(
+			screen.getByRole("link", { name: "Current status" }),
+		).toHaveAttribute("href", `/?region=${united.id}`);
 		expect(
 			await historyMetadata({
 				searchParams: params({ month: "2026-05", region: united.id }),

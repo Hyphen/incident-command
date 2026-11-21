@@ -36,6 +36,7 @@ const MESSAGE_CODES: Record<string, FlashCode> = {
 	[TWO_FACTOR_NOT_READY]: "two_factor_not_ready",
 	"Maintenance requires scheduledStart and scheduledEnd":
 		"maintenance_window_required",
+	"Write a reason before you delete the incident.": "delete_reason_required",
 	"This invite link is not valid. Ask an admin for a new invite.":
 		"invite_invalid",
 	"You cannot remove the last admin": "last_admin",

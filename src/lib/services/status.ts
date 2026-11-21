@@ -29,7 +29,7 @@ import {
 import { NotFoundError } from "../errors";
 import type { ServiceCatalog } from "./catalog";
 import type { ServiceContext } from "./context";
-import type { IncidentService } from "./incidents";
+import { type IncidentService, NOT_DELETED } from "./incidents";
 import type { RegionService } from "./regions";
 import type { SettingsService } from "./settings";
 
@@ -379,7 +379,7 @@ export class StatusService {
 		}
 		const current = monthKey(this.ctx.now());
 		const [first] = await this.ctx.store.find("incidents", {
-			where: [{ field: "status", op: "ne", value: "scheduled" }],
+			where: [{ field: "status", op: "ne", value: "scheduled" }, NOT_DELETED],
 			sort: [{ field: "createdAt" }],
 			limit: 1,
 		});

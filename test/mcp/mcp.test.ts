@@ -347,9 +347,26 @@ describe("MCP handler", () => {
 		).toHaveLength(1);
 		expect((await call("list_incidents")).data).toHaveLength(2);
 
+		const blank = await call("delete_incident", {
+			id: maintenance.id,
+			reason: "  ",
+		});
+		expect(blank.isError).toBe(true);
+		expect(blank.text).toMatch(/^bad_request:/);
 		expect(
-			(await call("delete_incident", { id: maintenance.id })).data,
+			(await call("list_incidents", { kind: "maintenance" })).data,
+		).toHaveLength(1);
+		expect(
+			(
+				await call("delete_incident", {
+					id: maintenance.id,
+					reason: "Wrong window",
+				})
+			).data,
 		).toEqual({ deleted: maintenance.id });
+		expect((await call("get_incident", { id: maintenance.id })).isError).toBe(
+			true,
+		);
 		expect((await call("delete_service", { id: web.id })).data).toEqual({
 			deleted: web.id,
 		});

@@ -7,7 +7,7 @@ import { EventStatusBadge } from "@/components/status/badges";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
 import { regionNameFor } from "@/lib/domain/regions";
-import { hasRole } from "@/lib/domain/status";
+import { hasRole, isDeletedIncident } from "@/lib/domain/status";
 import type { Incident, Region } from "@/lib/domain/types";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +45,17 @@ function IncidentTable({
 							<LocalTime iso={incident.createdAt} /> · {incident.updates.length}{" "}
 							post{incident.updates.length === 1 ? "" : "s"}
 						</p>
+						{isDeletedIncident(incident) && (
+							<>
+								<p className="text-xs text-muted">
+									Deleted by {incident.deletedBy.name} ·{" "}
+									<LocalTime iso={incident.deletedAt} />
+								</p>
+								<p className="text-xs break-words whitespace-pre-wrap text-muted">
+									Reason: {incident.deletedReason}
+								</p>
+							</>
+						)}
 					</div>
 					<EventStatusBadge
 						kind={incident.kind}
@@ -64,9 +75,14 @@ export default async function IncidentsPage({
 }) {
 	const flash = await searchParams;
 	const { member, services, app } = await requireMember();
-	const [open, closed, regions, pending] = await Promise.all([
+	const [open, closed, deleted, regions, pending] = await Promise.all([
 		services.incidents.list({ open: true }),
 		services.incidents.list({ open: false, limit: 50 }),
+		services.incidents.list({
+			deleted: true,
+			orderBy: "updatedAt",
+			limit: 50,
+		}),
 		services.regions.list(),
 		services.drafts.list({ pending: true }),
 	]);
@@ -114,6 +130,18 @@ export default async function IncidentsPage({
 					empty="Nothing resolved yet."
 				/>
 			</Card>
+			{deleted.length > 0 && (
+				<Card
+					title="Deleted"
+					description="Customers cannot see these incidents. The 50 most recent."
+				>
+					<IncidentTable
+						incidents={deleted}
+						regions={regions}
+						empty="No deleted incidents."
+					/>
+				</Card>
+			)}
 		</ManagePage>
 	);
 }

@@ -2,6 +2,8 @@ import { createId } from "../crypto";
 import {
 	type CreateIncidentInput,
 	createIncidentSchema,
+	type DeleteIncidentInput,
+	deleteIncidentSchema,
 	type EditIncidentInput,
 	editIncidentSchema,
 	type IncidentUpdateInput,
@@ -92,7 +94,23 @@ export interface IncidentListOptions {
 	 */
 	orderBy?: "createdAt" | "updatedAt";
 	limit?: number;
+	/** `true` returns only incidents that left the public view. */
+	deleted?: boolean;
 }
+
+/** Matches an incident that is still on the public view. */
+export const NOT_DELETED: Condition = {
+	field: "deletedAt",
+	op: "eq",
+	value: null,
+};
+
+/** Matches an incident that left the public view. */
+const ONLY_DELETED: Condition = {
+	field: "deletedAt",
+	op: "gt",
+	value: "",
+};
 
 interface ServicePlan {
 	status: ServiceStatus;
@@ -243,6 +261,7 @@ export class IncidentService {
 		if (options.before) {
 			where.push({ field: "createdAt", op: "lt", value: options.before });
 		}
+		where.push(options.deleted ? ONLY_DELETED : NOT_DELETED);
 		const stored = await this.ctx.store.find("incidents", {
 			where,
 			sort: [{ field: options.orderBy ?? "createdAt", direction: "desc" }],
@@ -251,9 +270,19 @@ export class IncidentService {
 		return stored.map((incident) => withPostFields(incident));
 	}
 
-	async find(id: string, options?: ReadOptions): Promise<Incident | undefined> {
+	async find(
+		id: string,
+		options?: ReadOptions & { includeDeleted?: boolean },
+	): Promise<Incident | undefined> {
 		const stored = await this.ctx.store.get("incidents", id, options);
-		return stored ? withPostFields(stored) : undefined;
+		if (!stored) {
+			return undefined;
+		}
+		const incident = withPostFields(stored);
+		if (incident.deletedAt && !options?.includeDeleted) {
+			return undefined;
+		}
+		return incident;
 	}
 
 	async get(id: string): Promise<Incident> {
@@ -518,11 +547,30 @@ export class IncidentService {
 		return next;
 	}
 
-	async delete(actor: Actor, id: string): Promise<void> {
+	/**
+	 * Removes an incident from the public view. The portal keeps the incident,
+	 * the posts, and a record of who deleted it and why.
+	 */
+	async delete(
+		actor: Actor,
+		id: string,
+		input: DeleteIncidentInput,
+	): Promise<void> {
 		requirePermission(actor, "incidents.delete");
-		if (!(await this.ctx.store.delete("incidents", id))) {
-			throw new NotFoundError("Incident", id);
+		const { reason } = parse(deleteIncidentSchema, input);
+		if (!reason) {
+			throw new ValidationError(
+				"Write a reason before you delete the incident.",
+			);
 		}
+		const deletedAt = iso(this.ctx.now());
+		await this.mutate(id, (current) => ({
+			...current,
+			deletedAt,
+			deletedBy: authorRef(actor),
+			deletedReason: reason,
+			updatedAt: deletedAt,
+		}));
 	}
 
 	private assertCanNotify(actor: Actor, notify: boolean | undefined): void {

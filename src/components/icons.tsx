@@ -57,6 +57,27 @@ export function ChevronDownIcon({ className }: IconProps) {
 	);
 }
 
+/** The icon marks a link that opens in a new tab. */
+export function ExternalLinkIcon({ className }: IconProps) {
+	return (
+		<svg {...base} className={className} aria-hidden="true">
+			<path d="M15 3h6v6" />
+			<path d="M10 14 21 3" />
+			<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+		</svg>
+	);
+}
+
+export function LogOutIcon({ className }: IconProps) {
+	return (
+		<svg {...base} className={className} aria-hidden="true">
+			<path d="m16 17 5-5-5-5" />
+			<path d="M21 12H9" />
+			<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+		</svg>
+	);
+}
+
 export function StatusIcon({
 	status,
 	className,

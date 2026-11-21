@@ -1,4 +1,6 @@
 import {
+	act,
+	cleanup,
 	fireEvent,
 	render,
 	screen,
@@ -320,6 +322,16 @@ describe("portal layout", () => {
 			"href",
 			"/manage/agents",
 		);
+		const statusPage = nav.getByRole("link", {
+			name: "View status page (opens in a new tab)",
+		});
+		expect(statusPage).toHaveAttribute("href", "/");
+		expect(statusPage).toHaveAttribute("target", "_blank");
+		expect(statusPage).toHaveAttribute("rel", "noreferrer");
+		expect(statusPage.querySelector("svg")).toHaveAttribute(
+			"aria-hidden",
+			"true",
+		);
 		expect(screen.getByRole("link", { name: "Acme Status" })).toHaveAttribute(
 			"href",
 			"/manage",
@@ -372,6 +384,11 @@ describe("portal layout", () => {
 			"aria-current",
 		);
 		expect(nav.getByRole("link", { name: "Members" })).toBeInTheDocument();
+		const hrefs = nav
+			.getAllByRole("link")
+			.map((link) => link.getAttribute("href"));
+		expect(hrefs.at(-2)).toBe("/manage/settings");
+		expect(hrefs.at(-1)).toBe("/");
 	});
 
 	it("opens My Profile from the user", async () => {
@@ -388,8 +405,8 @@ describe("portal layout", () => {
 		expect(profile).toHaveAttribute("href", "/manage/account");
 		expect(profile).not.toHaveAttribute("aria-current");
 		expect(
-			within(menu).getByRole("menuitem", { name: "View status page" }),
-		).toHaveAttribute("href", "/");
+			within(menu).queryByRole("menuitem", { name: /status page/i }),
+		).not.toBeInTheDocument();
 		expect(
 			within(menu).getByRole("menuitem", { name: "Sign out" }),
 		).toBeInTheDocument();
@@ -420,11 +437,6 @@ describe("portal layout", () => {
 
 		fireEvent.click(user);
 		fireEvent.click(screen.getByRole("menuitem", { name: "My Profile" }));
-		expect(
-			screen.queryByRole("menu", { name: "User" }),
-		).not.toBeInTheDocument();
-		fireEvent.click(user);
-		fireEvent.click(screen.getByRole("menuitem", { name: "View status page" }));
 		expect(
 			screen.queryByRole("menu", { name: "User" }),
 		).not.toBeInTheDocument();
@@ -633,6 +645,14 @@ describe("incident pages", () => {
 			scheduledStart: "2026-11-05T00:00:00.000Z",
 			scheduledEnd: "2026-11-05T01:00:00.000Z",
 		});
+		const removed = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Removed one",
+			message: "x",
+			notify: false,
+		});
+		await services.incidents.delete(SYSTEM_ACTOR, removed.id, {
+			reason: "Duplicate report",
+		});
 		render(await IncidentsPage(flash()));
 		expect(screen.getByRole("link", { name: "Open one" })).toBeInTheDocument();
 		expect(screen.getByText(/2 posts/)).toBeInTheDocument();
@@ -643,6 +663,16 @@ describe("incident pages", () => {
 		expect(
 			screen.getByRole("link", { name: "Schedule maintenance" }),
 		).toBeInTheDocument();
+		expect(
+			screen.getByRole("heading", { name: "Deleted" }),
+		).toBeInTheDocument();
+		expect(screen.getByText(/Deleted by System/)).toBeInTheDocument();
+		expect(screen.getByText("Reason: Duplicate report")).toBeInTheDocument();
+		expect(
+			screen
+				.getAllByRole("link", { name: "Removed one" })
+				.map((link) => link.getAttribute("href")),
+		).toEqual([`/manage/incidents/${removed.id}`]);
 	});
 
 	it("shows empty states for viewers", async () => {
@@ -655,6 +685,9 @@ describe("incident pages", () => {
 		expect(screen.getByText("Nothing resolved yet.")).toBeInTheDocument();
 		expect(
 			screen.queryByRole("heading", { name: "Drafts" }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("heading", { name: "Deleted" }),
 		).not.toBeInTheDocument();
 		expect(
 			screen.queryByRole("link", { name: "Declare incident" }),
@@ -782,9 +815,20 @@ describe("incident pages", () => {
 		expect(
 			screen.queryByRole("button", { name: "Save region" }),
 		).not.toBeInTheDocument();
+		const banner = screen.getByRole("region", { name: "Delete this incident" });
 		expect(
-			screen.getByRole("button", { name: "Delete incident" }),
+			within(banner).getByText(
+				"Be very careful. Delete an incident only when customers must not see it.",
+			),
 		).toBeInTheDocument();
+		expect(
+			within(banner).getByRole("button", { name: "Delete incident" }),
+		).toBeInTheDocument();
+		const postsHeading = screen.getByRole("heading", { name: "Posts" });
+		expect(
+			postsHeading.compareDocumentPosition(banner) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
 		dashboard.unmount();
 
 		// The update form sets a status for each affected service and can add another.
@@ -877,6 +921,12 @@ describe("incident pages", () => {
 		expect(screen.getAllByText("API outage").length).toBeGreaterThan(1);
 		expect(screen.getAllByText(/System \(system\)/).length).toBeGreaterThan(1);
 		expect(screen.getByText("Looking")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Delete incident" }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("region", { name: "Delete this incident" }),
+		).not.toBeInTheDocument();
 		timeline.unmount();
 
 		const posts = render(
@@ -893,6 +943,9 @@ describe("incident pages", () => {
 			"href",
 			`/manage/incidents/${incident.id}?tab=posts&post=1`,
 		);
+		expect(
+			screen.queryByRole("button", { name: "Delete incident" }),
+		).not.toBeInTheDocument();
 		const items = screen.getAllByRole("listitem");
 		const newest = items[0]?.textContent ?? "";
 		expect(newest.indexOf("Investigating")).toBeLessThan(
@@ -1071,7 +1124,24 @@ describe("incident pages", () => {
 			"aria-current",
 			"page",
 		);
+		expect(
+			screen.getByRole("region", { name: "Delete this incident" }),
+		).toBeInTheDocument();
 		editor.unmount();
+
+		const timeline = render(
+			await IncidentPage({
+				params: params({ id: maintenance.id }),
+				searchParams: params({ tab: "timeline" }),
+			}),
+		);
+		expect(
+			screen.queryByRole("button", { name: "Save window" }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Delete incident" }),
+		).not.toBeInTheDocument();
+		timeline.unmount();
 
 		// Maintenance with no services has no status for each service.
 		const form = render(
@@ -1149,6 +1219,130 @@ describe("incident pages", () => {
 		expect(
 			screen.getByRole("button", { name: "Save region" }),
 		).toBeInTheDocument();
+		cleanup();
+		render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "posts" }),
+			}),
+		);
+		expect(
+			screen.queryByRole("button", { name: "Save region" }),
+		).not.toBeInTheDocument();
+	});
+
+	it("asks for a reason before it deletes an incident", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "editor");
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Looking",
+			notify: false,
+		});
+		render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({}),
+			}),
+		);
+		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+		const user = userEvent.setup();
+		await user.click(screen.getByRole("button", { name: "Delete incident" }));
+		const dialog = screen.getByRole("dialog", {
+			name: "Delete this incident from the public view",
+		});
+		expect(
+			within(dialog).getByText(
+				"This action removes the incident from the public view only. The portal keeps the incident and its posts.",
+			),
+		).toBeInTheDocument();
+		expect(
+			within(dialog).getByText(
+				"The portal records who deleted the incident and why. A member can read that record later.",
+			),
+		).toBeInTheDocument();
+		const reason = within(dialog).getByLabelText("Reason");
+		expect(reason).toBeRequired();
+		expect(reason).toHaveAttribute("maxlength", "1000");
+		await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+		await user.click(screen.getByRole("button", { name: "Delete incident" }));
+		const open = screen.getByRole("dialog", {
+			name: "Delete this incident from the public view",
+		});
+		await user.type(within(open).getByLabelText("Reason"), "Duplicate report");
+		const close = vi.spyOn(HTMLDialogElement.prototype, "close");
+		const url = await redirectOf(
+			act(async () => {
+				await user.click(
+					within(open).getByRole("button", {
+						name: "Delete from the public view",
+					}),
+				);
+			}),
+		);
+		expect(url).toContain("notice=incident_deleted");
+		expect(close).toHaveBeenCalled();
+		close.mockRestore();
+		const kept = await services.incidents.find(incident.id, {
+			includeDeleted: true,
+		});
+		expect(kept).toMatchObject({
+			deletedReason: "Duplicate report",
+			deletedBy: { name: "Editor User" },
+		});
+	});
+
+	it("shows the deletion record and no edit controls", async () => {
+		const { app, services } = await setupApp();
+		const { actor } = await signIn(app, "editor");
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Looking",
+			notify: false,
+		});
+		await services.incidents.delete(actor, incident.id, {
+			reason: "Duplicate report",
+		});
+		const page = render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ post: "1" }),
+			}),
+		);
+		expect(
+			screen.getByRole("region", { name: "Deleted from the public view" }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(/Editor User deleted this incident on/),
+		).toBeInTheDocument();
+		expect(screen.getByText("Reason: Duplicate report")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("link", { name: "View public page" }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("link", { name: "Create a post" }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Delete incident" }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Post update" }),
+		).not.toBeInTheDocument();
+		expect(screen.getByText("Looking")).toBeInTheDocument();
+		page.unmount();
+
+		render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "timeline" }),
+			}),
+		);
+		expect(screen.getByText("Looking")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Delete incident" }),
+		).not.toBeInTheDocument();
 	});
 
 	it("404s for unknown incidents", async () => {
@@ -1192,7 +1386,9 @@ describe("notification draft pages", () => {
 			incidentId: orphan.id,
 			message: "z",
 		});
-		await services.incidents.delete(SYSTEM_ACTOR, orphan.id);
+		await services.incidents.delete(SYSTEM_ACTOR, orphan.id, {
+			reason: "Duplicate",
+		});
 		const discarded = await services.drafts.create(AGENT, {
 			kind: "maintenance",
 			title: "Upgrade",
@@ -1488,7 +1684,9 @@ describe("notification draft pages", () => {
 			incidentId: incident.id,
 			message: "y",
 		});
-		await services.incidents.delete(SYSTEM_ACTOR, incident.id);
+		await services.incidents.delete(SYSTEM_ACTOR, incident.id, {
+			reason: "Duplicate",
+		});
 		render(await draftPage(draft.id));
 		expect(
 			screen.getByRole("heading", { level: 1, name: "Deleted incident" }),

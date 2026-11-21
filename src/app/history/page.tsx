@@ -64,7 +64,10 @@ export default async function HistoryPage({ searchParams }: Props) {
 				<h1 className="text-2xl font-semibold tracking-tight">
 					Incident history
 				</h1>
-				<Link href="/" className="text-sm text-muted hover:text-fg">
+				<Link
+					href={regionHref("/", region?.id)}
+					className="text-sm text-muted hover:text-fg"
+				>
 					Current status
 				</Link>
 			</div>
