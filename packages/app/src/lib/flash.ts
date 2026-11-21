@@ -14,6 +14,7 @@ import {
 import type { Role } from "./domain/types";
 import type { AppError, ErrorCode } from "./errors";
 import catalog from "./flash-messages.json";
+import { DEVELOPMENT_MODE_REQUIRED } from "./services/development";
 
 export type FlashKind = "notice" | "error";
 
@@ -74,6 +75,7 @@ const MESSAGE_CODES: Record<string, FlashCode> = {
 	[BRAND_ASSET_MESSAGES.favicon.type]: "favicon_type",
 	[BRAND_ASSET_MESSAGES.favicon.size]: "favicon_too_large",
 	[BRAND_ASSET_MESSAGES.favicon.svg]: "favicon_svg",
+	[DEVELOPMENT_MODE_REQUIRED]: "development_mode_required",
 };
 
 const ERROR_CODE_FLASH: Record<ErrorCode, FlashCode> = {

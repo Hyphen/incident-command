@@ -44,6 +44,11 @@ export interface Config {
 	encryption: { key?: string; previousKeys: string[] };
 	/** Seed demo services and incidents into an empty store on boot. */
 	seedDemo: boolean;
+	/**
+	 * True when `NODE_ENV` is `development`, for example with `pnpm dev`.
+	 * The portal then shows the development tools, such as "Clear incidents".
+	 */
+	developmentMode: boolean;
 }
 
 /** Drops empty and whitespace-only values so `FOO=` behaves like an unset variable. */
@@ -129,6 +134,7 @@ const envSchema = z.object({
 		.string()
 		.optional()
 		.transform((value) => value === "true" || value === "1"),
+	NODE_ENV: optional,
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -201,5 +207,6 @@ export function loadConfig(
 			previousKeys: env.ENCRYPTION_KEY_PREVIOUS,
 		},
 		seedDemo: env.SEED_DEMO,
+		developmentMode: env.NODE_ENV === "development",
 	};
 }

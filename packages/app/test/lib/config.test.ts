@@ -27,6 +27,7 @@ describe("loadConfig", () => {
 			webhookSecret: undefined,
 			encryption: { key: undefined, previousKeys: [] },
 			seedDemo: false,
+			developmentMode: false,
 		});
 	});
 

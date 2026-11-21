@@ -6,6 +6,7 @@ import {
 	approveAgentAction,
 	approveDraftAction,
 	changePasswordAction,
+	clearIncidentsAction,
 	createAgentAction,
 	createAgentTokenAction,
 	createIncidentAction,
@@ -1287,6 +1288,39 @@ describe("subscriber and settings actions", () => {
 			"error",
 			"Check the form and try again.",
 		);
+	});
+
+	it("clears the incidents only in development mode", async () => {
+		const production = await setupApp();
+		await signIn(production.app, "admin");
+		await production.services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Looking",
+			notify: false,
+		});
+		expectFlashRedirect(
+			await redirectOf(clearIncidentsAction()),
+			"/manage/settings",
+			"error",
+			"This action is available only in development mode.",
+		);
+		expect(await production.services.incidents.list()).toHaveLength(1);
+
+		const { app, services } = await setupApp({ NODE_ENV: "development" });
+		await signIn(app, "admin");
+		await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Looking",
+			notify: false,
+		});
+		vi.mocked(revalidatePath).mockClear();
+		expectSameFlash(
+			await redirectOf(clearIncidentsAction()),
+			"/manage/settings?notice=All incidents are cleared. Each service is operational.",
+		);
+		// The status page and the portal pages stop showing the incidents.
+		expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
+		expect(await services.incidents.list()).toEqual([]);
 	});
 
 	it("saves branding without touching the general settings", async () => {

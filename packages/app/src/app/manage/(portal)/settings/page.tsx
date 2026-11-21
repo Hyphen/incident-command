@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
-import { updateGeneralSettingsAction } from "@/app/manage/actions";
+import {
+	clearIncidentsAction,
+	updateGeneralSettingsAction,
+} from "@/app/manage/actions";
+import { ConfirmButton } from "@/components/manage/confirm-button";
 import { SettingsTabs } from "@/components/manage/settings-tabs";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import {
@@ -107,6 +111,24 @@ export default async function SettingsPage({
 					Save settings
 				</SubmitButton>
 			</form>
+			{services.development.enabled && (
+				<Card
+					title="Development"
+					description="The server runs in development mode (NODE_ENV=development)."
+				>
+					<p className="text-sm text-muted">
+						Clear incidents deletes all incidents and maintenance, the drafts,
+						the notification history and the uptime history. Each service
+						becomes operational. Services, regions, members, subscribers, agents
+						and settings stay.
+					</p>
+					<form action={clearIncidentsAction} className="mt-4">
+						<ConfirmButton message="Delete all incidents, drafts and uptime history? You cannot undo this action.">
+							Clear incidents
+						</ConfirmButton>
+					</form>
+				</Card>
+			)}
 		</ManagePage>
 	);
 }

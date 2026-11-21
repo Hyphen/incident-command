@@ -189,6 +189,16 @@
 		"kind": "notice",
 		"text": "Branding saved"
 	},
+	"incidents_cleared": {
+		"id": "fls_dev7clear0incs",
+		"kind": "notice",
+		"text": "All incidents are cleared. Each service is operational."
+	},
+	"development_mode_required": {
+		"id": "fls_dev7mode0reqd",
+		"kind": "error",
+		"text": "This action is available only in development mode."
+	},
 	"notification_channel_saved": {
 		"id": "fls_apfmvi2otxs98y80",
 		"kind": "notice",

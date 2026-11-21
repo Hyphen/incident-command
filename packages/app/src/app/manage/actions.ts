@@ -955,6 +955,18 @@ export async function updateGeneralSettingsAction(
 	redirect(flash(GENERAL_PATH, "settings_saved"));
 }
 
+/**
+ * Deletes all incidents and their records. The service accepts this only in
+ * development mode.
+ */
+export async function clearIncidentsAction(): Promise<void> {
+	const { actor, services } = await requireMemberForAction("admin");
+	await attempt(GENERAL_PATH, () => services.development.clearIncidents(actor));
+	// The status page, the history and the portal pages show incidents.
+	revalidatePath("/", "layout");
+	redirect(flash(GENERAL_PATH, "incidents_cleared"));
+}
+
 /** The change that the branding form asks for one file. A new file wins over the remove flag. */
 async function brandAssetChange(
 	form: FormData,
