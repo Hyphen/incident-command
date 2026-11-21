@@ -20,8 +20,9 @@ function isActive(href: string, pathname: string): boolean {
 
 /**
  * The section links of the portal sidebar. An external item opens in a new
- * tab and is not a section. The portal layout does not render again when the
- * page changes, so this component reads the path in the browser.
+ * tab and is not a section. It stays at the bottom of the sidebar, above the
+ * member and the line. The portal layout does not render again when the page
+ * changes, so this component reads the path in the browser.
  */
 export function PortalNav({ items }: { items: PortalNavItem[] }) {
 	const pathname = usePathname();
@@ -29,10 +30,10 @@ export function PortalNav({ items }: { items: PortalNavItem[] }) {
 	const external = items.filter((item) => item.external);
 	return (
 		<nav
-			className="px-3 pb-3 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-y-auto lg:pb-0"
+			className="px-3 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden"
 			aria-label="Manage"
 		>
-			<div className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+			<div className="flex gap-1 overflow-x-auto pb-3 lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-y-auto lg:pb-0">
 				{sections.map((item) => {
 					const active = isActive(item.href, pathname);
 					return (
@@ -58,7 +59,7 @@ export function PortalNav({ items }: { items: PortalNavItem[] }) {
 					target="_blank"
 					rel="noreferrer"
 					aria-label={`${item.label} (opens in a new tab)`}
-					className="mt-1 flex items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium whitespace-nowrap text-fg hover:bg-surface-muted"
+					className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium whitespace-nowrap text-fg hover:bg-surface-muted lg:mt-3 lg:shrink-0"
 				>
 					{item.label}
 					<ExternalLinkIcon className="size-4 shrink-0 text-muted" />
