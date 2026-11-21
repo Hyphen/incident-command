@@ -329,6 +329,58 @@ describe("two-factor authentication", () => {
 		).toBe(9);
 	});
 
+	// After one sign-in with the new key and the old key in
+	// ENCRYPTION_KEY_PREVIOUS, the server does not need the old key.
+	it.each([
+		{ from: "a".repeat(32), signIn: "code", case: "old key, code" },
+		{ from: "a".repeat(32), signIn: "recovery", case: "old key, recovery" },
+		{ from: undefined, signIn: "code", case: "plain secret, code" },
+	] as const)(
+		"encrypts the authenticator secret with the current key at sign-in ($case)",
+		async ({ from, signIn }) => {
+			const newKey = "b".repeat(32);
+			const before = createTestContext({
+				env: from ? { ENCRYPTION_KEY: from } : {},
+			});
+			const { member } = await owner(before);
+			const started = await before.services.twoFactor.begin(member.id, "Acme");
+			const codes = await before.services.twoFactor.confirm(
+				member.id,
+				totpAt(started.secret, before.clock.now().getTime()),
+			);
+
+			const rotation = createTestContext({
+				env: from
+					? { ENCRYPTION_KEY: newKey, ENCRYPTION_KEY_PREVIOUS: from }
+					: { ENCRYPTION_KEY: newKey },
+				store: before.store,
+			});
+			rotation.clock.advance(30_000);
+			await rotation.services.twoFactor.verify(
+				member.id,
+				signIn === "code"
+					? totpAt(started.secret, rotation.clock.now().getTime())
+					: (codes[0] ?? ""),
+			);
+			const stored = (await rotation.store.get("members", member.id))?.twoFactor
+				?.secret;
+			expect(stored).toMatch(/^v1\./);
+			expect(stored).not.toContain(started.secret);
+
+			const after = createTestContext({
+				env: { ENCRYPTION_KEY: newKey },
+				store: before.store,
+			});
+			after.clock.advance(60_000);
+			await expect(
+				after.services.twoFactor.verify(
+					member.id,
+					totpAt(started.secret, after.clock.now().getTime()),
+				),
+			).resolves.toBeUndefined();
+		},
+	);
+
 	it("stops when the member record keeps changing", async () => {
 		const t = createTestContext();
 		const { member } = await owner(t);

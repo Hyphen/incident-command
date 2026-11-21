@@ -42,7 +42,7 @@ Make a key and set it:
 Without `ENCRYPTION_KEY`:
 
 - You can turn channels on and off, and add providers that need no credentials, such as Amazon SES with an IAM role. You cannot save credentials.
-- The server stores new authenticator secrets as plain text. A member who set up an authenticator before you set the key keeps a plain-text secret until that member sets up the authenticator again.
+- The server stores new authenticator secrets as plain text. After you set the key, the next sign-in of each member encrypts that member's secret.
 
 Each encrypted value is bound to its provider and field, or to its member. A value that moves to a different place does not decrypt. The portal and the MCP server never show a saved credential again. Leave a credential field empty to keep the saved value.
 
@@ -51,15 +51,25 @@ Each encrypted value is bound to its provider and field, or to its member. A val
 If the key changes or is lost, the stored values do not decrypt:
 
 - The portal shows the providers whose credentials do not decrypt. Enter those credentials again.
-- A member whose authenticator secret does not decrypt sees "The server cannot read the authenticator secret. Check ENCRYPTION_KEY." That member can sign in with a recovery code and set up the authenticator again.
+- The queue does not open. Enter the **Connection URI** again in the **Queue** card, and select **Save queue**.
+- A member whose authenticator secret does not decrypt sees "The server cannot read the authenticator secret. Check ENCRYPTION_KEY." That member must set up a new authenticator. Use the steps below.
+
+To give a member a new authenticator:
+
+1. If an admin requires two-factor authentication, the admin turns off **Require two-factor authentication** in **Manage → Settings → General**.
+2. The member signs in with a recovery code.
+3. On **My Profile**, the member selects **Turn off two-factor authentication**, and enters the password and a different recovery code.
+4. The member sets up the authenticator again on **My Profile**.
+5. The admin turns on **Require two-factor authentication** again.
 
 ### Change the key
 
 1. Set the new key as `ENCRYPTION_KEY` and the old key as `ENCRYPTION_KEY_PREVIOUS`. `ENCRYPTION_KEY_PREVIOUS` can hold more than one key, separated by commas.
 2. Restart the server. The old key still decrypts the stored values.
 3. In **Manage → Settings → Notifications**, select **Save channel** on each channel that has providers. Each save encrypts the values of that channel again with the new key.
-4. Keep the old key in `ENCRYPTION_KEY_PREVIOUS` while members use authenticators that they set up with it. The server does not encrypt an authenticator secret again when a member signs in. A member who sets up the authenticator again gets a secret with the new key.
-5. Remove `ENCRYPTION_KEY_PREVIOUS` and restart the server.
+4. If you use a queue, select **Save queue** in the **Queue** card. The save encrypts the connection URI again with the new key.
+5. Keep the old key in `ENCRYPTION_KEY_PREVIOUS` until each member with an authenticator signs in one time. Each sign-in encrypts the authenticator secret of that member again with the new key. A session lasts for `SESSION_TTL` (default `7d`), so most members sign in again in that time.
+6. Remove `ENCRYPTION_KEY_PREVIOUS` and restart the server. A member who did not sign in during step 5 needs a new authenticator. See [When the key is lost](#when-the-key-is-lost).
 
 ## Server action key
 

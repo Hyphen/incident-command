@@ -174,6 +174,8 @@ export class TwoFactorService {
 	/**
 	 * The next authenticator record after a valid code.
 	 * A recovery code does not read the authenticator secret.
+	 * Each valid code stores the secret again under the current key, so an
+	 * old key in ENCRYPTION_KEY_PREVIOUS is not necessary after a sign-in.
 	 */
 	private nextRecord(member: Member, code: string): MemberTwoFactor {
 		const record = member.twoFactor;
@@ -190,7 +192,11 @@ export class TwoFactorService {
 				record.lastStep,
 			);
 			if (result.ok) {
-				return { ...record, lastStep: result.step };
+				return {
+					...record,
+					secret: this.reseal(member.id, record.secret),
+					lastStep: result.step,
+				};
 			}
 		}
 		const normalized = normalizeRecoveryCode(trimmed);
@@ -206,6 +212,7 @@ export class TwoFactorService {
 		}
 		return {
 			...record,
+			secret: this.reseal(member.id, record.secret),
 			recoveryCodeHashes: record.recoveryCodeHashes.filter(
 				(_, item) => item !== index,
 			),
@@ -245,6 +252,18 @@ export class TwoFactorService {
 			secret,
 			uri: otpauthUri({ issuer, account: member.email, secret }),
 		};
+	}
+
+	/**
+	 * The stored secret under the current key. The method encrypts a plain
+	 * secret and encrypts a secret from an old key again. It keeps a value
+	 * that it cannot change.
+	 */
+	private reseal(memberId: string, stored: string): string {
+		if (stored.startsWith("plain:")) {
+			return this.seal(memberId, stored.slice("plain:".length));
+		}
+		return this.box.rotate(stored, this.context(memberId));
 	}
 
 	private seal(memberId: string, secret: string): string {
