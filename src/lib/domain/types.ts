@@ -56,13 +56,7 @@ export const PROVIDER_TYPES = ["sendgrid", "ses", "twilio", "sns"] as const;
 export type ProviderType = (typeof PROVIDER_TYPES)[number];
 
 /** The qified providers. An admin selects one, or no queue. */
-export const QUEUE_PROVIDER_IDS = [
-	"memory",
-	"redis",
-	"rabbitmq",
-	"nats",
-	"zeromq",
-] as const;
+export const QUEUE_PROVIDER_IDS = ["redis", "rabbitmq", "nats"] as const;
 export type QueueProviderId = (typeof QUEUE_PROVIDER_IDS)[number];
 
 /** Why a queued job ran in this process. */
@@ -200,7 +194,7 @@ export interface NotificationChannelSettings {
 export interface NotificationQueueSettings {
 	id: "queue";
 	provider?: QueueProviderId;
-	/** The connection URI, encrypted. Memory has none. */
+	/** The connection URI, encrypted. */
 	uri?: string;
 	revision: number;
 	updatedAt: string;

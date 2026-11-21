@@ -607,7 +607,7 @@ export class NotificationJobService {
 }
 
 function staleAfter(job: NotificationJob): number {
-	if (!job.queued || job.provider === "memory" || job.provider === "zeromq") {
+	if (!job.queued) {
 		return DIRECT_STALE_MS;
 	}
 	return DURABLE_STALE_MS;

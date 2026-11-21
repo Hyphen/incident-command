@@ -152,15 +152,12 @@ export class NotificationQueueService {
 		const typed = uriText?.trim() ?? "";
 		let uri = current.provider === provider ? current.uri : undefined;
 		if (typed !== "") {
-			if (!definition.uri || !matches(definition.uri.pattern, typed)) {
+			if (!matches(definition.uri.pattern, typed)) {
 				throw new ValidationError(QUEUE_URI_INVALID);
 			}
 			uri = this.box.encrypt(typed, uriContext(provider));
-		} else if (uri && definition.uri) {
+		} else if (uri) {
 			uri = this.box.rotate(uri, uriContext(provider));
-		}
-		if (!definition.uri) {
-			uri = undefined;
 		}
 		const next: NotificationQueueSettings = {
 			id: QUEUE_ID,

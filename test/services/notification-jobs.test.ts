@@ -151,30 +151,28 @@ describe("NotificationJobService", () => {
 		).rejects.toBeInstanceOf(PermissionDeniedError);
 	});
 
-	it("returns from a memory queue before the consumer finishes", async () => {
+	it("returns before the queue sends the notifications", async () => {
+		vi.spyOn(NotificationQueue.prototype, "open").mockResolvedValue("ok");
+		vi.spyOn(NotificationQueue.prototype, "enqueue").mockResolvedValue("ok");
 		await t.services.notificationQueue.update(ADMIN, {
 			revision: 0,
-			provider: "memory",
+			provider: "redis",
 		});
 		await webhook(t);
 		const created = await incident(t);
-		const release = t.notifier.hold();
 		await t.services.incidents.postUpdate(
 			ADMIN,
 			created.id,
 			{ message: "Queued", notify: true },
-			{ jobId: "njb_mem" },
+			{ jobId: "njb_queued" },
 		);
 		expect(t.notifier.incidents).toHaveLength(0);
 		expect(
-			(await t.services.notificationJobs.lookup(ADMIN, "njb_mem"))?.queued,
+			(await t.services.notificationJobs.lookup(ADMIN, "njb_queued"))?.queued,
 		).toBe(true);
-		release();
-		await vi.waitFor(async () => {
-			const job = await t.services.notificationJobs.lookup(ADMIN, "njb_mem");
-			expect(job?.state).toBe("done");
-			expect(job?.sent).toBe(1);
-		});
+		await t.services.notificationJobs.process("njb_queued");
+		const job = await t.services.notificationJobs.lookup(ADMIN, "njb_queued");
+		expect(job).toMatchObject({ state: "done", sent: 1 });
 	});
 
 	it("sends each subscriber once when two runs overlap", async () => {
@@ -312,9 +310,8 @@ describe("NotificationJobService", () => {
 				id: "njb_fresh",
 				incidentId: created.id,
 				updateId,
-				provider: "zeromq",
 				heartbeatAt: new Date(
-					t.clock.now().getTime() - 3 * MINUTE,
+					t.clock.now().getTime() - 16 * MINUTE,
 				).toISOString(),
 			}),
 		);
@@ -336,9 +333,8 @@ describe("NotificationJobService", () => {
 				id: "njb_held",
 				incidentId: created.id,
 				updateId,
-				provider: "memory",
 				heartbeatAt: new Date(
-					t.clock.now().getTime() - 3 * MINUTE,
+					t.clock.now().getTime() - 16 * MINUTE,
 				).toISOString(),
 			}),
 		);
@@ -364,7 +360,7 @@ describe("NotificationJobService", () => {
 		});
 	});
 
-	it("sends a fresh memory job after the stale time", async () => {
+	it("sends a fresh queued job after the stale time", async () => {
 		vi.useFakeTimers();
 		try {
 			const person = await webhook(t);
@@ -376,7 +372,6 @@ describe("NotificationJobService", () => {
 					id: "njb_later",
 					incidentId: created.id,
 					updateId,
-					provider: "memory",
 				}),
 			);
 			await delivery(t, {
@@ -389,8 +384,8 @@ describe("NotificationJobService", () => {
 			expect((await t.store.get("notification_jobs", "njb_later"))?.state).toBe(
 				"active",
 			);
-			t.clock.advance(2 * MINUTE);
-			await vi.advanceTimersByTimeAsync(2 * MINUTE);
+			t.clock.advance(15 * MINUTE);
+			await vi.advanceTimersByTimeAsync(15 * MINUTE);
 			expect((await t.store.get("notification_jobs", "njb_later"))?.state).toBe(
 				"done",
 			);
@@ -923,9 +918,10 @@ describe("NotificationJobService", () => {
 	it("does not mark a missing job when the queue refuses it", async () => {
 		await webhook(t);
 		const created = await incident(t);
+		vi.spyOn(NotificationQueue.prototype, "open").mockResolvedValue("ok");
 		await t.services.notificationQueue.update(ADMIN, {
 			revision: 0,
-			provider: "memory",
+			provider: "redis",
 		});
 		const enqueue = vi
 			.spyOn(NotificationQueue.prototype, "enqueue")
@@ -1034,9 +1030,8 @@ describe("NotificationJobService", () => {
 				incidentId: created.id,
 				updateId,
 				heartbeatAt: new Date(
-					t.clock.now().getTime() - 3 * MINUTE,
+					t.clock.now().getTime() - 16 * MINUTE,
 				).toISOString(),
-				provider: "memory",
 			}),
 		);
 		await delivery(t, {

@@ -26,7 +26,7 @@ describe("queue package load", () => {
 		const t = createTestContext();
 		const saved = await t.services.notificationQueue.update(ADMIN, {
 			revision: 0,
-			provider: "memory",
+			provider: "redis",
 		});
 		expect(saved.ready).toBe(false);
 		expect(state.imports).toBeGreaterThan(0);

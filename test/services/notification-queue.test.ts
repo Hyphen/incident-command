@@ -1,4 +1,5 @@
 import { permissionsForRole } from "@/lib/domain/permissions";
+import type { NotificationJob } from "@/lib/domain/types";
 import {
 	ConflictError,
 	PermissionDeniedError,
@@ -6,6 +7,7 @@ import {
 } from "@/lib/errors";
 import { NotificationQueue } from "@/lib/notifications/queue";
 import { EncryptionKeyMissingError, SecretBox } from "@/lib/secrets";
+import { authorRef } from "@/lib/services/context";
 import {
 	NOTIFICATION_QUEUE_CHANGED,
 	QUEUE_URI_INVALID,
@@ -56,19 +58,6 @@ describe("NotificationQueueService", () => {
 		const rotated = await t.store.get("notification_queue", "queue");
 		expect(rotated?.uri).toBe(stored?.uri);
 		expect(rotated?.uri).not.toContain("secret");
-
-		const cleared = await t.services.notificationQueue.update(ADMIN, {
-			revision: 2,
-			provider: "memory",
-		});
-		expect(cleared.settings).toEqual({
-			provider: "memory",
-			hasUri: false,
-			revision: 3,
-		});
-		expect(
-			(await t.store.get("notification_queue", "queue"))?.uri,
-		).toBeUndefined();
 	});
 
 	it("drops the URI when the provider changes and rejects a bad URI", async () => {
@@ -108,32 +97,19 @@ describe("NotificationQueueService", () => {
 				uri: "bad uri",
 			}),
 		).rejects.toThrow(new ValidationError(QUEUE_URI_INVALID));
-		await expect(
-			t.services.notificationQueue.update(ADMIN, {
-				revision: 2,
-				provider: "zeromq",
-				uri: "http://localhost",
-			}),
-		).rejects.toThrow(new ValidationError(QUEUE_URI_INVALID));
-		await expect(
-			t.services.notificationQueue.update(ADMIN, {
-				revision: 2,
-				provider: "memory",
-				uri: "redis://localhost:6379",
-			}),
-		).rejects.toThrow(new ValidationError(QUEUE_URI_INVALID));
 	});
 
 	it("rejects a stale revision and a second save of the same revision", async () => {
 		const t = context({ ENCRYPTION_KEY: KEY });
+		vi.spyOn(NotificationQueue.prototype, "open").mockResolvedValue("ok");
 		await t.services.notificationQueue.update(ADMIN, {
 			revision: 0,
-			provider: "memory",
+			provider: "redis",
 		});
 		await expect(
 			t.services.notificationQueue.update(ADMIN, {
 				revision: 0,
-				provider: "memory",
+				provider: "redis",
 			}),
 		).rejects.toThrow(new ConflictError(NOTIFICATION_QUEUE_CHANGED));
 		const [first, second] = await Promise.allSettled([
@@ -166,12 +142,16 @@ describe("NotificationQueueService", () => {
 				uri: "redis://localhost:6379",
 			}),
 		).rejects.toBeInstanceOf(EncryptionKeyMissingError);
+		vi.spyOn(NotificationQueue.prototype, "open").mockResolvedValue("ok");
 		await expect(
 			t.services.notificationQueue.update(ADMIN, {
 				revision: 0,
-				provider: "memory",
+				provider: "redis",
 			}),
-		).resolves.toMatchObject({ ready: true, settings: { provider: "memory" } });
+		).resolves.toMatchObject({
+			ready: true,
+			settings: { provider: "redis", hasUri: false },
+		});
 	});
 
 	it("lets an admin read the choice and blocks an editor and an agent from a change", async () => {
@@ -190,13 +170,13 @@ describe("NotificationQueueService", () => {
 		await expect(
 			t.services.notificationQueue.update(EDITOR, {
 				revision: 0,
-				provider: "memory",
+				provider: "redis",
 			}),
 		).rejects.toBeInstanceOf(PermissionDeniedError);
 		await expect(
 			t.services.notificationQueue.update(agent, {
 				revision: 0,
-				provider: "memory",
+				provider: "redis",
 			}),
 		).rejects.toBeInstanceOf(PermissionDeniedError);
 		await expect(t.services.notificationQueue.provider()).resolves.toBe(
@@ -244,7 +224,7 @@ describe("NotificationQueueService", () => {
 			.mockRejectedValueOnce(new Error("boom"));
 		await t.store.insert("notification_queue", {
 			id: "queue",
-			provider: "memory",
+			provider: "redis",
 			revision: 1,
 			updatedAt: "2026-11-02T12:00:00.000Z",
 		});
@@ -265,11 +245,75 @@ describe("NotificationQueueService", () => {
 		await t.services.notificationQueue.bootstrap();
 	});
 
+	it("sends a job when the provider opens", async () => {
+		const t = context();
+		const person = await t.services.subscribers.addWebhook(ADMIN, {
+			url: "https://hooks.example.com/a",
+		});
+		const created = await t.services.incidents.create(ADMIN, {
+			title: "API errors",
+			message: "Looking",
+			notify: false,
+		});
+		const now = t.clock.now().toISOString();
+		const job: NotificationJob = {
+			id: "njb_open",
+			incidentId: created.id,
+			updateId: created.updates[0]?.id ?? "",
+			event: "incident.created",
+			queued: true,
+			provider: "redis",
+			state: "active",
+			total: 1,
+			sent: 0,
+			failed: 0,
+			createdBy: authorRef(ADMIN),
+			createdAt: now,
+			heartbeatAt: now,
+		};
+		await t.store.insert("notification_jobs", job);
+		await t.store.insert("notification_deliveries", {
+			id: "ndl_open",
+			jobId: job.id,
+			subscriberId: person.id,
+			channel: "webhook",
+			label: "hooks.example.com",
+			order: 0,
+			state: "pending",
+			createdAt: now,
+			updatedAt: now,
+		});
+		const providers = await import("@/lib/notifications/queue-providers");
+		const transport = vi
+			.spyOn(providers, "createTransport")
+			.mockImplementation(async () => ({
+				enqueue: async () => {},
+				consume: async (run) => {
+					await run(job.id, async () => {});
+				},
+				close: async () => {},
+			}));
+		try {
+			const saved = await t.services.notificationQueue.update(ADMIN, {
+				revision: 0,
+				provider: "redis",
+			});
+			expect(saved.ready).toBe(true);
+			expect(t.notifier.incidents).toHaveLength(1);
+			expect((await t.store.get("notification_jobs", job.id))?.state).toBe(
+				"done",
+			);
+		} finally {
+			transport.mockRestore();
+		}
+	});
+
 	it("clears the provider", async () => {
 		const t = context();
+		vi.spyOn(NotificationQueue.prototype, "open").mockResolvedValue("ok");
 		await t.services.notificationQueue.update(ADMIN, {
 			revision: 0,
-			provider: "memory",
+			provider: "redis",
 		});
 		const cleared = await t.services.notificationQueue.update(ADMIN, {
 			revision: 1,

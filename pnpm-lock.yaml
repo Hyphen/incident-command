@@ -320,10 +320,6 @@ importers:
       wrangler:
         specifier: ^4.156.2
         version: 4.156.2(@types/node@24.19.2)
-    optionalDependencies:
-      "@qified/zeromq":
-        specifier: 0.13.2
-        version: 0.13.2(qified@0.13.2)
 
 packages:
   "@adobe/css-tools@4.5.0":
@@ -1569,15 +1565,6 @@ packages:
     peerDependencies:
       qified: ^0.13.2
 
-  "@qified/zeromq@0.13.2":
-    resolution:
-      {
-        integrity: sha512-H5u13Zwpm7kHi/PCn0qMEn5PbV4qNSL8Ns+xXVc5YFDd/cyTrvDLbppGZnxmarS8Oa5ukYkJSK55/jVx5/l/kg==,
-      }
-    engines: { node: ">=22" }
-    peerDependencies:
-      qified: ^0.13.2
-
   "@redis/bloom@6.3.1":
     resolution:
       {
@@ -2660,13 +2647,6 @@ packages:
       {
         integrity: sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp/8IM2MQtSiqaCxrrcfu8I8rMA==,
       }
-
-  cmake-ts@1.0.2:
-    resolution:
-      {
-        integrity: sha512-5l++JHE7MxFuyV/OwJf3ek7ZZN1aGPFPM5oUz6AnK5inQAPe4TFXRMz5sA2qg2FRgByPWdqO+gSfIPo8GzoKNQ==,
-      }
-    hasBin: true
 
   combined-stream@1.0.8:
     resolution:
@@ -4624,13 +4604,6 @@ packages:
       sass:
         optional: true
 
-  node-addon-api@8.9.2:
-    resolution:
-      {
-        integrity: sha512-VijLXbi3UACN69I0JVXJsX4tjACjNoQDgv2gTF6sx2wWEi8tkSg2eX8p5gSIFi8z2+DL3oHmY6OyKce38SDolg==,
-      }
-    engines: { node: ^18 || ^20 || >= 21 }
-
   node-emoji@2.2.0:
     resolution:
       {
@@ -6031,13 +6004,6 @@ packages:
         integrity: sha512-rLfVLB4FgQneDr0dv1oddCVZmKjcJ6yX6mS4pU82Mq/Dt9a3cLZQ62pDBL4AUO+uVrCvtWz3ZFUL2HFAFJ/BXQ==,
       }
 
-  zeromq@6.8.0:
-    resolution:
-      {
-        integrity: sha512-0LBpwZKNn4e6YZRDuHVvzXsSHlCx6nTk2B0O9KWQ2vUe3lau7PYPcmnFpJfOwEUTNcKn39x4GgzVU+dQyIJnNg==,
-      }
-    engines: { node: ">= 12" }
-
   zod-to-json-schema@3.25.2:
     resolution:
       {
@@ -6757,12 +6723,6 @@ snapshots:
       - "@node-rs/xxhash"
       - "@opentelemetry/api"
 
-  "@qified/zeromq@0.13.2(qified@0.13.2)":
-    dependencies:
-      qified: 0.13.2
-      zeromq: 6.8.0
-    optional: true
-
   "@redis/bloom@6.3.1(@redis/client@6.3.1)":
     dependencies:
       "@redis/client": 6.3.1
@@ -7311,9 +7271,6 @@ snapshots:
   chrono-node@2.10.1: {}
 
   client-only@0.0.1: {}
-
-  cmake-ts@1.0.2:
-    optional: true
 
   combined-stream@1.0.8:
     dependencies:
@@ -8782,9 +8739,6 @@ snapshots:
       - "@types/node"
       - babel-plugin-macros
 
-  node-addon-api@8.9.2:
-    optional: true
-
   node-emoji@2.2.0:
     dependencies:
       "@sindresorhus/is": 4.6.0
@@ -9727,12 +9681,6 @@ snapshots:
       "@speed-highlight/core": 1.2.24
       cookie: 1.1.1
       youch-core: 0.3.3
-
-  zeromq@6.8.0:
-    dependencies:
-      cmake-ts: 1.0.2
-      node-addon-api: 8.9.2
-    optional: true
 
   zod-to-json-schema@3.25.2(zod@4.6.7):
     dependencies:

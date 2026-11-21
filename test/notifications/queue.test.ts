@@ -87,8 +87,8 @@ describe("NotificationQueue", () => {
 	it("opens one version once and enqueues on it", async () => {
 		const queue = new NotificationQueue();
 		await expect(queue.enqueue("njb_1")).resolves.toBe("enqueue");
-		await expect(queue.open("memory", undefined, 1)).resolves.toBe("ok");
-		await expect(queue.open("memory", undefined, 1)).resolves.toBe("ok");
+		await expect(queue.open("redis", undefined, 1)).resolves.toBe("ok");
+		await expect(queue.open("redis", undefined, 1)).resolves.toBe("ok");
 		expect(state.calls).toBe(1);
 		await expect(queue.enqueue("njb_1")).resolves.toBe("ok");
 		await queue.close();
@@ -123,7 +123,7 @@ describe("NotificationQueue", () => {
 
 	it("runs one open or one close at a time", async () => {
 		const queue = new NotificationQueue();
-		await queue.open("memory", undefined, 1);
+		await queue.open("redis", undefined, 1);
 		await expect(
 			Promise.all([
 				queue.open("redis", undefined, 2),
@@ -133,7 +133,7 @@ describe("NotificationQueue", () => {
 		expect(state.calls).toBe(2);
 		expect(state.closed).toBe(1);
 
-		const opening = queue.open("memory", undefined, 3);
+		const opening = queue.open("redis", undefined, 3);
 		const closing = queue.close();
 		await expect(opening).resolves.toBe("ok");
 		await closing;
@@ -146,7 +146,7 @@ describe("NotificationQueue", () => {
 		const queue = new NotificationQueue((error) => errors.push(error));
 		await queue.open("redis", undefined, 1);
 		state.mode = "close-hang";
-		const pending = queue.open("memory", undefined, 2);
+		const pending = queue.open("redis", undefined, 2);
 		await vi.advanceTimersByTimeAsync(5000);
 		await expect(pending).resolves.toBe("ok");
 		expect(errors.map((error) => error.message)).toEqual([
@@ -159,7 +159,7 @@ describe("NotificationQueue", () => {
 	it("continues the send when the broker does not accept the task", async () => {
 		state.mode = "ok";
 		const queue = new NotificationQueue();
-		await queue.open("memory", undefined, 1);
+		await queue.open("redis", undefined, 1);
 		state.mode = "hang";
 		const pending = queue.enqueue("njb_1");
 		await vi.advanceTimersByTimeAsync(5000);
@@ -172,7 +172,7 @@ describe("NotificationQueue", () => {
 		const errors: Error[] = [];
 		const queue = new NotificationQueue((error) => errors.push(error));
 		state.mode = "throw-string";
-		await expect(queue.open("memory", undefined, 1)).resolves.toBe("load");
+		await expect(queue.open("redis", undefined, 1)).resolves.toBe("load");
 		expect(errors.at(-1)?.message).toBe("missing");
 
 		state.mode = "throw-error";
@@ -192,16 +192,16 @@ describe("NotificationQueue", () => {
 			logged.push(error.message);
 		});
 		state.mode = "close-string";
-		await queue.open("memory", undefined, 1);
+		await queue.open("redis", undefined, 1);
 		await expect(queue.open("redis", undefined, 2)).resolves.toBe("ok");
 		expect(logged).toContain("closed");
 		state.mode = "close-error";
-		await expect(queue.open("memory", undefined, 4)).resolves.toBe("ok");
+		await expect(queue.open("redis", undefined, 4)).resolves.toBe("ok");
 		expect(errors.some((error) => error.message === "closed")).toBe(true);
 		const plain = new NotificationQueue();
 		const error = vi.spyOn(console, "error").mockImplementation(() => {});
 		state.mode = "throw-error";
-		await plain.open("memory", undefined, 3);
+		await plain.open("redis", undefined, 3);
 		expect(error).toHaveBeenCalled();
 		error.mockRestore();
 	});

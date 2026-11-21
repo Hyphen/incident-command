@@ -123,40 +123,6 @@ export function taskTransport(
 	};
 }
 
-/** A transport that uses qified messages. ZeroMQ uses this. */
-export function messageTransport(
-	qified: Qified,
-	onError: (error: Error) => void,
-): QueueTransport {
-	listen(qified, onError);
-	return {
-		async enqueue(jobId) {
-			await strict(qified, () =>
-				qified.publish(QUEUE_NAME, { id: jobId, data: { jobId } }),
-			);
-		},
-		async consume(run) {
-			await strict(qified, () =>
-				qified.subscribe(QUEUE_NAME, {
-					id: "incident-command.notifications",
-					handler: async (message) => {
-						const jobId = jobIdOf(message.data);
-						if (!jobId) {
-							return;
-						}
-						void run(jobId, async () => {}).catch((error: unknown) =>
-							onError(asError(error)),
-						);
-					},
-				}),
-			);
-		},
-		async close() {
-			await qified.disconnect();
-		},
-	};
-}
-
 function taskOf(provider: TaskProvider, onError: (error: Error) => void) {
 	listen(provider, onError);
 	return import("qified").then(
@@ -175,12 +141,6 @@ export async function createTransport(
 ): Promise<QueueTransport> {
 	const options = uri ? { uri } : {};
 	switch (id) {
-		case "memory": {
-			const { MemoryTaskProvider, Qified } = await import("qified");
-			const provider = new MemoryTaskProvider();
-			listen(provider, onError);
-			return taskTransport(new Qified({ taskProviders: [provider] }), onError);
-		}
 		case "redis": {
 			const { RedisTaskProvider } = await import("@qified/redis");
 			return taskTransport(
@@ -199,16 +159,6 @@ export async function createTransport(
 			const { NatsTaskProvider } = await import("@qified/nats");
 			return taskTransport(
 				await taskOf(new NatsTaskProvider(options), onError),
-				onError,
-			);
-		}
-		case "zeromq": {
-			const { ZmqMessageProvider } = await import("@qified/zeromq");
-			const { Qified } = await import("qified");
-			const provider = new ZmqMessageProvider(options);
-			listen(provider, onError);
-			return messageTransport(
-				new Qified({ messageProviders: [provider] }),
 				onError,
 			);
 		}

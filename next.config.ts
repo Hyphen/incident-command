@@ -57,16 +57,11 @@ const nextConfig: NextConfig = {
 		"@qified/redis",
 		"@qified/rabbitmq",
 		"@qified/nats",
-		"@qified/zeromq",
 	],
 	// The standalone build must copy the qrbit addon. The loader picks the file by platform.
-	// The build must copy the zeromq addon too. Each route can open the queue, thus
-	// the key matches each route. pnpm puts zeromq only in `.pnpm`, because only
-	// @qified/zeromq uses it.
 	outputFileTracingIncludes: {
 		"/manage/account": ["./node_modules/qrbit/**/*"],
 		"/manage/login/two-factor": ["./node_modules/qrbit/**/*"],
-		"/*": ["./node_modules/.pnpm/zeromq@*/node_modules/zeromq/build/**/*"],
 	},
 };
 

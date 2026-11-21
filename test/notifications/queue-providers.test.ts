@@ -1,8 +1,7 @@
-import { MemoryMessageProvider, MemoryTaskProvider, Qified } from "qified";
+import { MemoryTaskProvider, Qified } from "qified";
 import {
 	createTransport,
 	listen,
-	messageTransport,
 	QUEUE_NAME,
 	strict,
 	taskTransport,
@@ -10,8 +9,8 @@ import {
 
 const built = vi.hoisted(() => {
 	const items: { id: string; uri?: string }[] = [];
-	const loads = { redis: 0, rabbitmq: 0, nats: 0, zeromq: 0 };
-	function providerClass(id: "redis" | "rabbitmq" | "nats" | "zeromq") {
+	const loads = { redis: 0, rabbitmq: 0, nats: 0 };
+	function providerClass(id: "redis" | "rabbitmq" | "nats") {
 		return class {
 			constructor(options?: { uri?: string }) {
 				loads[id] += 1;
@@ -31,19 +30,21 @@ vi.mock("@qified/rabbitmq", () => ({
 vi.mock("@qified/nats", () => ({
 	NatsTaskProvider: built.providerClass("nats"),
 }));
-vi.mock("@qified/zeromq", () => ({
-	ZmqMessageProvider: built.providerClass("zeromq"),
-}));
 
 describe("queue transports", () => {
-	it("delivers a memory task again after the run throws", async () => {
+	it("delivers a task again after the run throws", async () => {
 		const ran: string[] = [];
-		const transport = await createTransport("memory", undefined, () => {});
-		await transport.consume(async (id) => {
+		const provider = new MemoryTaskProvider();
+		const transport = taskTransport(
+			new Qified({ taskProviders: [provider] }),
+			() => {},
+		);
+		await transport.consume(async (id, keepAlive) => {
 			ran.push(id);
 			if (ran.length === 1) {
 				throw new Error("again");
 			}
+			await keepAlive();
 		});
 		await transport.enqueue("njb_1");
 		await vi.waitFor(() => expect(ran).toEqual(["njb_1", "njb_1"]), {
@@ -91,39 +92,18 @@ describe("queue transports", () => {
 		await transport.close();
 	});
 
-	it("delivers a message and reports a handler failure", async () => {
-		const provider = new MemoryMessageProvider();
-		const qified = new Qified({ messageProviders: [provider] });
-		const got: string[] = [];
-		const errors: Error[] = [];
-		const transport = messageTransport(qified, (error) => errors.push(error));
-		await transport.consume(async (id, keepAlive) => {
-			await keepAlive();
-			got.push(id);
-			throw new Error("handler");
-		});
-		await transport.enqueue("njb_9");
-		await qified.publish(QUEUE_NAME, { id: "msg_bad", data: { jobId: 4 } });
-		await qified.publish(QUEUE_NAME, { id: "msg_empty", data: null });
-		await vi.waitFor(() => expect(got).toEqual(["njb_9"]));
-		await vi.waitFor(() => expect(errors[0]?.message).toBe("handler"));
-		await transport.close();
-	});
-
 	it("builds only the selected broker", async () => {
 		const ignore = () => {};
 		await createTransport("redis", "redis://localhost:6379", ignore);
-		expect(built.loads).toEqual({ redis: 1, rabbitmq: 0, nats: 0, zeromq: 0 });
+		expect(built.loads).toEqual({ redis: 1, rabbitmq: 0, nats: 0 });
 		await createTransport("rabbitmq", "amqp://localhost:5672", ignore);
 		await createTransport("nats", undefined, ignore);
-		await createTransport("zeromq", "tcp://localhost:5555", ignore);
 		expect(built.items).toEqual([
 			{ id: "redis", uri: "redis://localhost:6379" },
 			{ id: "rabbitmq", uri: "amqp://localhost:5672" },
 			{ id: "nats", uri: undefined },
-			{ id: "zeromq", uri: "tcp://localhost:5555" },
 		]);
-		expect(built.loads).toEqual({ redis: 1, rabbitmq: 1, nats: 1, zeromq: 1 });
+		expect(built.loads).toEqual({ redis: 1, rabbitmq: 1, nats: 1 });
 	});
 
 	it("reports an error event and ignores a source with no listener", async () => {

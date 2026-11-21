@@ -27,6 +27,7 @@ import type {
 	NotificationJobView,
 	NotificationProgress,
 } from "@/lib/domain/types";
+import { NotificationQueue } from "@/lib/notifications/queue";
 import { SYSTEM_ACTOR } from "@/lib/services/context";
 import { agentActor } from "../helpers";
 import {
@@ -156,9 +157,15 @@ describe("notification progress routes", () => {
 			job: NotificationJobView;
 		};
 		expect(labeled.job.deliveries[0]?.label).toBe("hooks.example.com");
+		const open = vi
+			.spyOn(NotificationQueue.prototype, "open")
+			.mockResolvedValue("ok");
+		const enqueue = vi
+			.spyOn(NotificationQueue.prototype, "enqueue")
+			.mockResolvedValue("ok");
 		await services.notificationQueue.update(admin, {
 			revision: 0,
-			provider: "memory",
+			provider: "redis",
 		});
 		const queued = await services.incidents.create(
 			admin,
@@ -168,7 +175,9 @@ describe("notification progress routes", () => {
 		const progress = (await (await callIncident(queued.id)).json()) as {
 			progress: NotificationProgress;
 		};
-		expect(progress.progress).toMatchObject({ sent: 1, active: 0 });
+		expect(progress.progress).toMatchObject({ sent: 0, active: 1 });
+		open.mockRestore();
+		enqueue.mockRestore();
 	});
 });
 
@@ -222,9 +231,12 @@ describe("queue send actions", () => {
 		expect(approved?.href).toContain("notice=draft_approved");
 
 		const { actor: admin } = await signIn(app, "admin");
+		const open = vi
+			.spyOn(NotificationQueue.prototype, "open")
+			.mockResolvedValue("ok");
 		await services.notificationQueue.update(admin, {
 			revision: 0,
-			provider: "memory",
+			provider: "redis",
 		});
 		const queued = await redirectOf(
 			postIncidentUpdateAction(
@@ -236,6 +248,7 @@ describe("queue send actions", () => {
 				}),
 			),
 		);
+		open.mockRestore();
 		expectFlashRedirect(
 			queued,
 			`/manage/incidents/${incident.id}`,
@@ -284,15 +297,19 @@ describe("queue send actions", () => {
 		expect(quiet).not.toContain("evil.example");
 
 		const { actor: admin } = await signIn(app, "admin");
+		const open = vi
+			.spyOn(NotificationQueue.prototype, "open")
+			.mockResolvedValue("ok");
 		await services.notificationQueue.update(admin, {
 			revision: 0,
-			provider: "memory",
+			provider: "redis",
 		});
 		const queued = await redirectOf(
 			postIncidentUpdateAction(
 				form({ id: odd.id, message: "Queued", notify: "on" }),
 			),
 		);
+		open.mockRestore();
 		expectFlashRedirect(
 			queued,
 			"/manage/incidents",
@@ -308,12 +325,12 @@ describe("queue send actions", () => {
 		expectFlashRedirect(
 			await redirectOf(
 				updateNotificationQueueAction(
-					form({ revision: "0", provider: "memory" }),
+					form({ revision: "0", provider: "redis" }),
 				),
 			),
 			"/manage/settings/notifications",
-			"notice",
-			"Queue saved",
+			"error",
+			"The settings are saved, but the server cannot connect to the queue. The server sends notifications without the queue until the connection works.",
 		);
 		expectFlashRedirect(
 			await redirectOf(
@@ -338,9 +355,7 @@ describe("queue send actions", () => {
 		const { app: editorApp } = await setupApp();
 		await signIn(editorApp, "editor");
 		const refused = await redirectOf(
-			updateNotificationQueueAction(
-				form({ revision: "0", provider: "memory" }),
-			),
+			updateNotificationQueueAction(form({ revision: "0", provider: "redis" })),
 		);
 		expect(new URL(refused, "http://localhost").pathname).toBe("/manage");
 
@@ -363,7 +378,7 @@ describe("queue send actions", () => {
 			"Queue saved",
 		);
 		const missing = await redirectOf(
-			updateNotificationQueueAction(form({ provider: "memory" })),
+			updateNotificationQueueAction(form({ provider: "redis" })),
 		);
 		expect(
 			new URL(missing, "http://localhost").searchParams.get("error"),
@@ -786,11 +801,11 @@ describe("queue settings card", () => {
 			/>,
 		);
 		expect(screen.getByRole("radio", { name: /No queue/ })).toBeChecked();
-		expect(screen.getAllByRole("radio")).toHaveLength(6);
+		expect(screen.getAllByRole("radio")).toHaveLength(4);
 		fireEvent.click(screen.getByRole("radio", { name: /Redis/ }));
 		expect(screen.getByLabelText("Connection URI")).toBeDisabled();
 		expect(screen.getByText(/ENCRYPTION_KEY/)).toBeInTheDocument();
-		fireEvent.click(screen.getByRole("radio", { name: /Memory/ }));
+		fireEvent.click(screen.getByRole("radio", { name: /No queue/ }));
 		expect(screen.queryByLabelText("Connection URI")).not.toBeInTheDocument();
 	});
 
@@ -818,17 +833,21 @@ describe("queue pages", () => {
 	it("shows the queue card and hides the URI", async () => {
 		const { app, services } = await setupApp({ ENCRYPTION_KEY: KEY });
 		const { actor } = await signIn(app, "admin");
+		const open = vi
+			.spyOn(NotificationQueue.prototype, "open")
+			.mockResolvedValue("ok");
 		await services.notificationQueue.update(actor, {
 			revision: 0,
-			provider: "memory",
+			provider: "redis",
 		});
+		open.mockRestore();
 		const { container } = render(await NotificationsSettingsPage(page()));
 		const queue = screen
 			.getByRole("heading", { name: "Queue" })
 			.closest("section");
 		expect(queue).not.toBeNull();
-		expect(within(queue as HTMLElement).getAllByRole("radio")).toHaveLength(6);
-		expect(screen.getByRole("radio", { name: /Memory/ })).toBeChecked();
+		expect(within(queue as HTMLElement).getAllByRole("radio")).toHaveLength(4);
+		expect(screen.getByRole("radio", { name: /Redis/ })).toBeChecked();
 		expect(container.innerHTML).not.toContain("secret");
 	});
 
@@ -849,9 +868,12 @@ describe("queue pages", () => {
 			url: "https://hooks.example.com/a",
 		});
 		const { actor: admin } = await signIn(app, "admin");
+		const open = vi
+			.spyOn(NotificationQueue.prototype, "open")
+			.mockResolvedValue("ok");
 		await services.notificationQueue.update(admin, {
 			revision: 0,
-			provider: "memory",
+			provider: "redis",
 		});
 		await signIn(app, "editor");
 		vi.stubGlobal(
@@ -875,6 +897,7 @@ describe("queue pages", () => {
 			{ title: "API errors", message: "Looking", notify: true },
 			{ jobId: "njb_banner" },
 		);
+		open.mockRestore();
 		const dashboard = render(
 			await IncidentPage({
 				params: params({ id: incident.id }),
@@ -929,10 +952,14 @@ describe("queue pages", () => {
 		first.unmount();
 
 		const { actor } = await signIn(app, "admin");
+		const open = vi
+			.spyOn(NotificationQueue.prototype, "open")
+			.mockResolvedValue("ok");
 		await services.notificationQueue.update(actor, {
 			revision: 0,
-			provider: "memory",
+			provider: "redis",
 		});
+		open.mockRestore();
 		await signIn(app, "editor");
 		render(
 			await DraftPage({

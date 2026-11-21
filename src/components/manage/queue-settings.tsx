@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { updateNotificationQueueAction } from "@/app/manage/actions";
 import { SubmitButton } from "@/components/submit-button";
-import type {
-	PublicNotificationQueue,
-	QueueProviderId,
+import {
+	type PublicNotificationQueue,
+	QUEUE_PROVIDER_IDS,
+	type QueueProviderId,
 } from "@/lib/domain/types";
 import { QUEUE_PROVIDERS } from "@/lib/notifications/queue-catalog";
 import { buttonClass, Card, Field, inputClass } from "./ui";
@@ -17,13 +18,11 @@ const OPTIONS: { id: "none" | QueueProviderId; label: string; hint: string }[] =
 			label: "No queue",
 			hint: "A window shows the status of each notification.",
 		},
-		...(["memory", "redis", "rabbitmq", "nats", "zeromq"] as const).map(
-			(id) => ({
-				id,
-				label: QUEUE_PROVIDERS[id].label,
-				hint: QUEUE_PROVIDERS[id].hint,
-			}),
-		),
+		...QUEUE_PROVIDER_IDS.map((id) => ({
+			id,
+			label: QUEUE_PROVIDERS[id].label,
+			hint: QUEUE_PROVIDERS[id].hint,
+		})),
 	];
 
 /** The queue choice. An admin selects one provider, or no queue. */
@@ -39,7 +38,6 @@ export function QueueSettingsCard({
 	);
 	const definition =
 		provider === "none" ? undefined : QUEUE_PROVIDERS[provider];
-	const uri = definition?.uri;
 	return (
 		<Card
 			title="Queue"
@@ -66,14 +64,14 @@ export function QueueSettingsCard({
 						</label>
 					))}
 				</fieldset>
-				{uri && (
+				{definition && (
 					<Field
 						label="Connection URI"
 						htmlFor="queue-uri"
 						hint={
 							queue.hasUri && provider === queue.provider
 								? "Saved. Leave empty to keep it."
-								: `Leave empty to use ${uri.default}.`
+								: `Leave empty to use ${definition.uri.default}.`
 						}
 					>
 						<input
@@ -82,12 +80,12 @@ export function QueueSettingsCard({
 							type="password"
 							autoComplete="off"
 							disabled={!canStoreSecrets}
-							placeholder={uri.default}
+							placeholder={definition.uri.default}
 							className={inputClass}
 						/>
 					</Field>
 				)}
-				{!canStoreSecrets && uri && (
+				{!canStoreSecrets && definition && (
 					<p className="text-xs text-muted">
 						Set ENCRYPTION_KEY on the server to save credentials.
 					</p>
