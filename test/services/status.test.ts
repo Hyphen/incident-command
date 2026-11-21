@@ -405,7 +405,7 @@ describe("StatusService", () => {
 			open.id,
 		]);
 		expect(usView.upcomingMaintenance).toEqual([]);
-		expect(usView.services[0]?.status).toBe(overview.services[0]?.status);
+		expect(usView.services[0]?.status).toBe("partial_outage");
 		const euView = await t.services.status.summary({ regionId: europe.id });
 		expect(euView.activeIncidents.map((item) => item.id)).toEqual([
 			everywhere.id,

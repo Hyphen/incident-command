@@ -76,7 +76,7 @@ export default async function RegionsPage({
 										</form>
 										<form action={deleteRegionAction}>
 											<input type="hidden" name="id" value={region.id} />
-											<ConfirmButton message="Delete this region? A service that uses only this region will have no region.">
+											<ConfirmButton message="Delete this region? A closed incident that used only this region will show only on Overview.">
 												Delete
 											</ConfirmButton>
 										</form>

@@ -542,8 +542,8 @@ export interface DraftContent {
 	serviceIds?: string[];
 	/**
 	 * Regions for each affected service.
-	 * On an update, regions for the services in this draft.
-	 * A service with no entry keeps its regions.
+	 * On an update, regions for the services in this draft. On an update, a
+	 * service with no entry keeps its regions.
 	 */
 	serviceRegions?: ServiceRegions[];
 	/** The window of new maintenance. Not used by an update. */

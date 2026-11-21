@@ -549,7 +549,7 @@ export function createMcpServer(
 		{
 			title: "Delete region",
 			description:
-				"Deletes a region. A service that used only that region has no region. The next change to the regions of that incident must give it a region. A service that also uses other regions keeps those regions.",
+				"Deletes a region. When other regions remain, the delete fails if an open incident has a service that uses only this region. Give that service a different region first. On a closed incident, such a service has no region after the delete. A service that also uses other regions keeps those regions.",
 			inputSchema: { id },
 		},
 		async (args) => {

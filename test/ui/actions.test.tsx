@@ -2005,6 +2005,16 @@ describe("region actions", () => {
 		]);
 		expectSameFlash(
 			await redirectOf(deleteRegionAction(form({ id: region?.id ?? "" }))),
+			"/manage/regions?error=An open incident has a service that uses only this region. Give that service a different region, then delete this region.",
+		);
+		await services.incidents.resolve(
+			SYSTEM_ACTOR,
+			incident?.id ?? "",
+			undefined,
+			false,
+		);
+		expectSameFlash(
+			await redirectOf(deleteRegionAction(form({ id: region?.id ?? "" }))),
 			"/manage/regions?notice=Region deleted",
 		);
 		expectSameFlash(

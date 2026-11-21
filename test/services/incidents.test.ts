@@ -964,7 +964,7 @@ describe("IncidentService", () => {
 		]) {
 			await expect(
 				t.services.incidents.create(EDITOR, {
-					title: "Global",
+					title: "Missing regions",
 					message: "x",
 					serviceIds: [api, web],
 					serviceRegions,
@@ -1013,6 +1013,46 @@ describe("IncidentService", () => {
 				serviceRegions: [{ serviceId: api, regionIds: [us.id] }],
 			}),
 		).rejects.toMatchObject(required);
+
+		// Another write removed Web after the read. The update adds Web again,
+		// so Web needs regions.
+		const find = vi.spyOn(t.services.incidents, "find").mockResolvedValueOnce({
+			...everywhere,
+			serviceIds: [api, web],
+			serviceRegions: [
+				{ serviceId: api, regionIds: [us.id, eu.id] },
+				{ serviceId: web, regionIds: [us.id] },
+			],
+		});
+		await expect(
+			t.services.incidents.postUpdate(EDITOR, everywhere.id, {
+				message: "Web again",
+				serviceIds: [web],
+				notify: false,
+			}),
+		).rejects.toMatchObject(required);
+		find.mockRestore();
+		expect((await t.services.incidents.get(everywhere.id)).serviceIds).toEqual([
+			api,
+		]);
+
+		// The form does not show a deleted service, so an edit needs no entry for it.
+		const pair = await t.services.incidents.create(EDITOR, {
+			title: "Pair",
+			message: "x",
+			serviceIds: [api, web],
+			serviceRegions: [
+				{ serviceId: api, regionIds: [us.id] },
+				{ serviceId: web, regionIds: [us.id] },
+			],
+		});
+		await t.services.catalog.delete(ADMIN, web);
+		const moved = await t.services.incidents.edit(EDITOR, pair.id, {
+			serviceRegions: [{ serviceId: api, regionIds: [eu.id] }],
+		});
+		expect(moved.serviceRegions).toEqual([
+			{ serviceId: api, regionIds: [eu.id] },
+		]);
 
 		// A service from before the first region keeps no region until a change sets one.
 		const resolved = await t.services.incidents.resolve(

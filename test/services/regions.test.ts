@@ -1,3 +1,4 @@
+import { REGION_ONLY_ONE_FOR_OPEN_INCIDENT } from "@/lib/domain/regions";
 import type { StoredIncident } from "@/lib/domain/types";
 import {
 	ConflictError,
@@ -54,6 +55,7 @@ describe("RegionService", () => {
 		const incident = await t.services.incidents.create(EDITOR, {
 			title: "Down",
 			message: "Looking",
+			status: "resolved",
 			serviceIds: [api.id],
 			serviceRegions: [{ serviceId: api.id, regionIds: [first.id] }],
 		});
@@ -242,7 +244,7 @@ describe("RegionService", () => {
 		);
 	});
 
-	it("keeps the other regions of a service", async () => {
+	it("keeps a region that an open incident needs, and the other regions of a service", async () => {
 		const united = await t.services.regions.create(EDITOR, {
 			name: "United States",
 		});
@@ -258,6 +260,25 @@ describe("RegionService", () => {
 				{ serviceId: web.id, regionIds: [united.id] },
 			],
 		});
+		// A member cannot edit a deleted incident, so it does not keep the region.
+		const hidden = await t.services.incidents.create(EDITOR, {
+			title: "Duplicate",
+			message: "Looking",
+			serviceIds: [web.id],
+			serviceRegions: [{ serviceId: web.id, regionIds: [united.id] }],
+		});
+		await t.services.incidents.delete(EDITOR, hidden.id, {
+			reason: "Duplicate",
+		});
+		await expect(
+			t.services.regions.delete(EDITOR, united.id),
+		).rejects.toMatchObject({ message: REGION_ONLY_ONE_FOR_OPEN_INCIDENT });
+		expect(await t.services.regions.list()).toEqual([united, europe]);
+		expect(
+			(await t.services.incidents.get(incident.id)).serviceRegions,
+		).toHaveLength(2);
+
+		await t.services.incidents.resolve(EDITOR, incident.id, undefined, false);
 		await t.services.regions.delete(EDITOR, united.id);
 		expect(
 			(await t.services.incidents.get(incident.id)).serviceRegions,

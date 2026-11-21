@@ -18,6 +18,13 @@ export const STATUS_OVERVIEW_LABEL = "Overview";
 export const SERVICE_REGIONS_REQUIRED =
 	"serviceRegions: give each affected service one or more regions. For an outage in all regions, select all regions.";
 
+/**
+ * The error when a region delete leaves a service on an open incident with no
+ * region. The portal maps this exact text to a flash code.
+ */
+export const REGION_ONLY_ONE_FOR_OPEN_INCIDENT =
+	"An open incident has a service that uses only this region. Give that service a different region, then delete this region.";
+
 type RegionalIncident = Pick<
 	Incident,
 	"serviceIds" | "serviceRegions" | "regionId"

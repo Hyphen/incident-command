@@ -109,6 +109,11 @@
 		"kind": "error",
 		"text": "Select one or more regions for each affected service. For an outage in all regions, select all regions."
 	},
+	"region_only_one_for_open_incident": {
+		"id": "fls_w6k4regiononly",
+		"kind": "error",
+		"text": "An open incident has a service that uses only this region. Give that service a different region, then delete this region."
+	},
 	"invite_revoked": {
 		"id": "fls_nfbb3lms7k97cwsd",
 		"kind": "notice",

@@ -1,5 +1,8 @@
 import { BRAND_ASSET_MESSAGES } from "./domain/brand-asset";
-import { SERVICE_REGIONS_REQUIRED } from "./domain/regions";
+import {
+	REGION_ONLY_ONE_FOR_OPEN_INCIDENT,
+	SERVICE_REGIONS_REQUIRED,
+} from "./domain/regions";
 import {
 	INVALID_TWO_FACTOR_CODE,
 	TWO_FACTOR_ALREADY_OFF,
@@ -44,6 +47,7 @@ const MESSAGE_CODES: Record<string, FlashCode> = {
 	"A member with that email already exists": "member_email_exists",
 	"A region with that name already exists": "region_name_taken",
 	[SERVICE_REGIONS_REQUIRED]: "service_regions_required",
+	[REGION_ONLY_ONE_FOR_OPEN_INCIDENT]: "region_only_one_for_open_incident",
 	"scheduledEnd must be after scheduledStart": "scheduled_end_before_start",
 	"Subscriptions are not enabled": "subscriptions_disabled",
 	"We couldn't send the confirmation. Please try again later.":
