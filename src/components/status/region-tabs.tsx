@@ -17,31 +17,35 @@ export function regionHref(
 }
 
 /**
- * Global and one tab for each region. Renders nothing when no region exists,
- * so the status page stays one page.
+ * One tab lists every outage. Then one tab lists each region.
+ * The tabs render nothing when no region exists.
  *
- * Overflow on the nav clips the focus outline. The padding leaves room
- * for that outline. The negative margin keeps the labels in place.
- * The outer element has no margin of its own, so it keeps the space that
- * the page puts between sections.
+ * Overflow on the nav clips the focus outline.
+ * The padding leaves room for that outline.
+ * The negative margin keeps the labels in place.
+ * The outer element has no margin of its own.
+ * Thus it keeps the space that the page puts between sections.
  */
 export function RegionTabs({
 	regions,
 	activeId,
 	path,
 	search,
+	defaultLabel = GLOBAL_REGION_NAME,
 }: {
 	regions: readonly Region[];
-	/** Set when a region tab is current. Omit it for Global. */
+	/** Set when a region tab is current. Omit it for the first tab. */
 	activeId?: string;
 	path: string;
 	search?: Record<string, string>;
+	/** Label of the tab that has no region. */
+	defaultLabel?: string;
 }) {
 	if (regions.length === 0) {
 		return null;
 	}
 	const tabs = [
-		{ id: undefined as string | undefined, label: GLOBAL_REGION_NAME },
+		{ id: undefined as string | undefined, label: defaultLabel },
 		...regions.map((region) => ({ id: region.id, label: region.name })),
 	];
 	return (

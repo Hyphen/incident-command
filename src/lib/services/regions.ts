@@ -13,6 +13,44 @@ import { iso, parse, requirePermission, type ServiceContext } from "./context";
 /** Stop after five failed writes. The same limit as an incident update. */
 const MAX_WRITE_ATTEMPTS = 5;
 
+function incidentUsesRegion(
+	incident: Pick<StoredIncident, "regionId" | "serviceRegions">,
+	regionId: string,
+): boolean {
+	if (incident.regionId === regionId) {
+		return true;
+	}
+	return (
+		incident.serviceRegions?.some((entry) =>
+			entry.regionIds.includes(regionId),
+		) ?? false
+	);
+}
+
+/** A copy that no longer uses `regionId`. Other regions stay. */
+function withoutRegion(
+	incident: StoredIncident,
+	regionId: string,
+): StoredIncident {
+	const next: StoredIncident = { ...incident };
+	if (next.regionId === regionId) {
+		delete next.regionId;
+	}
+	if (!next.serviceRegions) {
+		return next;
+	}
+	const serviceRegions = next.serviceRegions.flatMap((entry) => {
+		const regionIds = entry.regionIds.filter((id) => id !== regionId);
+		return regionIds.length > 0 ? [{ ...entry, regionIds }] : [];
+	});
+	if (serviceRegions.length > 0) {
+		next.serviceRegions = serviceRegions;
+	} else {
+		delete next.serviceRegions;
+	}
+	return next;
+}
+
 export class RegionService {
 	private readonly ctx: ServiceContext;
 
@@ -72,8 +110,10 @@ export class RegionService {
 	}
 
 	/**
-	 * Deletes a region. Each incident in that region becomes global.
-	 * A Global incident shows on the Global tab only.
+	 * Deletes a region.
+	 * A service that used only that region becomes Global.
+	 * A service that also uses other regions keeps those regions.
+	 * An old incident that used only that region becomes Global.
 	 */
 	async delete(actor: Actor, id: string): Promise<void> {
 		requirePermission(actor, "services.delete");
@@ -101,13 +141,16 @@ export class RegionService {
 
 	/** Removes the region from each incident that uses it. */
 	private async clearIncidents(regionId: string): Promise<void> {
+		// A region can sit inside serviceRegions, so a field query cannot find it.
 		const incidents = await this.ctx.store.find(
 			"incidents",
-			{ where: [{ field: "regionId", op: "eq", value: regionId }] },
+			{},
 			{ consistent: true },
 		);
 		for (const incident of incidents) {
-			await this.clearRegion(incident.id, regionId);
+			if (incidentUsesRegion(incident, regionId)) {
+				await this.clearRegion(incident.id, regionId);
+			}
 		}
 	}
 
@@ -120,15 +163,12 @@ export class RegionService {
 			const current = await this.ctx.store.get("incidents", id, {
 				consistent: true,
 			});
-			if (!current || current.regionId !== regionId) {
+			if (!current || !incidentUsesRegion(current, regionId)) {
 				return;
 			}
-			const next: StoredIncident = {
-				...current,
-				revision: (current.revision ?? 0) + 1,
-				updatedAt: iso(this.ctx.now()),
-			};
-			delete next.regionId;
+			const next = withoutRegion(current, regionId);
+			next.revision = (current.revision ?? 0) + 1;
+			next.updatedAt = iso(this.ctx.now());
 			const saved = await this.ctx.store.update("incidents", next, {
 				where: [
 					{ field: "revision", op: "eq", value: current.revision ?? null },

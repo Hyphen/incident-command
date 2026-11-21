@@ -353,18 +353,21 @@ describe("region markdown", () => {
 		const region = await services.regions.create(SYSTEM_ACTOR, {
 			name: "United States",
 		});
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
 		clock.set("2026-05-05T00:00:00.000Z");
 		const incident = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "US down",
 			message: "Looking",
-			regionId: region.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 			status: "resolved",
 		});
 		clock.set("2026-11-02T12:00:00.000Z");
 		await services.incidents.create(SYSTEM_ACTOR, {
 			title: "US open",
 			message: "Still down",
-			regionId: region.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
 		const status = await llms(
 			new Request(`https://status.acme.dev/llms.txt?region=${region.id}`),
@@ -382,7 +385,9 @@ describe("region markdown", () => {
 			`(https://status.acme.dev/api/v1/status?region=${region.id})`,
 		);
 		const global = await llms(new Request("https://status.acme.dev/llms.txt"));
-		expect(await global.text()).toContain("Region: Global.");
+		const globalText = await global.text();
+		expect(globalText).toContain("Region: Overview.");
+		expect(globalText).toContain("US open");
 		const missing = await llms(
 			new Request("https://status.acme.dev/llms.txt?region=reg_missing"),
 		);

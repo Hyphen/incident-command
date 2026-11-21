@@ -222,6 +222,15 @@ export interface ServiceStatusOverride {
 	status: ServiceStatus;
 }
 
+/**
+ * Regions where one affected service is down.
+ * An empty list means Global. A Global service stays on the Global tab.
+ */
+export interface ServiceRegions {
+	serviceId: string;
+	regionIds: string[];
+}
+
 export interface ServiceStatusChange {
 	id: string;
 	serviceId: string;
@@ -274,7 +283,16 @@ export interface Incident extends Partial<IncidentDeletion> {
 	/** The impact of the latest post. */
 	impact: IncidentImpact;
 	serviceIds: string[];
-	/** The region of this incident. Missing means Global. */
+	/**
+	 * Regions for each affected service.
+	 * A service with no entry, or an empty list, is Global.
+	 * An old incident can omit this field and set `regionId` for every service.
+	 */
+	serviceRegions?: ServiceRegions[];
+	/**
+	 * The region of every service on an old incident.
+	 * New writes omit this field. Read it only when `serviceRegions` is absent.
+	 */
 	regionId?: string;
 	updates: IncidentUpdate[];
 	scheduledStart?: string;
@@ -522,8 +540,12 @@ export interface DraftContent {
 	 * On an update, the services to add. An update does not remove a service.
 	 */
 	serviceIds?: string[];
-	/** The region of a new incident or maintenance. Missing means Global. */
-	regionId?: string;
+	/**
+	 * Regions for each affected service.
+	 * On an update, regions for the services in this draft.
+	 * A service with no entry, or an empty list, is Global.
+	 */
+	serviceRegions?: ServiceRegions[];
 	/** The window of new maintenance. Not used by an update. */
 	scheduledStart?: string;
 	scheduledEnd?: string;

@@ -50,20 +50,25 @@ describe("RegionService", () => {
 			name: "united states",
 		});
 
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
 		const incident = await t.services.incidents.create(EDITOR, {
 			title: "Down",
 			message: "Looking",
-			regionId: first.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [first.id] }],
 		});
-		await t.store.insert("incidents", {
+		const legacy: StoredIncident = {
 			...incident,
 			id: "inc_legacy",
 			revision: undefined,
-		});
+			regionId: first.id,
+		};
+		delete legacy.serviceRegions;
+		await t.store.insert("incidents", legacy);
 		await t.services.regions.delete(EDITOR, first.id);
 		expect(await t.services.regions.list()).toEqual([second]);
 		expect(
-			(await t.services.incidents.get(incident.id)).regionId,
+			(await t.services.incidents.get(incident.id)).serviceRegions,
 		).toBeUndefined();
 		expect((await t.store.get("incidents", "inc_legacy"))?.revision).toBe(1);
 		expect(
@@ -125,10 +130,12 @@ describe("RegionService", () => {
 
 	it("keeps a newer incident update when a region is deleted", async () => {
 		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
 		const incident = await t.services.incidents.create(EDITOR, {
 			title: "Down",
 			message: "Looking",
-			regionId: region.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
 		replaceUpdate(async (current) => {
 			await t.store.update("incidents", {
@@ -150,7 +157,7 @@ describe("RegionService", () => {
 		});
 		await t.services.regions.delete(EDITOR, region.id);
 		const saved = await t.services.incidents.get(incident.id);
-		expect(saved.regionId).toBeUndefined();
+		expect(saved.serviceRegions).toBeUndefined();
 		expect(saved.updates.map((update) => update.message)).toContain(
 			"Posted during the delete",
 		);
@@ -158,10 +165,12 @@ describe("RegionService", () => {
 
 	it("stops when the incident keeps changing", async () => {
 		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
 		const incident = await t.services.incidents.create(EDITOR, {
 			title: "Down",
 			message: "Looking",
-			regionId: region.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
 		const update = t.store.update.bind(t.store);
 		t.store.update = (async (collection, doc, options) => {
@@ -182,17 +191,19 @@ describe("RegionService", () => {
 			t.services.regions.delete(EDITOR, region.id),
 		).rejects.toBeInstanceOf(ConflictError);
 		expect(await t.services.regions.list()).toEqual([region]);
-		expect((await t.services.incidents.get(incident.id)).regionId).toBe(
-			region.id,
-		);
+		expect(
+			(await t.services.incidents.get(incident.id)).serviceRegions,
+		).toEqual([{ serviceId: api.id, regionIds: [region.id] }]);
 	});
 
 	it("deletes a region when the incident is already gone", async () => {
 		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
 		const incident = await t.services.incidents.create(EDITOR, {
 			title: "Down",
 			message: "Looking",
-			regionId: region.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
 		replaceUpdate(async (current) => {
 			await t.store.delete("incidents", current.id);
@@ -204,10 +215,12 @@ describe("RegionService", () => {
 
 	it("keeps a clear that another delete already saved", async () => {
 		const region = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
 		const incident = await t.services.incidents.create(EDITOR, {
 			title: "Down",
 			message: "Looking",
-			regionId: region.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
 		replaceUpdate(async (current) => {
 			const next: StoredIncident = {
@@ -226,15 +239,37 @@ describe("RegionService", () => {
 				],
 				revision: (current.revision ?? 0) + 1,
 			};
-			delete next.regionId;
+			delete next.serviceRegions;
 			await t.store.update("incidents", next);
 		});
 		await t.services.regions.delete(EDITOR, region.id);
 		const saved = await t.services.incidents.get(incident.id);
-		expect(saved.regionId).toBeUndefined();
+		expect(saved.serviceRegions).toBeUndefined();
 		expect(saved.updates.map((update) => update.message)).toContain(
 			"Cleared first",
 		);
+	});
+
+	it("keeps the other regions of a service", async () => {
+		const united = await t.services.regions.create(EDITOR, {
+			name: "United States",
+		});
+		const europe = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
+		const web = await t.services.catalog.create(EDITOR, { name: "Web" });
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Down",
+			message: "Looking",
+			serviceIds: [api.id, web.id],
+			serviceRegions: [
+				{ serviceId: api.id, regionIds: [united.id, europe.id] },
+				{ serviceId: web.id, regionIds: [united.id] },
+			],
+		});
+		await t.services.regions.delete(EDITOR, united.id);
+		expect(
+			(await t.services.incidents.get(incident.id)).serviceRegions,
+		).toEqual([{ serviceId: api.id, regionIds: [europe.id] }]);
 	});
 
 	it("requires the service permissions", async () => {

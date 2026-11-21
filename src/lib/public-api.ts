@@ -1,13 +1,15 @@
+import { incidentRegionIds, serviceRegionIds } from "./domain/regions";
 import { OVERALL_STATUS_COPY } from "./domain/status";
 import type { Incident, Region } from "./domain/types";
 import type { StatusSummary } from "./services/status";
 
-function publicRegion(incident: Incident, regions: readonly Region[]) {
-	if (!incident.regionId) {
-		return null;
-	}
-	const region = regions.find((item) => item.id === incident.regionId);
-	return region ? { id: region.id, name: region.name } : null;
+function namedRegions(
+	regionIds: readonly string[],
+	regions: readonly Region[],
+) {
+	return regions
+		.filter((region) => regionIds.includes(region.id))
+		.map((region) => ({ id: region.id, name: region.name }));
 }
 
 function publicIncident(
@@ -21,8 +23,15 @@ function publicIncident(
 		title: incident.title,
 		status: incident.status,
 		impact: incident.impact,
-		region: publicRegion(incident, regions),
+		regions: namedRegions(incidentRegionIds(incident), regions),
 		services: incident.serviceIds.filter((id) => visible.has(id)),
+		serviceRegions: incident.serviceIds.flatMap((id) => {
+			if (!visible.has(id)) {
+				return [];
+			}
+			const bound = namedRegions(serviceRegionIds(incident, id), regions);
+			return bound.length > 0 ? [{ serviceId: id, regions: bound }] : [];
+		}),
 		startedAt: incident.startedAt,
 		resolvedAt: incident.resolvedAt ?? null,
 		scheduledStart: incident.scheduledStart ?? null,

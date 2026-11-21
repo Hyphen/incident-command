@@ -1,4 +1,4 @@
-import { GLOBAL_REGION_NAME, regionNameFor } from "./domain/regions";
+import { regionNameFor, STATUS_OVERVIEW_LABEL } from "./domain/regions";
 import {
 	affectedNames,
 	EVENT_STATUS_LABELS,
@@ -202,7 +202,7 @@ function servicesSection(summary: StatusSummary): string {
 	]);
 }
 
-/** A query that keeps the reader on one region. Empty on the Global tab. */
+/** A query that keeps the reader on one region. Empty on the Overview tab. */
 function regionQuery(region?: Region): string {
 	return region ? `?region=${region.id}` : "";
 }
@@ -216,7 +216,7 @@ export function statusMarkdown(summary: StatusSummary, origin: string): string {
 		`> Overall status: ${SERVICE_STATUS_LABELS[summary.overall]}. ${OVERALL_STATUS_COPY[summary.overall].description}`,
 		text(settings.description),
 		summary.regions.length > 0 &&
-			`Region: ${text(summary.region?.name ?? GLOBAL_REGION_NAME)}.`,
+			`Region: ${text(summary.region?.name ?? STATUS_OVERVIEW_LABEL)}.`,
 		`This file is the public status page of ${name} in Markdown, for agents and other automated readers. It shows the status at ${formatDateTime(summary.generatedAt)}.`,
 		eventSection(
 			"Active incidents",
