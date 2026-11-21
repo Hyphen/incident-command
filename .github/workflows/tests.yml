@@ -73,3 +73,29 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           directory: ./packages/app/coverage
           fail_ci_if_error: false
+
+  # Build the image from the root Dockerfile and smoke test it. The release
+  # workflow (release-docker.yml) runs the same test before it pushes.
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The job installs no packages on the runner. `docker build` installs
+      # them in the image from the frozen lockfile, with the policies of
+      # pnpm-workspace.yaml.
+      - name: Install Socket Firewall
+        uses: SocketDev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+        with:
+          mode: firewall-free
+          firewall-version: "1.16.0"
+
+      - name: Build the image
+        run: docker build --platform linux/amd64 --tag incident-command:test .
+
+      - name: Smoke test the image
+        run: sh scripts/smoke-test-image.sh incident-command:test

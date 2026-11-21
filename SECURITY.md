@@ -28,4 +28,5 @@ This repository follows the [defense-in-depth](https://github.com/jaredwray/agen
 - CI runs with read-only permissions (only jobs whose purpose is mutating the repo get `contents: write`); generated output is an artifact, never committed back; every action is pinned to a full commit SHA; Socket Firewall (`sfw`) wraps `pnpm install` / `npm install`; workflows are security-linted with zizmor on every PR.
 - All changes land through pull requests — direct pushes to `main` are blocked, and merging requires passing status checks.
 - Tags can only be created by repository admins; published GitHub Releases are immutable (assets and tags cannot be changed after publish).
+- The Docker Hub image `jaredwray/incident-command` comes only from `.github/workflows/release-docker.yml`. The workflow builds the image from the release tag and runs a smoke test. Then it pushes the image with provenance and SBOM attestations. The Docker Hub token is in the `docker-hub` GitHub environment.
 - Workflow runs from outside collaborators always require maintainer approval, and only allowlisted GitHub Actions can run.

@@ -37,13 +37,13 @@ Profile: website/app · public
 - [x] Workflow `name:` and job `name:` contain no spaces (kebab-case) so they can be set as required status checks — verified 2026-11-02
 - [x] `persist-credentials: false` on checkouts that don't push — PR #15
 - [x] No `pull_request_target` on workflows that run untrusted PR code — verified 2026-11-02
-- [x] Artifact-publishing workflows disable `actions/setup-node` default caching (`package-manager-cache: false`) to prevent cache poisoning — verified 2026-11-04 (`deploy-development` sets it and restores no cache)
-- [x] No npm tokens (or other registry credentials) in Actions secrets — verified 2026-11-02
+- [x] Artifact-publishing workflows disable `actions/setup-node` default caching (`package-manager-cache: false`) to prevent cache poisoning — verified 2026-11-04 (`deploy-development` sets it and restores no cache); verified 2026-11-21 (`release-docker` does not use setup-node and restores no build cache)
+- [ ] No npm tokens (or other registry credentials) in Actions secrets — exception from 2026-11-21: `release-docker` pushes the image to Docker Hub with `DOCKERHUB_TOKEN`. Docker Hub has no OIDC publish for GitHub Actions. The token is in the `docker-hub` environment only. Give it write access to `jaredwray/incident-command` only.
 
 ## 6. Security tooling
 
 - [x] Aikido runs on every build — verified 2026-11-02
-- [x] Aikido release gate: the release workflow's stage-publish job `needs:` a passing `scan-release` — verified 2026-11-02 (no release workflow; this app does not publish)
+- [ ] Aikido release gate: the release workflow's stage-publish job `needs:` a passing `scan-release` — open: `release-docker` (added 2026-11-21) publishes the Docker image on each GitHub release, and it has no `scan-release` job yet
 - [x] Socket reviews every PR that changes dependencies — verified 2026-11-02
 
 ## 7. Repository lockdown
