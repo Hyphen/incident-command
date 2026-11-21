@@ -1,0 +1,908 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Incident Command API",
+		"version": "1",
+		"description": "The REST API of an Incident Command server. The status endpoint is public. The subscriber endpoints need a bearer token: an API token (`icmd_…`) that an admin makes on the agent page, or an OAuth access token of an agent. The agent must have the permission that each operation names. A server serves this document at `/api/v1/openapi.json`.",
+		"license": {
+			"name": "MIT",
+			"identifier": "MIT"
+		}
+	},
+	"servers": [
+		{
+			"url": "https://status.example.com"
+		}
+	],
+	"tags": [
+		{
+			"name": "Status",
+			"description": "The public status of the page."
+		},
+		{
+			"name": "Subscribers",
+			"description": "The subscribers to notifications."
+		}
+	],
+	"paths": {
+		"/api/v1/status": {
+			"get": {
+				"tags": [
+					"Status"
+				],
+				"operationId": "getStatus",
+				"summary": "Get the status",
+				"description": "Returns the status page in JSON. All origins can call it. The response can be cached for 15 seconds.",
+				"security": [],
+				"parameters": [
+					{
+						"name": "region",
+						"in": "query",
+						"required": false,
+						"description": "A region id. The response then shows that region tab. Without it, the response shows the Overview.",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "The status.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PublicStatus"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "The region was not found.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RegionNotFound"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/subscribers": {
+			"get": {
+				"tags": [
+					"Subscribers"
+				],
+				"operationId": "listSubscribers",
+				"summary": "List the subscribers",
+				"description": "Returns all subscribers, the newest first. The response has no tokens. Permission: `subscribers.read`.",
+				"responses": {
+					"200": {
+						"description": "The subscribers.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SubscriberList"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request has no valid bearer token.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The agent does not have the necessary permission.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": [
+					"Subscribers"
+				],
+				"operationId": "addSubscriber",
+				"summary": "Add a subscriber",
+				"description": "Adds a confirmed subscriber. The subscriber gets no confirmation message, so get consent first. Send `serviceIds` to limit the notifications to those services. Permission: `subscribers.manage`.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SubscribeInput"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "The new subscriber, with its token.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CreatedSubscriberResponse"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "The body is not valid.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request has no valid bearer token.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The agent does not have the necessary permission.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/subscribers/{id}": {
+			"patch": {
+				"tags": [
+					"Subscribers"
+				],
+				"operationId": "setSubscriberServices",
+				"summary": "Set the services of a subscriber",
+				"description": "Replaces the services that send a notification to the subscriber. An empty list clears the choice, and all services then send a notification. Permission: `subscribers.manage`.",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"description": "The subscriber id.",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SubscriberServicesInput"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "The subscriber.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SubscriberResponse"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "The body is not valid.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request has no valid bearer token.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The agent does not have the necessary permission.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "The subscriber or a service was not found.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"PublicStatus": {
+				"type": "object",
+				"properties": {
+					"page": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"url": {
+								"description": "The Public URL setting.",
+								"type": [
+									"string",
+									"null"
+								]
+							}
+						},
+						"required": [
+							"name",
+							"url"
+						]
+					},
+					"region": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/RegionRef"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "The region of the response, or null for the Overview."
+					},
+					"regions": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/RegionRef"
+						}
+					},
+					"status": {
+						"type": "object",
+						"properties": {
+							"indicator": {
+								"type": "string",
+								"enum": [
+									"operational",
+									"under_maintenance",
+									"degraded_performance",
+									"partial_outage",
+									"major_outage"
+								],
+								"description": "The worst status of the services."
+							},
+							"description": {
+								"type": "string"
+							}
+						},
+						"required": [
+							"indicator",
+							"description"
+						]
+					},
+					"services": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"description": {
+									"type": [
+										"string",
+										"null"
+									]
+								},
+								"group": {
+									"type": [
+										"string",
+										"null"
+									]
+								},
+								"status": {
+									"type": "string",
+									"enum": [
+										"operational",
+										"under_maintenance",
+										"degraded_performance",
+										"partial_outage",
+										"major_outage"
+									]
+								},
+								"uptime": {
+									"description": "The uptime in the uptime window, from 0 to 1, or null when there is no data.",
+									"type": [
+										"number",
+										"null"
+									]
+								}
+							},
+							"required": [
+								"id",
+								"name",
+								"description",
+								"group",
+								"status",
+								"uptime"
+							]
+						}
+					},
+					"incidents": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Incident"
+						},
+						"description": "The incidents that are not resolved."
+					},
+					"maintenance": {
+						"type": "object",
+						"properties": {
+							"active": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/Incident"
+								}
+							},
+							"upcoming": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/Incident"
+								}
+							}
+						},
+						"required": [
+							"active",
+							"upcoming"
+						]
+					},
+					"generatedAt": {
+						"type": "string",
+						"description": "An ISO 8601 time in UTC."
+					}
+				},
+				"required": [
+					"page",
+					"region",
+					"regions",
+					"status",
+					"services",
+					"incidents",
+					"maintenance",
+					"generatedAt"
+				],
+				"description": "The status page in JSON."
+			},
+			"Incident": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"kind": {
+						"type": "string",
+						"enum": [
+							"incident",
+							"maintenance"
+						]
+					},
+					"title": {
+						"type": "string",
+						"description": "The title of the latest post."
+					},
+					"status": {
+						"type": "string",
+						"enum": [
+							"investigating",
+							"identified",
+							"monitoring",
+							"resolved",
+							"scheduled",
+							"in_progress",
+							"verifying",
+							"completed"
+						]
+					},
+					"impact": {
+						"type": "string",
+						"enum": [
+							"none",
+							"minor",
+							"major",
+							"critical"
+						],
+						"description": "The impact of the latest post."
+					},
+					"regions": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/RegionRef"
+						},
+						"description": "The regions of the incident. An empty list means Global."
+					},
+					"services": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "The ids of the affected services that the page shows."
+					},
+					"serviceRegions": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"serviceId": {
+									"type": "string"
+								},
+								"regions": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/RegionRef"
+									}
+								}
+							},
+							"required": [
+								"serviceId",
+								"regions"
+							]
+						},
+						"description": "The regions of each affected service. A service that is not in the list is Global."
+					},
+					"startedAt": {
+						"type": "string",
+						"description": "An ISO 8601 time in UTC."
+					},
+					"resolvedAt": {
+						"anyOf": [
+							{
+								"type": "string",
+								"description": "An ISO 8601 time in UTC."
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"scheduledStart": {
+						"anyOf": [
+							{
+								"type": "string",
+								"description": "An ISO 8601 time in UTC."
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "The start of the maintenance window."
+					},
+					"scheduledEnd": {
+						"anyOf": [
+							{
+								"type": "string",
+								"description": "An ISO 8601 time in UTC."
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "The end of the maintenance window."
+					},
+					"updates": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/IncidentUpdate"
+						},
+						"description": "The posts, the newest first."
+					}
+				},
+				"required": [
+					"id",
+					"kind",
+					"title",
+					"status",
+					"impact",
+					"regions",
+					"services",
+					"serviceRegions",
+					"startedAt",
+					"resolvedAt",
+					"scheduledStart",
+					"scheduledEnd",
+					"updates"
+				],
+				"description": "An incident or a maintenance."
+			},
+			"IncidentUpdate": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"impact": {
+						"type": "string",
+						"enum": [
+							"none",
+							"minor",
+							"major",
+							"critical"
+						]
+					},
+					"status": {
+						"type": "string",
+						"enum": [
+							"investigating",
+							"identified",
+							"monitoring",
+							"resolved",
+							"scheduled",
+							"in_progress",
+							"verifying",
+							"completed"
+						]
+					},
+					"message": {
+						"type": "string"
+					},
+					"createdAt": {
+						"type": "string",
+						"description": "An ISO 8601 time in UTC."
+					}
+				},
+				"required": [
+					"id",
+					"title",
+					"impact",
+					"status",
+					"message",
+					"createdAt"
+				],
+				"description": "One post on an incident."
+			},
+			"RegionRef": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"id",
+					"name"
+				],
+				"description": "A named region."
+			},
+			"RegionNotFound": {
+				"type": "object",
+				"properties": {
+					"error": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"error"
+				],
+				"description": "The region was not found."
+			},
+			"Subscriber": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"webhook",
+							"email",
+							"sms"
+						]
+					},
+					"target": {
+						"type": "string",
+						"description": "The email address, the phone number or the webhook URL."
+					},
+					"confirmed": {
+						"type": "boolean"
+					},
+					"confirmedAt": {
+						"type": "string"
+					},
+					"createdAt": {
+						"type": "string"
+					},
+					"serviceIds": {
+						"description": "The services that send a notification. When the field is absent, all services send one.",
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				},
+				"required": [
+					"id",
+					"type",
+					"target",
+					"confirmed",
+					"createdAt"
+				],
+				"description": "A subscriber. The response has no token."
+			},
+			"CreatedSubscriber": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"webhook",
+							"email",
+							"sms"
+						]
+					},
+					"target": {
+						"type": "string",
+						"description": "The email address, the phone number or the webhook URL."
+					},
+					"confirmed": {
+						"type": "boolean"
+					},
+					"confirmedAt": {
+						"type": "string"
+					},
+					"createdAt": {
+						"type": "string"
+					},
+					"serviceIds": {
+						"description": "The services that send a notification. When the field is absent, all services send one.",
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"token": {
+						"type": "string",
+						"description": "The secret of the subscriber links (confirm, services and unsubscribe). Keep it secret."
+					}
+				},
+				"required": [
+					"id",
+					"type",
+					"target",
+					"confirmed",
+					"createdAt",
+					"token"
+				],
+				"description": "A new subscriber with its token."
+			},
+			"SubscriberList": {
+				"type": "object",
+				"properties": {
+					"subscribers": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Subscriber"
+						}
+					}
+				},
+				"required": [
+					"subscribers"
+				]
+			},
+			"SubscriberResponse": {
+				"type": "object",
+				"properties": {
+					"subscriber": {
+						"$ref": "#/components/schemas/Subscriber"
+					}
+				},
+				"required": [
+					"subscriber"
+				]
+			},
+			"CreatedSubscriberResponse": {
+				"type": "object",
+				"properties": {
+					"subscriber": {
+						"$ref": "#/components/schemas/CreatedSubscriber"
+					}
+				},
+				"required": [
+					"subscriber"
+				]
+			},
+			"SubscribeInput": {
+				"oneOf": [
+					{
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"const": "email"
+							},
+							"target": {
+								"type": "string",
+								"maxLength": 254,
+								"format": "email",
+								"pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+							},
+							"serviceIds": {
+								"maxItems": 100,
+								"type": "array",
+								"items": {
+									"type": "string",
+									"minLength": 1
+								}
+							}
+						},
+						"required": [
+							"type",
+							"target"
+						]
+					},
+					{
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"const": "sms"
+							},
+							"target": {
+								"type": "string"
+							},
+							"serviceIds": {
+								"maxItems": 100,
+								"type": "array",
+								"items": {
+									"type": "string",
+									"minLength": 1
+								}
+							}
+						},
+						"required": [
+							"type",
+							"target"
+						]
+					},
+					{
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"const": "webhook"
+							},
+							"target": {
+								"type": "string",
+								"maxLength": 2000,
+								"format": "uri"
+							},
+							"serviceIds": {
+								"maxItems": 100,
+								"type": "array",
+								"items": {
+									"type": "string",
+									"minLength": 1
+								}
+							}
+						},
+						"required": [
+							"type",
+							"target"
+						]
+					}
+				]
+			},
+			"SubscriberServicesInput": {
+				"type": "object",
+				"properties": {
+					"serviceIds": {
+						"maxItems": 100,
+						"type": "array",
+						"items": {
+							"type": "string",
+							"minLength": 1
+						}
+					}
+				},
+				"required": [
+					"serviceIds"
+				]
+			},
+			"ApiError": {
+				"type": "object",
+				"properties": {
+					"error": {
+						"type": "object",
+						"properties": {
+							"code": {
+								"type": "string",
+								"enum": [
+									"bad_request",
+									"unauthorized",
+									"forbidden",
+									"not_found",
+									"conflict",
+									"unavailable",
+									"internal_error"
+								]
+							},
+							"message": {
+								"type": "string"
+							}
+						},
+						"required": [
+							"code",
+							"message"
+						]
+					}
+				},
+				"required": [
+					"error"
+				],
+				"description": "An error."
+			}
+		},
+		"securitySchemes": {
+			"bearerAuth": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "An API token (`icmd_…`) or an OAuth access token of an agent."
+			}
+		}
+	},
+	"security": [
+		{
+			"bearerAuth": []
+		}
+	]
+}

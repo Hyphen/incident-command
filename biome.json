@@ -6,7 +6,15 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		"includes": ["**", "!**/.next", "!**/coverage", "!**/next-env.d.ts"]
+		"includes": [
+			"**",
+			"!**/.next",
+			"!**/coverage",
+			"!**/next-env.d.ts",
+			"!**/site/api/swagger.json",
+			"!**/site/docs/**/*.md",
+			"!**/site/README.md"
+		]
 	},
 	"css": {
 		"parser": {

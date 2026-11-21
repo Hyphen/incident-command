@@ -21,6 +21,7 @@
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run --coverage",
 		"test:watch": "vitest",
+		"openapi": "vitest run test/lib/openapi.test.ts --update",
 		"cf:dev": "WRANGLER_DOCKER_BIN=../../scripts/wrangler-docker.sh wrangler dev",
 		"cf:deploy": "WRANGLER_DOCKER_BIN=../../scripts/wrangler-docker.sh wrangler deploy",
 		"clean": "rm -rf .next .wrangler coverage node_modules"
