@@ -353,14 +353,7 @@ async function createIncident(
 	);
 	const notice =
 		input.kind === "incident" ? "incident_declared" : "maintenance_scheduled";
-	return finishSend(
-		services,
-		actor,
-		incident.id,
-		jobId,
-		flash(`/manage/incidents/${incident.id}`, notice),
-		progress,
-	);
+	return finishSend(services, actor, incident.id, jobId, notice, progress);
 }
 
 export async function createIncidentAction(form: FormData): Promise<void> {
@@ -380,35 +373,58 @@ export interface SendResult {
 	href: string;
 }
 
+/** An incident id can be one segment of a portal path. */
+const INCIDENT_ID = /^(?:inc|mnt)_[a-z0-9]+$/;
+
 /**
  * Redirects after a send. A queued send opens the incident dashboard.
- * A direct send from the status window returns the job instead.
+ * A direct send returns the job for the status window.
+ * The path uses the incident id only when that id has the inc_ or mnt_ form.
  */
 async function finishSend(
 	services: App["services"],
 	actor: Actor,
 	incidentId: string,
 	jobId: string,
-	plain: string,
+	notice: FlashCode,
 	progress: boolean,
+	posts = false,
 ): Promise<SendResult | undefined> {
 	const job = await services.notificationJobs.lookup(actor, jobId);
+	// An id that is not an incident id does not become the redirect address.
+	if (!INCIDENT_ID.test(incidentId)) {
+		if (job?.queued) {
+			redirect(flash("/manage/incidents", "notifications_queued"));
+		}
+		if (progress && job) {
+			return { jobId: job.id, href: flash("/manage/incidents", notice) };
+		}
+		redirect(flash("/manage/incidents", notice));
+	}
 	if (job?.queued) {
 		redirect(flash(`/manage/incidents/${incidentId}`, "notifications_queued"));
 	}
 	if (progress && job) {
-		return { jobId: job.id, href: plain };
+		return {
+			jobId: job.id,
+			href: posts
+				? flash(`/manage/incidents/${incidentId}?tab=posts`, notice)
+				: flash(`/manage/incidents/${incidentId}`, notice),
+		};
 	}
-	redirect(plain);
+	if (posts) {
+		redirect(flash(`/manage/incidents/${incidentId}?tab=posts`, notice));
+	}
+	redirect(flash(`/manage/incidents/${incidentId}`, notice));
 }
 
-/** The path after a post. A post from the posts tab returns to that tab. */
-function postedPath(id: string, tab: string, formOpen: boolean): string {
+/** Opens the post form after an error. The posts tab stays on that tab. */
+function postedPath(id: string, tab: string): string {
 	const path = `/manage/incidents/${id}`;
 	if (tab === "posts") {
-		return formOpen ? `${path}?tab=posts&post=1` : `${path}?tab=posts`;
+		return `${path}?tab=posts&post=1`;
 	}
-	return formOpen ? `${path}?post=1` : path;
+	return `${path}?post=1`;
 }
 
 function updateInput(form: FormData) {
@@ -432,7 +448,7 @@ async function postIncidentUpdate(
 	const id = text(form, "id");
 	const tab = text(form, "tab");
 	const jobId = createId("njb");
-	await attempt(postedPath(id, tab, true), () =>
+	await attempt(postedPath(id, tab), () =>
 		services.incidents.postUpdate(actor, id, updateInput(form), {
 			jobId,
 			delivery: progress ? "background" : "wait",
@@ -443,8 +459,9 @@ async function postIncidentUpdate(
 		actor,
 		id,
 		jobId,
-		flash(postedPath(id, tab, false), "update_posted"),
+		"update_posted",
 		progress,
+		tab === "posts",
 	);
 }
 
@@ -529,7 +546,7 @@ async function approveDraft(
 		actor,
 		incident.id,
 		jobId,
-		flash(`/manage/incidents/${incident.id}`, "draft_approved"),
+		"draft_approved",
 		progress,
 	);
 }

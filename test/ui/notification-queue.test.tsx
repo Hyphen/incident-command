@@ -247,6 +247,61 @@ describe("queue send actions", () => {
 		);
 	});
 
+	it("keeps a send on the incident list when the id is not an incident id", async () => {
+		const { app, services } = await setupApp();
+		const { actor } = await signIn(app, "editor");
+		await services.subscribers.addWebhook(SYSTEM_ACTOR, {
+			url: "https://hooks.example.com/a",
+		});
+		const odd = await services.incidents.create(
+			actor,
+			{ title: "Odd", message: "Looking", notify: false },
+			{ id: "https://evil.example" },
+		);
+		const direct = await redirectOf(
+			postIncidentUpdateAction(
+				form({ id: odd.id, message: "More", notify: "on" }),
+			),
+		);
+		expect(new URL(direct, "http://localhost").pathname).toBe(
+			"/manage/incidents",
+		);
+		expect(direct).not.toContain("evil.example");
+
+		const modal = await postIncidentUpdateWithProgressAction(
+			form({ id: odd.id, message: "Again", notify: "on" }),
+		);
+		expect(modal?.href).toBe("/manage/incidents?notice=update_posted");
+
+		const quiet = await redirectOf(
+			postIncidentUpdateWithProgressAction(
+				form({ id: odd.id, message: "Quiet" }),
+			),
+		);
+		expect(new URL(quiet, "http://localhost").pathname).toBe(
+			"/manage/incidents",
+		);
+		expect(quiet).not.toContain("evil.example");
+
+		const { actor: admin } = await signIn(app, "admin");
+		await services.notificationQueue.update(admin, {
+			revision: 0,
+			provider: "memory",
+		});
+		const queued = await redirectOf(
+			postIncidentUpdateAction(
+				form({ id: odd.id, message: "Queued", notify: "on" }),
+			),
+		);
+		expectFlashRedirect(
+			queued,
+			"/manage/incidents",
+			"notice",
+			"The notifications are in the queue.",
+		);
+		expect(queued).not.toContain("evil.example");
+	});
+
 	it("saves the queue and reports a bad URI", async () => {
 		const { app } = await setupApp({ ENCRYPTION_KEY: KEY });
 		await signIn(app, "admin");
