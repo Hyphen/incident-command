@@ -282,7 +282,7 @@ describe("status page", () => {
 		}
 	});
 
-	it("shows Global and one tab for each region", async () => {
+	it("shows every outage on Overview and one tab for each region", async () => {
 		const { services } = await setupApp();
 		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
 		const united = await services.regions.create(SYSTEM_ACTOR, {
@@ -317,7 +317,7 @@ describe("status page", () => {
 		});
 		const global = render(await StatusPage());
 		const tabs = within(screen.getByRole("navigation", { name: "Regions" }));
-		expect(tabs.getByRole("link", { name: "Global" })).toHaveAttribute(
+		expect(tabs.getByRole("link", { name: "Overview" })).toHaveAttribute(
 			"aria-current",
 			"page",
 		);
@@ -327,7 +327,11 @@ describe("status page", () => {
 		);
 		expect(screen.getAllByText("US only").length).toBeGreaterThan(0);
 		expect(screen.getAllByText("Everywhere").length).toBeGreaterThan(0);
-		expect(screen.getAllByText("Global").length).toBeGreaterThan(1);
+		expect(screen.getAllByText("Split").length).toBeGreaterThan(0);
+		expect(document.querySelector(".ic-banner")).toHaveAttribute(
+			"data-status",
+			"major_outage",
+		);
 		global.unmount();
 
 		render(

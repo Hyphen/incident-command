@@ -139,9 +139,9 @@ Pass `regionId` to `get_status` to read one region.
 
 With no regions, the status page is one page.
 
-With regions, the page shows Global and a tab for each region.
+With regions, the page shows Overview and a tab for each region.
 
-A region tab shows only the services bound to that region. A Global service stays on the Global tab.
+Overview lists every outage. A region tab shows only the services bound to that region.
 
 Delete a region. A service that used only that region becomes Global. A service that also uses other regions keeps those regions.
 

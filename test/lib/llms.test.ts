@@ -385,7 +385,9 @@ describe("region markdown", () => {
 			`(https://status.acme.dev/api/v1/status?region=${region.id})`,
 		);
 		const global = await llms(new Request("https://status.acme.dev/llms.txt"));
-		expect(await global.text()).toContain("Region: Global.");
+		const globalText = await global.text();
+		expect(globalText).toContain("Region: Overview.");
+		expect(globalText).toContain("US open");
 		const missing = await llms(
 			new Request("https://status.acme.dev/llms.txt?region=reg_missing"),
 		);

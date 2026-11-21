@@ -11,6 +11,9 @@ import type {
 /** The name of the default region. It is not a stored region. */
 export const GLOBAL_REGION_NAME = "Global";
 
+/** The public status tab that lists every outage. */
+export const STATUS_OVERVIEW_LABEL = "Overview";
+
 type RegionalIncident = Pick<
 	Incident,
 	"serviceIds" | "serviceRegions" | "regionId"

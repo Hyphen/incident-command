@@ -8,7 +8,11 @@ import { IncidentList } from "@/components/status/recent-incidents";
 import { RegionTabs, regionHref } from "@/components/status/region-tabs";
 import { SystemStatus } from "@/components/status/system-status";
 import { getApp } from "@/lib/app";
-import { regionNameFor, serviceOnRegion } from "@/lib/domain/regions";
+import {
+	regionNameFor,
+	STATUS_OVERVIEW_LABEL,
+	serviceOnRegion,
+} from "@/lib/domain/regions";
 import type { Incident } from "@/lib/domain/types";
 import { LLMS_PATH } from "@/lib/llms";
 import type { StatusSummary } from "@/lib/services/status";
@@ -73,6 +77,7 @@ export default async function StatusPage({ searchParams }: Props = {}) {
 				regions={summary.regions}
 				activeId={summary.region?.id}
 				path="/"
+				defaultLabel={STATUS_OVERVIEW_LABEL}
 			/>
 			<OverallBanner status={summary.overall} />
 			{summary.settings.description && (

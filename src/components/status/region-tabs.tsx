@@ -17,26 +17,29 @@ export function regionHref(
 }
 
 /**
- * Global and one tab for each region. Renders nothing when no region exists,
- * so the status page stays one page.
+ * One tab for every outage, then one tab for each region.
+ * Renders nothing when no region exists, so the status page stays one page.
  */
 export function RegionTabs({
 	regions,
 	activeId,
 	path,
 	search,
+	defaultLabel = GLOBAL_REGION_NAME,
 }: {
 	regions: readonly Region[];
-	/** Set when a region tab is current. Omit it for Global. */
+	/** Set when a region tab is current. Omit it for the first tab. */
 	activeId?: string;
 	path: string;
 	search?: Record<string, string>;
+	/** Label of the tab that has no region. */
+	defaultLabel?: string;
 }) {
 	if (regions.length === 0) {
 		return null;
 	}
 	const tabs = [
-		{ id: undefined as string | undefined, label: GLOBAL_REGION_NAME },
+		{ id: undefined as string | undefined, label: defaultLabel },
 		...regions.map((region) => ({ id: region.id, label: region.name })),
 	];
 	return (

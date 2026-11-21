@@ -61,7 +61,8 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
   draft_notification and edit_incident.
   On an update, serviceRegions sets regions for the services in that list. Other services keep their regions.
   Pass an empty list or null to edit_incident to make every service Global. Omit it to keep the current regions.
-  Pass regionId to get_status to read one region. A region tab omits Global services.
+  Pass regionId to get_status to read one region. Omit it to read Overview, which lists every outage.
+  A region tab omits a service that has no region.
   With no regions, the status page is one page.
 - When a person must review a notification first, use draft_notification and give that person the reviewUrl.
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
@@ -333,13 +334,13 @@ export function createMcpServer(
 		{
 			title: "Get status",
 			description:
-				"Current overall status, every visible service with its status and uptime, open incidents and maintenance. Pass regionId to read one region. A region omits Global.",
+				"Current overall status, every visible service with its status and uptime, open incidents and maintenance. Omit regionId to read Overview. Overview lists every outage. A region tab shows only that region.",
 			inputSchema: {
 				regionId: z
 					.string()
 					.min(1)
 					.optional()
-					.describe("A region id. Omit this field to read Global."),
+					.describe("A region id. Omit this field to read Overview."),
 			},
 			readOnly: true,
 		},
@@ -518,7 +519,7 @@ export function createMcpServer(
 		{
 			title: "Create region",
 			description:
-				"Adds a named region. The status page then shows Global and a tab for each region.",
+				"Adds a named region. The status page then shows Overview and a tab for each region.",
 			inputSchema: {
 				name: regionName,
 				order: z.number().int().optional().describe("Display order"),
