@@ -226,6 +226,10 @@ describe("MCP handler", () => {
 			serviceRegions: [{ serviceId: api.id, regionIds: ["reg_missing"] }],
 		});
 		expect(unknown.isError).toBe(true);
+		const needed = await call("delete_region", { id: europe.id });
+		expect(needed.isError).toBe(true);
+		expect(needed.text).toMatch(/uses only this region/);
+		await call("resolve_incident", { id: incident.id, notify: false });
 		expect((await call("delete_region", { id: europe.id })).data).toEqual({
 			deleted: europe.id,
 		});

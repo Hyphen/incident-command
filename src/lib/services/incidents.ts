@@ -1,5 +1,8 @@
 import { createId } from "../crypto";
-import { boundServiceRegions } from "../domain/regions";
+import {
+	boundServiceRegions,
+	SERVICE_REGIONS_REQUIRED,
+} from "../domain/regions";
 import {
 	type CreateIncidentInput,
 	createIncidentSchema,
@@ -124,6 +127,14 @@ function assertStatusForKind(kind: IncidentKind, status: EventStatus): void {
 /** The most services that one incident can affect. */
 const MAX_AFFECTED_SERVICES = 100;
 
+/** Services in `next` that `current` does not have. */
+function newServiceIds(
+	current: readonly string[],
+	next: readonly string[],
+): string[] {
+	return next.filter((id) => !current.includes(id));
+}
+
 /**
  * Adds services to the current list. A service that is already affected stays.
  * The result keeps the current order, then the new services.
@@ -168,7 +179,7 @@ function rejectLegacyRegion(input: object): void {
 		(input as { regionId?: unknown }).regionId !== undefined
 	) {
 		throw new ValidationError(
-			"regionId: set serviceRegions for each service. No regions means Global.",
+			"regionId: set serviceRegions for each affected service.",
 		);
 	}
 }
@@ -185,6 +196,29 @@ function assertRegionServices(
 		throw new ValidationError(
 			`serviceRegions: only an affected service can have regions. Add ${extra.join(", ")} to the affected services, or remove the regions.`,
 		);
+	}
+}
+
+/**
+ * When a region exists, each entry must list a region, and each service in
+ * `required` must have an entry. Select all regions for an outage in all regions.
+ */
+function assertServiceRegions(
+	hasRegions: boolean,
+	regions: readonly ServiceRegions[] | null | undefined,
+	required: readonly string[],
+): void {
+	if (!hasRegions) {
+		return;
+	}
+	const entries = regions ?? [];
+	if (
+		entries.some((entry) => entry.regionIds.length === 0) ||
+		required.some(
+			(serviceId) => !entries.some((entry) => entry.serviceId === serviceId),
+		)
+	) {
+		throw new ValidationError(SERVICE_REGIONS_REQUIRED);
 	}
 }
 
@@ -241,10 +275,11 @@ function regionsForEdit(
  * Writes `serviceRegions` and drops the old `regionId`.
  * Call this before you change `incident.serviceIds`.
  * `serviceIds` is the list after the write.
- * `replace` uses `patch` as the full list. `null` or `[]` makes every service Global.
+ * `replace` uses `patch` as the full list. `null` or `[]` clears every region.
  * Omit `patch` to keep the current regions of the services that remain.
  * `merge` sets only the services in `patch`. Other services keep their regions.
- * An empty `regionIds` list makes that service Global.
+ * An empty `regionIds` list clears the regions of that service.
+ * `validateRegions` permits an empty list only when no region exists.
  * A service that leaves the incident keeps its region entry for uptime.
  * An old incident with no services keeps `regionId` until a service can hold it.
  */
@@ -426,11 +461,13 @@ export class IncidentService {
 		assertWindow(data.scheduledStart, data.scheduledEnd);
 		const serviceIds = await this.validateServices(data.serviceIds ?? []);
 		assertAffected(serviceIds, data.serviceStatuses);
-		const serviceRegions = await this.validateRegions(
+		const hasRegions = await this.checkRegionIds(
 			serviceIds,
 			data.serviceRegions,
+			serviceIds,
 		);
-		return { ...data, serviceIds, serviceRegions };
+		assertServiceRegions(hasRegions, data.serviceRegions, serviceIds);
+		return { ...data, serviceIds };
 	}
 
 	/**
@@ -447,16 +484,21 @@ export class IncidentService {
 		const addIds = await this.validateServices(data.serviceIds ?? []);
 		const serviceIds = mergeServiceIds(incident.serviceIds, addIds);
 		assertAffected(serviceIds, data.serviceStatuses);
-		const serviceRegions = await this.validateRegions(
+		const hasRegions = await this.checkRegionIds(
 			serviceIds,
 			data.serviceRegions,
+			addIds,
+		);
+		assertServiceRegions(
+			hasRegions,
+			data.serviceRegions,
+			newServiceIds(incident.serviceIds, addIds),
 		);
 		return {
 			incident,
 			data: {
 				...data,
 				serviceIds: addIds.length > 0 ? addIds : undefined,
-				serviceRegions,
 			},
 		};
 	}
@@ -535,9 +577,11 @@ export class IncidentService {
 		this.assertCanNotify(actor, data.notify);
 		const addIds = await this.validateServices(data.serviceIds ?? []);
 		const existing = await this.load(id);
-		const serviceRegions = await this.validateRegions(
+		const serviceRegions = data.serviceRegions;
+		const hasRegions = await this.checkRegionIds(
 			mergeServiceIds(existing.serviceIds, addIds),
-			data.serviceRegions,
+			serviceRegions,
+			addIds,
 		);
 		const author = authorRef(actor);
 		const updateId = options.id ?? createId("upd");
@@ -548,6 +592,12 @@ export class IncidentService {
 			assertStatusForKind(current.kind, status);
 			const serviceIds = mergeServiceIds(current.serviceIds, addIds);
 			assertAffected(serviceIds, data.serviceStatuses);
+			// Check the latest services. Another write can remove one after the read.
+			assertServiceRegions(
+				hasRegions,
+				serviceRegions,
+				newServiceIds(current.serviceIds, addIds),
+			);
 			const now = iso(this.ctx.now());
 			const next: Incident = {
 				...current,
@@ -635,16 +685,39 @@ export class IncidentService {
 			? await this.validateServices(patch.serviceIds)
 			: undefined;
 		const read = await this.get(id);
-		const serviceRegions = await this.validateRegions(
-			validatedIds ?? read.serviceIds,
-			patch.serviceRegions,
+		const editedIds = validatedIds ?? read.serviceIds;
+		const serviceRegions = patch.serviceRegions;
+		const hasRegions = await this.checkRegionIds(
+			editedIds,
+			serviceRegions,
+			serviceRegions === undefined ? (validatedIds ?? []) : editedIds,
 		);
+		if (hasRegions && serviceRegions !== undefined) {
+			// A new list replaces every list, so each service needs an entry.
+			// A deleted service is not on the form, so it needs none.
+			const existing = new Set(
+				(await this.catalog.list()).map((service) => service.id),
+			);
+			assertServiceRegions(
+				hasRegions,
+				serviceRegions,
+				editedIds.filter((serviceId) => existing.has(serviceId)),
+			);
+		}
 		const { next } = await this.mutate(id, (current) => {
 			const next: Incident = {
 				...current,
 				updatedAt: iso(this.ctx.now()),
 			};
 			const serviceIds = validatedIds ?? current.serviceIds;
+			if (serviceRegions === undefined) {
+				// Check the latest services. Another write can change them after the read.
+				assertServiceRegions(
+					hasRegions,
+					undefined,
+					newServiceIds(current.serviceIds, serviceIds),
+				);
+			}
 			assignRegions(
 				next,
 				serviceIds,
@@ -747,26 +820,30 @@ export class IncidentService {
 		return unique;
 	}
 
-	/** Checks each region id. `null` and `undefined` pass through. */
-	private async validateRegions(
+	/**
+	 * Checks that each region id exists and each entry is for an affected service.
+	 * Returns true when a region exists. Then `assertServiceRegions` applies.
+	 * It reads the regions only when `regions` or `candidates` is not empty.
+	 * `candidates` are the services that can need regions.
+	 */
+	private async checkRegionIds(
 		serviceIds: readonly string[],
-		regions: ServiceRegions[] | null | undefined,
-	): Promise<ServiceRegions[] | null | undefined> {
-		if (regions == null) {
-			return regions;
+		regions: readonly ServiceRegions[] | null | undefined,
+		candidates: readonly string[],
+	): Promise<boolean> {
+		const entries = regions ?? [];
+		assertRegionServices(serviceIds, entries);
+		if (entries.length === 0 && candidates.length === 0) {
+			return false;
 		}
-		assertRegionServices(serviceIds, regions);
-		const cleaned: ServiceRegions[] = [];
-		for (const entry of regions) {
-			for (const regionId of entry.regionIds) {
-				await this.regions.get(regionId);
+		const known = new Set((await this.regions.list()).map((item) => item.id));
+		for (const entry of entries) {
+			const unknown = entry.regionIds.find((regionId) => !known.has(regionId));
+			if (unknown) {
+				throw new NotFoundError("Region", unknown);
 			}
-			cleaned.push({
-				serviceId: entry.serviceId,
-				regionIds: entry.regionIds,
-			});
 		}
-		return cleaned;
+		return known.size > 0;
 	}
 
 	/** Decides which status (if any) the affected services should move to. */

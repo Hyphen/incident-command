@@ -1,11 +1,15 @@
 import { createId } from "../crypto";
-import { GLOBAL_REGION_NAME } from "../domain/regions";
+import {
+	REGION_ONLY_ONE_FOR_OPEN_INCIDENT,
+	serviceRegionIds,
+} from "../domain/regions";
 import {
 	type CreateRegionInput,
 	createRegionSchema,
 	type UpdateRegionInput,
 	updateRegionSchema,
 } from "../domain/schemas";
+import { isClosedStatus } from "../domain/status";
 import type { Actor, Region, StoredIncident } from "../domain/types";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import { iso, parse, requirePermission, type ServiceContext } from "./context";
@@ -58,7 +62,7 @@ export class RegionService {
 		this.ctx = ctx;
 	}
 
-	/** Regions in display order. Global is not in this list. */
+	/** Regions in display order. */
 	async list(): Promise<Region[]> {
 		return this.ctx.store.find("regions", {
 			sort: [{ field: "order" }, { field: "createdAt" }],
@@ -111,23 +115,30 @@ export class RegionService {
 
 	/**
 	 * Deletes a region.
-	 * A service that used only that region becomes Global.
+	 * When other regions remain, an open incident must not have a service that
+	 * uses only this region. That service would have no region.
+	 * On a closed incident, such a service has no region after the delete.
 	 * A service that also uses other regions keeps those regions.
-	 * An old incident that used only that region becomes Global.
 	 */
 	async delete(actor: Actor, id: string): Promise<void> {
 		requirePermission(actor, "services.delete");
 		await this.get(id);
-		await this.clearIncidents(id);
+		// A region can sit inside serviceRegions, so a field query cannot find it.
+		const incidents = await this.ctx.store.find(
+			"incidents",
+			{},
+			{ consistent: true },
+		);
+		await this.assertNoOpenOnlyRegion(id, incidents);
+		for (const incident of incidents) {
+			if (incidentUsesRegion(incident, id)) {
+				await this.clearRegion(incident.id, id);
+			}
+		}
 		await this.ctx.store.delete("regions", id);
 	}
 
 	private async assertName(name: string, exceptId?: string): Promise<void> {
-		if (name.toLowerCase() === GLOBAL_REGION_NAME.toLowerCase()) {
-			throw new ValidationError(
-				"Global is the default region. Choose another name.",
-			);
-		}
 		const regions = await this.ctx.store.find("regions");
 		const taken = regions.some(
 			(region) =>
@@ -139,18 +150,33 @@ export class RegionService {
 		}
 	}
 
-	/** Removes the region from each incident that uses it. */
-	private async clearIncidents(regionId: string): Promise<void> {
-		// A region can sit inside serviceRegions, so a field query cannot find it.
-		const incidents = await this.ctx.store.find(
-			"incidents",
-			{},
-			{ consistent: true },
+	/**
+	 * Rejects the delete when another region remains and an open incident has
+	 * a service whose only known region is this one.
+	 */
+	private async assertNoOpenOnlyRegion(
+		regionId: string,
+		incidents: readonly StoredIncident[],
+	): Promise<void> {
+		const others = new Set(
+			(await this.list())
+				.map((region) => region.id)
+				.filter((id) => id !== regionId),
 		);
-		for (const incident of incidents) {
-			if (incidentUsesRegion(incident, regionId)) {
-				await this.clearRegion(incident.id, regionId);
-			}
+		if (others.size === 0) {
+			return;
+		}
+		const stranded = incidents.some(
+			(incident) =>
+				!incident.deletedAt &&
+				!isClosedStatus(incident.status) &&
+				incident.serviceIds.some((serviceId) => {
+					const ids = serviceRegionIds(incident, serviceId);
+					return ids.includes(regionId) && !ids.some((id) => others.has(id));
+				}),
+		);
+		if (stranded) {
+			throw new ValidationError(REGION_ONLY_ONE_FOR_OPEN_INCIDENT);
 		}
 	}
 

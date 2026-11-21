@@ -330,7 +330,7 @@ describe("StatusService", () => {
 		expect(await t.services.status.history("2026-05")).toEqual(latest);
 	});
 
-	it("keeps Global complete and limits a region tab", async () => {
+	it("keeps Overview complete and limits a region tab", async () => {
 		t.clock.set("2026-10-01T00:00:00.000Z");
 		const api = await t.services.catalog.create(EDITOR, { name: "API" });
 		const united = await t.services.regions.create(EDITOR, {
@@ -378,36 +378,43 @@ describe("StatusService", () => {
 			message: "Wide",
 			impact: "major",
 			serviceIds: [api.id],
+			serviceRegions: [
+				{ serviceId: api.id, regionIds: [united.id, europe.id] },
+			],
 		});
 		const maintenance = await t.services.incidents.create(EDITOR, {
 			kind: "maintenance",
-			title: "Global window",
+			title: "Window with no services",
 			message: "Work",
 			scheduledStart: "2026-11-21T06:00:00.000Z",
 			scheduledEnd: "2026-11-22T08:00:00.000Z",
 		});
-		const globalView = await t.services.status.summary();
-		expect(globalView.services[0]?.status).toBe("partial_outage");
-		expect(globalView.activeIncidents.map((item) => item.id)).toEqual([
+		const overview = await t.services.status.summary();
+		expect(overview.services[0]?.status).toBe("partial_outage");
+		expect(overview.activeIncidents.map((item) => item.id)).toEqual([
 			everywhere.id,
 			open.id,
 		]);
-		expect(globalView.upcomingMaintenance.map((item) => item.id)).toEqual([
+		expect(overview.upcomingMaintenance.map((item) => item.id)).toEqual([
 			maintenance.id,
 		]);
+		// An outage in all regions lists every region, so each tab shows it.
 		const usView = await t.services.status.summary({ regionId: united.id });
-		expect(usView.activeIncidents.map((item) => item.id)).toEqual([open.id]);
-		expect(usView.upcomingMaintenance).toEqual([]);
-		expect(usView.recentIncidents.map((item) => item.id)).not.toContain(
+		expect(usView.activeIncidents.map((item) => item.id)).toEqual([
 			everywhere.id,
-		);
-		expect(usView.services[0]?.status).toBe("major_outage");
+			open.id,
+		]);
+		expect(usView.upcomingMaintenance).toEqual([]);
+		expect(usView.services[0]?.status).toBe("partial_outage");
 		const euView = await t.services.status.summary({ regionId: europe.id });
-		expect(euView.activeIncidents).toEqual([]);
+		expect(euView.activeIncidents.map((item) => item.id)).toEqual([
+			everywhere.id,
+		]);
 		expect(euView.upcomingMaintenance).toEqual([]);
-		expect(euView.recentIncidents).toEqual([]);
-		expect(euView.services[0]?.status).toBe("operational");
-		expect(euView.services[0]?.uptime).toBe(1);
+		expect(euView.recentIncidents.map((item) => item.id)).toEqual([
+			everywhere.id,
+		]);
+		expect(euView.services[0]?.status).toBe("partial_outage");
 		await expect(
 			t.services.status.summary({ regionId: "reg_missing" }),
 		).rejects.toBeInstanceOf(NotFoundError);

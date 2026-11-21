@@ -33,7 +33,7 @@ export default async function RegionsPage({
 		<ManagePage title="Regions" flash={flash} health={app.store.health}>
 			<Card
 				title="All regions"
-				description="Add a region to split the status page. Global stays the default."
+				description="Add a region to split the status page. Then each affected service needs one or more regions."
 			>
 				{regions.length === 0 ? (
 					<EmptyState>
@@ -76,7 +76,7 @@ export default async function RegionsPage({
 										</form>
 										<form action={deleteRegionAction}>
 											<input type="hidden" name="id" value={region.id} />
-											<ConfirmButton message="Delete this region? A service that uses only this region becomes Global.">
+											<ConfirmButton message="Delete this region? A closed incident that used only this region will show only on Overview.">
 												Delete
 											</ConfirmButton>
 										</form>

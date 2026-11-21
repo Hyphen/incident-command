@@ -1845,15 +1845,32 @@ describe("region actions", () => {
 			),
 			"/manage/regions?notice=Region saved",
 		);
+		expectSameFlash(
+			await redirectOf(
+				createIncidentAction(
+					form({
+						title: "API down",
+						message: "Investigating",
+						serviceIds: [api.id, web.id],
+						serviceRegions: "",
+						[`regionIds:${api.id}`]: [region?.id ?? "", europe.id],
+						[`regionIds:${web.id}`]: "",
+					}),
+				),
+			),
+			"/manage/incidents/new?kind=incident&error=Select one or more regions for each affected service. For an outage in all regions, select all regions.",
+		);
+		expect(await services.incidents.list()).toEqual([]);
+		// The picker also sends the regions of a service that is not selected.
 		const created = await redirectOf(
 			createIncidentAction(
 				form({
 					title: "API down",
 					message: "Investigating",
-					serviceIds: [api.id, web.id],
+					serviceIds: [api.id],
 					serviceRegions: "",
 					[`regionIds:${api.id}`]: [region?.id ?? "", europe.id],
-					[`regionIds:${web.id}`]: "",
+					[`regionIds:${web.id}`]: [region?.id ?? "", europe.id],
 					"regionIds:svc_other": region?.id ?? "",
 				}),
 			),
@@ -1905,15 +1922,19 @@ describe("region actions", () => {
 					}),
 				),
 			),
-			`/manage/incidents/${incident?.id}?notice=Incident saved`,
+			`/manage/incidents/${incident?.id}?error=Select one or more regions for each affected service. For an outage in all regions, select all regions.`,
 		);
 		expect(
 			(await services.incidents.get(incident?.id ?? "")).serviceRegions,
-		).toBeUndefined();
+		).toEqual([
+			{ serviceId: api.id, regionIds: [region?.id, europe.id] },
+			{ serviceId: web.id, regionIds: [europe.id] },
+		]);
 		const draft = await services.drafts.create(agentActor(), {
 			title: "Next",
 			message: "x",
 			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [europe.id] }],
 		});
 		expectSameFlash(
 			await redirectOf(
@@ -1954,7 +1975,10 @@ describe("region actions", () => {
 		);
 		expect(
 			(await services.incidents.get(incident?.id ?? "")).serviceRegions,
-		).toEqual([{ serviceId: api.id, regionIds: [region?.id] }]);
+		).toEqual([
+			{ serviceId: api.id, regionIds: [region?.id] },
+			{ serviceId: web.id, regionIds: [europe.id] },
+		]);
 		const clearDraft = await services.drafts.create(agentActor(), {
 			incidentId: incident?.id,
 			message: "Clear API",
@@ -1971,11 +1995,24 @@ describe("region actions", () => {
 					}),
 				),
 			),
-			`/manage/incidents/${incident?.id}?notice=Draft approved. The update is published and subscribers are notified.`,
+			`/manage/drafts/${clearDraft.id}?error=Select one or more regions for each affected service. For an outage in all regions, select all regions.`,
 		);
 		expect(
 			(await services.incidents.get(incident?.id ?? "")).serviceRegions,
-		).toEqual([{ serviceId: web.id, regionIds: [europe.id] }]);
+		).toEqual([
+			{ serviceId: api.id, regionIds: [region?.id] },
+			{ serviceId: web.id, regionIds: [europe.id] },
+		]);
+		expectSameFlash(
+			await redirectOf(deleteRegionAction(form({ id: region?.id ?? "" }))),
+			"/manage/regions?error=An open incident has a service that uses only this region. Give that service a different region, then delete this region.",
+		);
+		await services.incidents.resolve(
+			SYSTEM_ACTOR,
+			incident?.id ?? "",
+			undefined,
+			false,
+		);
 		expectSameFlash(
 			await redirectOf(deleteRegionAction(form({ id: region?.id ?? "" }))),
 			"/manage/regions?notice=Region deleted",
@@ -1985,14 +2022,5 @@ describe("region actions", () => {
 			"/manage/regions?notice=Region deleted",
 		);
 		expect(await services.regions.list()).toEqual([]);
-	});
-
-	it("rejects the reserved region name", async () => {
-		const { app } = await setupApp();
-		await signIn(app, "editor");
-		expectSameFlash(
-			await redirectOf(createRegionAction(form({ name: "Global" }))),
-			"/manage/regions?error=Global is the default region. Choose another name.",
-		);
 	});
 });

@@ -60,7 +60,7 @@ export interface StatusSummary {
 	recentIncidents: Incident[];
 	/** Named regions. Empty when the page has no region tabs. */
 	regions: Region[];
-	/** Set when this summary is one region. Absent means the Global view. */
+	/** Set when this summary is one region. Absent means the Overview tab. */
 	region?: Region;
 	/** The combined uptime of the visible services across the window. */
 	uptime: UptimeResult;

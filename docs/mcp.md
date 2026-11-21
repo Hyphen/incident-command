@@ -117,8 +117,6 @@ A person reviews drafts. An agent cannot approve a draft. An agent cannot change
 
 ## Regions
 
-Global is the default region. It is not a record.
-
 Call `list_regions` before you set a region.
 
 Regions belong to each affected service.
@@ -127,11 +125,13 @@ Pass `serviceRegions` to `create_incident`, `schedule_maintenance`, `post_incide
 
 Use one entry for each service, for example `[{"serviceId": "svc_api", "regionIds": ["reg_us", "reg_eu"]}]`.
 
-Omit a service, or pass an empty `regionIds` list, for Global.
+When a region exists, give each affected service one or more regions. There is no Global choice.
 
-On an update, `serviceRegions` sets regions for the services in that list. Other services keep their regions.
+For an outage in all regions, list all region ids.
 
-Pass `[]` or `null` to `edit_incident` to make every service Global.
+On an update, `serviceRegions` sets regions for the services in that list. Other services keep their regions. A service that the update adds needs an entry.
+
+On `edit_incident`, `serviceRegions` replaces the regions of every service. Give each service one or more regions.
 
 Omit `serviceRegions` on `edit_incident` to keep the current regions.
 
@@ -143,7 +143,7 @@ With regions, the page shows Overview and a tab for each region.
 
 Overview lists every outage. A region tab shows only the services bound to that region.
 
-Delete a region. A service that used only that region becomes Global. A service that also uses other regions keeps those regions.
+Delete a region. When other regions remain, the delete fails if an open incident has a service that uses only this region. Give that service a different region first. On a closed incident, such a service has no region after the delete. A service that also uses other regions keeps those regions.
 
 ## Tools
 
@@ -158,10 +158,10 @@ Delete a region. A service that used only that region becomes Global. A service 
 | `update_service`              | `services.write`      | Edit a service (`null` clears description or group).                                         |
 | `set_service_status`          | `services.set_status` | Change a service's status without an incident. Feeds uptime history.                         |
 | `delete_service`              | `services.delete`     | Delete a service and its status history.                                                     |
-| `list_regions`                | `status.read`         | Named regions in display order. Global is not in the list.                                   |
+| `list_regions`                | `status.read`         | Named regions in display order.                                                              |
 | `create_region`               | `services.write`      | Add a named region. The status page then shows a tab for it.                                 |
 | `update_region`               | `services.write`      | Rename a region or change its display order.                                                 |
-| `delete_region`               | `services.delete`     | Delete a region. A service that used only that region becomes Global.                        |
+| `delete_region`               | `services.delete`     | Delete a region. It fails while an open incident needs it as the only region of a service.   |
 | `create_incident`             | `incidents.publish`   | Declare an incident. Pass `serviceRegions` to set the regions of each service.               |
 | `post_incident_update`        | `incidents.publish`   | Add a timeline update. It records the title and the impact, and it can change them.          |
 | `resolve_incident`            | `incidents.publish`   | Resolve an incident or complete maintenance; restores affected services.                     |
