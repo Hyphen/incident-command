@@ -1,0 +1,151 @@
+name: release-docker
+
+# Publishes the app image to Docker Hub as jaredwray/incident-command for each
+# published GitHub release. To try again after a failure, use "Re-run jobs" on
+# the run. A new run of the same release pushes the same tags.
+#
+# Tags for a release v1.2.3:
+#   1.2.3 and 1.2   always
+#   1               always
+#   latest          only when GitHub shows the release as the latest release
+# A prerelease version, such as v1.3.0-rc.1, gets only 1.3.0-rc.1. A release
+# that is marked as a prerelease on GitHub also gets only its version tag.
+#
+# The "docker-hub" GitHub environment holds the Docker Hub credentials:
+#   DOCKERHUB_USERNAME  secret: the Docker Hub user that pushes the image
+#   DOCKERHUB_TOKEN     secret: a Docker Hub access token with write access to
+#                       the jaredwray/incident-command repository
+#
+# The job uses the Docker CLI and Buildx of the runner, not third-party
+# actions, so the Actions allowlist does not change.
+#
+# Platforms: linux/amd64 only. qrbit (the QR code for two-factor setup) has
+# no linux-arm64 binary, so the two-factor pages fail on arm64. Add
+# linux/arm64 to PLATFORMS after qrbit ships linux-arm64 binaries.
+#
+# Server action key: `next build` writes NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+# into the image files, so the key of a public image is public. This build
+# does not set the key, and Next.js makes a new key for each release. The only
+# bound server action argument is an invite id behind an admin check. An
+# operator who wants a private key builds an image from source. See
+# https://incident-command.org/docs/operate/secrets.
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+# One publish for each release at a time. Do not cancel a publish that is in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read # checkout, and read the latest release
+    environment:
+      name: docker-hub
+      url: https://hub.docker.com/r/jaredwray/incident-command
+    env:
+      IMAGE: docker.io/jaredwray/incident-command
+      PLATFORMS: linux/amd64
+    steps:
+      - name: Check the release tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::The tag \"$TAG\" is not a version tag such as v1.2.3 or v1.3.0-rc.1."
+            exit 1
+          fi
+
+      - name: Checkout the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name }}
+          persist-credentials: false
+
+      # The job installs no packages on the runner. `docker build` installs
+      # them in the image from the frozen lockfile, with the policies of
+      # pnpm-workspace.yaml.
+      - name: Install Socket Firewall
+        uses: SocketDev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+        with:
+          mode: firewall-free
+          firewall-version: "1.16.0"
+
+      - name: Make the image tags
+        id: tags
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          version="${TAG#v}"
+          tags="${IMAGE}:${version}"
+          case "$version" in
+            *-*) ;;
+            *)
+              if [ "$PRERELEASE" != "true" ]; then
+                major="${version%%.*}"
+                rest="${version#*.}"
+                minor="${rest%%.*}"
+                tags="${tags} ${IMAGE}:${major}.${minor} ${IMAGE}:${major}"
+                latest=$(gh api "repos/${REPOSITORY}/releases/latest" --jq .tag_name || true)
+                if [ "$latest" = "$TAG" ]; then
+                  tags="${tags} ${IMAGE}:latest"
+                fi
+              fi
+              ;;
+          esac
+          echo "Tags: ${tags}"
+          {
+            echo "version=${version}"
+            echo "tags=${tags}"
+            echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+
+      # A docker-container builder can make provenance and SBOM attestations.
+      # This job publishes, so it does not restore a build cache (cache
+      # poisoning). The push step uses the layers of the smoke test build.
+      - name: Create a Buildx builder
+        run: docker buildx create --name release --driver docker-container --use
+
+      - name: Build the image for the smoke test
+        run: docker buildx build --platform "$PLATFORMS" --load --tag incident-command:smoke-test .
+
+      - name: Smoke test the image
+        run: sh scripts/smoke-test-image.sh incident-command:smoke-test
+
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: printf '%s' "$DOCKERHUB_TOKEN" | docker login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+
+      - name: Push the image to Docker Hub
+        env:
+          TAGS: ${{ steps.tags.outputs.tags }}
+          VERSION: ${{ steps.tags.outputs.version }}
+          CREATED: ${{ steps.tags.outputs.created }}
+          REVISION: ${{ github.sha }}
+        run: |
+          set --
+          for tag in $TAGS; do
+            set -- "$@" --tag "$tag"
+          done
+          docker buildx build --platform "$PLATFORMS" --push \
+            --provenance=mode=max --sbom=true \
+            --label "org.opencontainers.image.version=${VERSION}" \
+            --label "org.opencontainers.image.revision=${REVISION}" \
+            --label "org.opencontainers.image.created=${CREATED}" \
+            "$@" .
+
+      - name: Log out of Docker Hub
+        if: ${{ always() }}
+        run: docker logout docker.io

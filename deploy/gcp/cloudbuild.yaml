@@ -1,5 +1,6 @@
 # Build the image, push it to Artifact Registry and roll it out to an existing
-# Cloud Run service (create the service first; see deploy/gcp/README.md).
+# Cloud Run service (create the service first; see
+# https://incident-command.org/docs/deploy/google-cloud/).
 #
 #   gcloud builds submit --config deploy/gcp/cloudbuild.yaml \
 #     --substitutions=_REGION=us-central1,_REPOSITORY=incident-command,_SERVICE=incident-command .

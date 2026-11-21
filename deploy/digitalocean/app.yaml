@@ -3,19 +3,34 @@
 #   doctl apps create --spec deploy/digitalocean/app.yaml
 #   doctl apps update <APP_ID> --spec deploy/digitalocean/app.yaml
 #
-# Builds the repo's Dockerfile and attaches a managed Postgres database.
-# Change SETUP_TOKEN before creating the app. Guide: deploy/digitalocean/README.md
+# Runs the jaredwray/incident-command image from Docker Hub and attaches a
+# managed Postgres database. Before you create the app:
+#   1. Set image.tag to a release version, for example "1.2.3".
+#   2. Change SETUP_TOKEN.
+# Guide: https://incident-command.org/docs/deploy/digitalocean/
 name: incident-command
 region: nyc
 
 services:
   - name: web
-    github:
-      repo: jaredwray/incident-command
-      branch: main
-      deploy_on_push: true
-    source_dir: /
-    dockerfile_path: Dockerfile
+    # The public Docker Hub image. It needs no registry credentials. App
+    # Platform does not redeploy automatically from Docker Hub: to upgrade,
+    # change the tag and run `doctl apps update`. Do not use "latest".
+    image:
+      registry_type: DOCKER_HUB
+      registry: jaredwray
+      repository: incident-command
+      tag: "<version>"
+    # Build from source instead (for example, from your fork): remove the
+    # image block above and use these lines. App Platform then builds the
+    # Dockerfile at the repository root. deploy_on_push redeploys on each push
+    # to the branch.
+    # github:
+    #   repo: jaredwray/incident-command
+    #   branch: main
+    #   deploy_on_push: true
+    # source_dir: /
+    # dockerfile_path: Dockerfile
     http_port: 3000
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-1gb
@@ -54,7 +69,8 @@ services:
       #   scope: RUN_TIME
       #   type: SECRET
       #   value: replace-with-a-long-random-string
-      # Optional email via SendGrid (see docs/deployment.md for SES):
+      # Optional email via SendGrid (for SES, see
+      # https://incident-command.org/docs/operate/notifications/):
       # - key: EMAIL_FROM
       #   scope: RUN_TIME
       #   value: status@example.com
