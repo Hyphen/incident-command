@@ -8,12 +8,32 @@ import { IncidentList } from "@/components/status/recent-incidents";
 import { RegionTabs, regionHref } from "@/components/status/region-tabs";
 import { SystemStatus } from "@/components/status/system-status";
 import { getApp } from "@/lib/app";
-import { regionNameFor } from "@/lib/domain/regions";
+import {
+	regionNameFor,
+	STATUS_OVERVIEW_LABEL,
+	serviceOnRegion,
+} from "@/lib/domain/regions";
+import type { Incident } from "@/lib/domain/types";
 import { LLMS_PATH } from "@/lib/llms";
+import type { StatusSummary } from "@/lib/services/status";
 import { RECENT_DAYS } from "@/lib/services/status";
 import { publicAlternates } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
+
+/** Services the card names. A region tab names only services on that tab. */
+function servicesOnTab(
+	summary: StatusSummary,
+	incident: Incident,
+): StatusSummary["services"] {
+	const regionId = summary.region?.id;
+	if (!regionId) {
+		return summary.services;
+	}
+	return summary.services.filter((service) =>
+		serviceOnRegion(incident, service.id, regionId),
+	);
+}
 
 interface Props {
 	searchParams?: Promise<{ region?: string }>;
@@ -57,6 +77,7 @@ export default async function StatusPage({ searchParams }: Props = {}) {
 				regions={summary.regions}
 				activeId={summary.region?.id}
 				path="/"
+				defaultLabel={STATUS_OVERVIEW_LABEL}
 			/>
 			<OverallBanner status={summary.overall} />
 			{summary.settings.description && (
@@ -71,7 +92,7 @@ export default async function StatusPage({ searchParams }: Props = {}) {
 						<IncidentCard
 							key={incident.id}
 							incident={incident}
-							services={summary.services}
+							services={servicesOnTab(summary, incident)}
 							regionName={regionNameFor(incident, summary.regions)}
 						/>
 					))}
@@ -85,7 +106,7 @@ export default async function StatusPage({ searchParams }: Props = {}) {
 						<IncidentCard
 							key={incident.id}
 							incident={incident}
-							services={summary.services}
+							services={servicesOnTab(summary, incident)}
 							regionName={regionNameFor(incident, summary.regions)}
 						/>
 					))}

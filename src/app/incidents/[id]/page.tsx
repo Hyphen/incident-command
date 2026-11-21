@@ -7,7 +7,7 @@ import { StatusTimeline } from "@/components/status/status-timeline";
 import { Timeline } from "@/components/status/timeline";
 import { LocalTime } from "@/components/time";
 import { getApp } from "@/lib/app";
-import { regionNameFor } from "@/lib/domain/regions";
+import { regionNameFor, regionTabPath } from "@/lib/domain/regions";
 import { affectedNames } from "@/lib/domain/status";
 import { formatDuration } from "@/lib/format";
 import { incidentMarkdownPath } from "@/lib/llms";
@@ -49,11 +49,7 @@ export default async function IncidentPage({ params }: Props) {
 		]);
 	const names = affectedNames(incident, catalog);
 	const regionName = regionNameFor(incident, regions);
-	const backHref =
-		incident.regionId &&
-		regions.some((region) => region.id === incident.regionId)
-			? `/?region=${incident.regionId}`
-			: "/";
+	const backHref = regionTabPath(incident, regions);
 	return (
 		<PublicPage settings={settings} canSubscribe={canSubscribe}>
 			<Link href={backHref} className="text-sm text-muted hover:text-fg">
@@ -82,7 +78,7 @@ export default async function IncidentPage({ params }: Props) {
 					<dl className="grid gap-x-6 gap-y-1 text-sm text-muted sm:grid-cols-[auto_1fr]">
 						{regionName && (
 							<>
-								<dt>Region</dt>
+								<dt>{regionName.includes(", ") ? "Regions" : "Region"}</dt>
 								<dd>{regionName}</dd>
 							</>
 						)}

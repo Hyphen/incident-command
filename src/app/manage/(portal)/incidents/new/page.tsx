@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { createIncidentAction } from "@/app/manage/actions";
 import {
 	ImpactSelect,
-	RegionSelect,
 	ServicePicker,
 	ServiceStatusSelect,
 	StatusSelect,
@@ -52,7 +51,6 @@ export default async function NewIncidentPage({
 						<StatusSelect kind={kind} />
 						{isIncident && <ImpactSelect />}
 					</div>
-					<RegionSelect regions={regions} />
 					{!isIncident && <WindowFields />}
 					<Field
 						label="Message"
@@ -67,7 +65,11 @@ export default async function NewIncidentPage({
 							className={inputClass}
 						/>
 					</Field>
-					<ServicePicker services={catalog} withStatus={isIncident} />
+					<ServicePicker
+						services={catalog}
+						withStatus={isIncident}
+						regions={regions}
+					/>
 					{isIncident && (
 						<ServiceStatusSelect hint="Automatic derives the status from the impact." />
 					)}

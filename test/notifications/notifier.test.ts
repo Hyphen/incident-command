@@ -365,13 +365,25 @@ describe("templates", () => {
 				subscriber(),
 			).title,
 		).toBe("New title");
-		expect(payload.incident.regionId).toBeNull();
+		expect(payload.incident.regionIds).toEqual([]);
 		expect(
 			webhookPayload({
 				...notification,
 				incident: { ...incident, regionId: "reg_us" },
-			}).incident.regionId,
-		).toBe("reg_us");
+			}).incident.regionIds,
+		).toEqual(["reg_us"]);
+		expect(
+			webhookPayload({
+				...notification,
+				incident: {
+					...incident,
+					serviceIds: ["svc_1", "svc_2"],
+					serviceRegions: [
+						{ serviceId: "svc_1", regionIds: ["reg_us", "reg_eu"] },
+					],
+				},
+			}).incident.regionIds,
+		).toEqual(["reg_us", "reg_eu"]);
 	});
 });
 
