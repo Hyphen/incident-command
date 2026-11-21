@@ -17,8 +17,12 @@ export function regionHref(
 }
 
 /**
- * One tab for every outage, then one tab for each region.
- * Renders nothing when no region exists, so the status page stays one page.
+ * One tab lists every outage. Then one tab lists each region.
+ * The tabs render nothing when no region exists.
+ *
+ * Overflow on the nav clips the focus outline.
+ * The padding leaves room for that outline.
+ * The negative margin keeps the labels in place.
  */
 export function RegionTabs({
 	regions,
@@ -43,7 +47,10 @@ export function RegionTabs({
 		...regions.map((region) => ({ id: region.id, label: region.name })),
 	];
 	return (
-		<nav aria-label="Regions" className="ic-regions flex gap-2 overflow-x-auto">
+		<nav
+			aria-label="Regions"
+			className="ic-regions -m-1.5 flex gap-2 overflow-x-auto p-1.5"
+		>
 			{tabs.map((tab) => {
 				const current = tab.id === activeId;
 				return (
