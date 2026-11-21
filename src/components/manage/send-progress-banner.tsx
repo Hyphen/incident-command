@@ -5,14 +5,22 @@ import type { NotificationProgress } from "@/lib/domain/types";
 import { ProgressBar } from "./progress-bar";
 import { useProgress } from "./use-progress";
 
-/** A banner for the incident dashboard. It updates while the queue sends. */
-export function SendProgressBanner({
-	incidentId,
-	initial,
-}: {
-	incidentId: string;
-	initial: NotificationProgress;
-}) {
+type Props = { incidentId: string; initial: NotificationProgress };
+
+/**
+ * A banner for the incident dashboard. It updates while the queue sends.
+ * Each server render gives a new `initial`. The banner then starts again,
+ * because a new send can be active.
+ */
+export function SendProgressBanner({ incidentId, initial }: Props) {
+	const [shown, setShown] = useState({ initial, turn: 0 });
+	if (shown.initial !== initial) {
+		setShown({ initial, turn: shown.turn + 1 });
+	}
+	return <Banner key={shown.turn} incidentId={incidentId} initial={initial} />;
+}
+
+function Banner({ incidentId, initial }: Props) {
 	const [current, setCurrent] = useState(initial);
 	const { data, error } = useProgress<{
 		progress: NotificationProgress | null;

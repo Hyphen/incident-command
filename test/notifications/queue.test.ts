@@ -8,8 +8,12 @@ const state = vi.hoisted(() => ({
 		| "throw-error"
 		| "close-string"
 		| "close-error"
-		| "enqueue-string",
+		| "close-hang"
+		| "enqueue-string"
+		| "consume-hang"
+		| "consume-error",
 	calls: 0,
+	closed: 0,
 }));
 
 vi.mock("@/lib/notifications/queue-providers", () => ({
@@ -37,9 +41,19 @@ vi.mock("@/lib/notifications/queue-providers", () => ({
 			consume: async (
 				run: (jobId: string, keepAlive: () => Promise<void>) => Promise<void>,
 			) => {
+				if (state.mode === "consume-hang") {
+					return new Promise(() => {});
+				}
+				if (state.mode === "consume-error") {
+					throw new Error("no consumer");
+				}
 				await run("njb_noop", async () => {});
 			},
 			close: async () => {
+				state.closed += 1;
+				if (state.mode === "close-hang") {
+					return new Promise<void>(() => {});
+				}
 				if (state.mode === "close-string") {
 					throw "closed";
 				}
@@ -55,6 +69,7 @@ describe("NotificationQueue", () => {
 	beforeEach(() => {
 		state.mode = "ok";
 		state.calls = 0;
+		state.closed = 0;
 		vi.useFakeTimers();
 	});
 
@@ -88,6 +103,57 @@ describe("NotificationQueue", () => {
 		await vi.advanceTimersByTimeAsync(5000);
 		await expect(pending).resolves.toBe("load");
 		expect(errors[0]?.message).toContain("did not answer");
+	});
+
+	it("closes the transport when the consumer does not start", async () => {
+		const errors: Error[] = [];
+		const queue = new NotificationQueue((error) => errors.push(error));
+		state.mode = "consume-error";
+		await expect(queue.open("redis", undefined, 1)).resolves.toBe("load");
+		await vi.waitFor(() => expect(state.closed).toBe(1));
+		expect(errors.map((error) => error.message)).toEqual(["no consumer"]);
+
+		state.mode = "consume-hang";
+		const pending = queue.open("redis", undefined, 1);
+		await vi.advanceTimersByTimeAsync(5000);
+		await expect(pending).resolves.toBe("load");
+		await vi.waitFor(() => expect(state.closed).toBe(2));
+		await expect(queue.enqueue("njb_1")).resolves.toBe("enqueue");
+	});
+
+	it("runs one open or one close at a time", async () => {
+		const queue = new NotificationQueue();
+		await queue.open("memory", undefined, 1);
+		await expect(
+			Promise.all([
+				queue.open("redis", undefined, 2),
+				queue.open("redis", undefined, 2),
+			]),
+		).resolves.toEqual(["ok", "ok"]);
+		expect(state.calls).toBe(2);
+		expect(state.closed).toBe(1);
+
+		const opening = queue.open("memory", undefined, 3);
+		const closing = queue.close();
+		await expect(opening).resolves.toBe("ok");
+		await closing;
+		expect(state.closed).toBe(3);
+		await expect(queue.enqueue("njb_1")).resolves.toBe("enqueue");
+	});
+
+	it("opens the next provider when the old broker does not close", async () => {
+		const errors: Error[] = [];
+		const queue = new NotificationQueue((error) => errors.push(error));
+		await queue.open("redis", undefined, 1);
+		state.mode = "close-hang";
+		const pending = queue.open("memory", undefined, 2);
+		await vi.advanceTimersByTimeAsync(5000);
+		await expect(pending).resolves.toBe("ok");
+		expect(errors.map((error) => error.message)).toEqual([
+			"The queue did not answer in time",
+		]);
+		state.mode = "ok";
+		await expect(queue.enqueue("njb_1")).resolves.toBe("ok");
 	});
 
 	it("continues the send when the broker does not accept the task", async () => {

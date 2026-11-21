@@ -23,22 +23,6 @@ const ROW_STATE = {
 	failed: "Failed",
 } as const;
 
-function redirectTarget(error: unknown): string | undefined {
-	if (typeof error !== "object" || error === null) {
-		return undefined;
-	}
-	if ("url" in error && typeof error.url === "string") {
-		return error.url;
-	}
-	if ("digest" in error && typeof error.digest === "string") {
-		const [code, , url] = error.digest.split(";");
-		if (code === "NEXT_REDIRECT" && url) {
-			return url;
-		}
-	}
-	return undefined;
-}
-
 function SendProgressDialog({
 	dialogRef,
 	jobId,
@@ -159,6 +143,7 @@ export function SendButton({
 	const [jobId, setJobId] = useState<string | undefined>();
 	const [href, setHref] = useState<string | undefined>();
 	const [prepare, setPrepare] = useState(false);
+	const [failure, setFailure] = useState<{ error: unknown }>();
 
 	useEffect(() => {
 		const form = buttonRef.current?.form;
@@ -187,17 +172,19 @@ export function SendButton({
 				},
 				(error: unknown) => {
 					dialog.close();
-					setPrepare(false);
-					const target = redirectTarget(error);
-					if (target) {
-						window.location.assign(target);
-					}
+					setFailure({ error });
 				},
 			);
 		};
 		form.addEventListener("submit", onSubmit);
 		return () => form.removeEventListener("submit", onSubmit);
 	}, [modal, progressAction, dialog]);
+
+	// A form action gives its failure to the page. This call must do the same.
+	// Next.js opens the page of a redirect, and the error page shows other failures.
+	if (failure) {
+		throw failure.error;
+	}
 
 	if (!modal) {
 		return (

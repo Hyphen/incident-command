@@ -235,7 +235,8 @@ export class NotificationJobService {
 
 	/**
 	 * Sends jobs whose heartbeat is old. A lost task or a restart leaves
-	 * the job active. This method continues it.
+	 * the job active. This method claims it. The server start and each
+	 * progress request call this method, thus it does not wait for the send.
 	 */
 	async recover(): Promise<void> {
 		const now = this.ctx.now().getTime();
@@ -246,6 +247,7 @@ export class NotificationJobService {
 		const jobs = await this.ctx.store.find("notification_jobs", {
 			where: [{ field: "state", op: "eq", value: "active" }],
 		});
+		const stale: string[] = [];
 		for (const job of jobs) {
 			if (new Date(job.heartbeatAt).getTime() > now - staleAfter(job)) {
 				continue;
@@ -264,8 +266,9 @@ export class NotificationJobService {
 			if (job.queued) {
 				await this.markFallback(job.id, "stalled");
 			}
-			await this.run(job.id);
+			stale.push(job.id);
 		}
+		void this.runEach(stale);
 	}
 
 	/** One job, or nothing when the id is unknown. */
@@ -357,6 +360,13 @@ export class NotificationJobService {
 			failed += counts.failed;
 		}
 		return { total, done: sent + failed, sent, failed, active, fallback };
+	}
+
+	/** Runs the jobs one after the other. It does not reject. */
+	private async runEach(jobIds: readonly string[]): Promise<void> {
+		for (const jobId of jobIds) {
+			await this.run(jobId);
+		}
 	}
 
 	private async reload(job: NotificationJob): Promise<NotificationJob> {

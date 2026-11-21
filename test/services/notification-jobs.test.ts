@@ -267,15 +267,22 @@ describe("NotificationJobService", () => {
 			state: "pending",
 			order: 1,
 		});
+		const release = t.notifier.hold();
 		const progress = await t.services.notificationJobs.incidentProgress(
 			ADMIN,
 			created.id,
 		);
 		expect(progress).toMatchObject({
-			active: 0,
-			sent: 1,
+			active: 1,
+			sent: 0,
 			failed: 1,
 			fallback: true,
+		});
+		release();
+		await vi.waitFor(async () => {
+			expect(
+				await t.services.notificationJobs.incidentProgress(ADMIN, created.id),
+			).toMatchObject({ active: 0, sent: 1, failed: 1, fallback: true });
 		});
 		const view = await t.services.notificationJobs.detail(ADMIN, "njb_stale");
 		expect(view.fallback).toBe("stalled");
@@ -318,9 +325,11 @@ describe("NotificationJobService", () => {
 			state: "pending",
 		});
 		await t.services.notificationJobs.recover();
-		expect((await t.store.get("notification_jobs", "njb_fresh"))?.state).toBe(
-			"done",
-		);
+		await vi.waitFor(async () => {
+			expect((await t.store.get("notification_jobs", "njb_fresh"))?.state).toBe(
+				"done",
+			);
+		});
 		await t.store.insert(
 			"notification_jobs",
 			jobDocument(t, {
@@ -340,17 +349,19 @@ describe("NotificationJobService", () => {
 			state: "pending",
 		});
 		await t.services.notificationJobs.recover();
-		expect((await t.store.get("notification_jobs", "njb_held"))?.state).toBe(
-			"active",
-		);
+		expect(
+			(await t.store.get("notification_jobs", "njb_held"))?.fallback,
+		).toBeUndefined();
 		t.clock.advance(10_000);
 		await t.services.notificationJobs.recover();
-		expect((await t.store.get("notification_jobs", "njb_held"))?.state).toBe(
-			"done",
-		);
 		expect((await t.store.get("notification_jobs", "njb_held"))?.fallback).toBe(
 			"stalled",
 		);
+		await vi.waitFor(async () => {
+			expect((await t.store.get("notification_jobs", "njb_held"))?.state).toBe(
+				"done",
+			);
+		});
 	});
 
 	it("uses the longer limit for a durable provider", async () => {
@@ -964,9 +975,14 @@ describe("NotificationJobService", () => {
 		});
 		t.clock.advance(10_000);
 		await t.services.notificationJobs.recover();
-		const direct = await t.store.get("notification_jobs", "njb_direct");
-		expect(direct?.state).toBe("done");
-		expect(direct?.fallback).toBeUndefined();
+		await vi.waitFor(async () => {
+			expect(
+				(await t.store.get("notification_jobs", "njb_direct"))?.state,
+			).toBe("done");
+		});
+		expect(
+			(await t.store.get("notification_jobs", "njb_direct"))?.fallback,
+		).toBeUndefined();
 	});
 
 	it("does not create a job when nobody can receive the notice", async () => {

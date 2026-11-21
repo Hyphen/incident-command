@@ -22,42 +22,52 @@ function asError(error: unknown): Error {
 	return error instanceof Error ? error : new Error(String(error));
 }
 
+type ErrorHandler = (error: unknown) => void;
+
 function errorMethod(
 	source: object,
-):
-	| ((event: "error", handler: (error: unknown) => void) => unknown)
-	| undefined {
-	if (!("on" in source) || typeof source.on !== "function") {
+	name: "on" | "off",
+): ((event: "error", handler: ErrorHandler) => unknown) | undefined {
+	const method: unknown = Reflect.get(source, name);
+	if (typeof method !== "function") {
 		return undefined;
 	}
-	return source.on.bind(source) as (
+	return method.bind(source) as (
 		event: "error",
-		handler: (error: unknown) => void,
+		handler: ErrorHandler,
 	) => unknown;
 }
 
 /** Logs provider errors. A missing listener can stop the process. */
 export function listen(source: object, onError: (error: Error) => void): void {
-	errorMethod(source)?.("error", (error: unknown) => onError(asError(error)));
+	errorMethod(source, "on")?.("error", (error: unknown) =>
+		onError(asError(error)),
+	);
 }
 
 /**
  * Runs one queue call. Qified reports a failure as an error event and then
- * returns. This function rejects when that event fires.
+ * returns. This function rejects when that event fires. The listener stays
+ * only for the call, because each task makes one call.
  */
 export async function strict<T>(
 	source: object,
 	op: () => Promise<T>,
 ): Promise<T> {
 	let failure: Error | undefined;
-	errorMethod(source)?.("error", (error: unknown) => {
+	const handler: ErrorHandler = (error) => {
 		failure = asError(error);
-	});
-	const result = await op();
-	if (failure) {
-		throw failure;
+	};
+	errorMethod(source, "on")?.("error", handler);
+	try {
+		const result = await op();
+		if (failure) {
+			throw failure;
+		}
+		return result;
+	} finally {
+		errorMethod(source, "off")?.("error", handler);
 	}
-	return result;
 }
 
 function jobIdOf(data: unknown): string | undefined {

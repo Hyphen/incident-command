@@ -29,12 +29,19 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	});
 }
 
+function asError(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error));
+}
+
+function ignore(): void {}
+
 /**
  * One qified transport for the saved queue. The provider package loads on
  * the first open.
  */
 export class NotificationQueue {
 	private current?: { version: string; transport: QueueTransport };
+	private last: Promise<unknown> = Promise.resolve();
 	private readonly report: (error: Error) => void;
 	private runner: QueueRun = async () => {};
 
@@ -56,33 +63,38 @@ export class NotificationQueue {
 	 * Opens the saved provider and starts the consumer. `load` means the
 	 * package or the broker did not open.
 	 */
-	async open(
+	open(
 		provider: QueueProviderId,
 		uri: string | undefined,
 		revision: number,
 	): Promise<"ok" | "load"> {
-		const version = `${provider}:${revision}`;
-		if (this.current?.version === version) {
-			return "ok";
-		}
-		await this.close();
-		try {
-			const { createTransport } = await loadProviders();
-			const transport = await withTimeout(
-				(async () => {
-					const created = await createTransport(provider, uri, this.report);
-					await created.consume(this.runner);
-					return created;
-				})(),
-				ENQUEUE_TIMEOUT_MS,
+		return this.inOrder(async () => {
+			const version = `${provider}:${revision}`;
+			if (this.current?.version === version) {
+				return "ok";
+			}
+			await this.release();
+			const created = loadProviders().then(({ createTransport }) =>
+				createTransport(provider, uri, this.report),
 			);
-			this.current = { version, transport };
-			return "ok";
-		} catch (error) {
-			this.report(error instanceof Error ? error : new Error(String(error)));
-			await this.close();
-			return "load";
-		}
+			try {
+				const transport = await withTimeout(
+					created.then(async (transport) => {
+						await transport.consume(this.runner);
+						return transport;
+					}),
+					ENQUEUE_TIMEOUT_MS,
+				);
+				this.current = { version, transport };
+				return "ok";
+			} catch (error) {
+				this.report(asError(error));
+				// The transport can exist with no consumer, or the broker can
+				// answer after the time limit. Close it, or it stays connected.
+				void created.then((transport) => this.shut(transport), ignore);
+				return "load";
+			}
+		});
 	}
 
 	/** Puts one job on the open queue. `enqueue` means the broker refused it. */
@@ -95,21 +107,39 @@ export class NotificationQueue {
 			await withTimeout(transport.enqueue(jobId), ENQUEUE_TIMEOUT_MS);
 			return "ok";
 		} catch (error) {
-			this.report(error instanceof Error ? error : new Error(String(error)));
+			this.report(asError(error));
 			return "enqueue";
 		}
 	}
 
-	async close(): Promise<void> {
+	close(): Promise<void> {
+		return this.inOrder(() => this.release());
+	}
+
+	/**
+	 * Runs one open or one close at a time. Two opens at the same time make
+	 * two consumers, and only one of them closes.
+	 */
+	private inOrder<T>(step: () => Promise<T>): Promise<T> {
+		const result = this.last.then(step);
+		this.last = result.then(ignore, ignore);
+		return result;
+	}
+
+	private async release(): Promise<void> {
 		const current = this.current;
 		this.current = undefined;
-		if (!current) {
-			return;
+		if (current) {
+			await this.shut(current.transport);
 		}
+	}
+
+	/** Closes one transport. A broker that does not answer must not stop the next open. */
+	private async shut(transport: QueueTransport): Promise<void> {
 		try {
-			await current.transport.close();
+			await withTimeout(transport.close(), ENQUEUE_TIMEOUT_MS);
 		} catch (error) {
-			this.report(error instanceof Error ? error : new Error(String(error)));
+			this.report(asError(error));
 		}
 	}
 }

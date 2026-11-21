@@ -74,6 +74,23 @@ describe("queue transports", () => {
 		await expect(transport.enqueue("njb_1")).rejects.toThrow(/did not accept/);
 	});
 
+	it("removes the error listener of each queue call", async () => {
+		const provider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [provider] });
+		const transport = taskTransport(qified, () => {});
+		const listeners = qified.listenerCount("error");
+		await transport.consume(async () => {});
+		await transport.enqueue("njb_1");
+		await transport.enqueue("njb_2");
+		expect(qified.listenerCount("error")).toBe(listeners);
+		await provider.disconnect();
+		await expect(transport.enqueue("njb_3")).rejects.toThrow(
+			"TaskProvider has been disconnected",
+		);
+		expect(qified.listenerCount("error")).toBe(listeners);
+		await transport.close();
+	});
+
 	it("delivers a message and reports a handler failure", async () => {
 		const provider = new MemoryMessageProvider();
 		const qified = new Qified({ messageProviders: [provider] });

@@ -5,7 +5,7 @@ import {
 	waitFor,
 	within,
 } from "@testing-library/react";
-import { act } from "react";
+import { act, Component, type ReactNode } from "react";
 import DraftPage from "@/app/manage/(portal)/drafts/[id]/page";
 import IncidentPage from "@/app/manage/(portal)/incidents/[id]/page";
 import NewIncidentPage from "@/app/manage/(portal)/incidents/new/page";
@@ -42,6 +42,26 @@ const KEY = "k".repeat(32);
 const page = (value: Record<string, string> = {}) => ({
 	searchParams: params(value),
 });
+
+/** Receives a render failure, as the error boundary of a page does. */
+class PageBoundary extends Component<
+	{ children: ReactNode; onError: (error: unknown) => void },
+	{ failed: boolean }
+> {
+	state = { failed: false };
+
+	static getDerivedStateFromError() {
+		return { failed: true };
+	}
+
+	componentDidCatch(error: unknown) {
+		this.props.onError(error);
+	}
+
+	render() {
+		return this.state.failed ? null : this.props.children;
+	}
+}
 
 function json(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), {
@@ -360,15 +380,9 @@ describe("send status window", () => {
 		);
 	});
 
-	it("closes when there is no job and follows a redirect", async () => {
-		const assign = vi.fn();
-		const location = window.location;
-		Object.defineProperty(window, "location", {
-			configurable: true,
-			value: { ...location, assign },
-		});
+	it("closes when there is no job", async () => {
 		const empty = vi.fn(async () => undefined);
-		const { unmount } = render(
+		render(
 			<form onSubmit={(event) => event.preventDefault()}>
 				<SendButton modal progressAction={empty} className="bg-brand">
 					Send
@@ -376,97 +390,48 @@ describe("send status window", () => {
 			</form>,
 		);
 		fireEvent.click(screen.getByRole("button", { name: "Send" }));
+		expect(document.querySelector("dialog")?.open).toBe(true);
 		await waitFor(() =>
 			expect(document.querySelector("dialog")?.open).toBe(false),
 		);
-		unmount();
+		expect(
+			screen.queryByText("The server prepares the notifications."),
+		).not.toBeInTheDocument();
+	});
 
-		const redirecting = vi.fn(async () => {
-			throw { url: "/manage/incidents/x?error=validation_failed" };
+	it("gives a failed send to the page and does not open a location", async () => {
+		const assign = vi.fn();
+		const location = window.location;
+		Object.defineProperty(window, "location", {
+			configurable: true,
+			value: { ...location, assign },
 		});
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		// Next.js rejects the action with this error after it opens the page.
+		const redirected = Object.assign(new Error("NEXT_REDIRECT"), {
+			digest: "NEXT_REDIRECT;push;/manage/incidents/x?error=validation;307;",
+		});
+		const caught = vi.fn();
 		render(
-			<form onSubmit={(event) => event.preventDefault()}>
-				<SendButton modal progressAction={redirecting} className="bg-brand">
-					Send
-				</SendButton>
-			</form>,
-		);
-		fireEvent.click(screen.getByRole("button", { name: "Send" }));
-		await waitFor(() =>
-			expect(assign).toHaveBeenCalledWith(
-				"/manage/incidents/x?error=validation_failed",
-			),
-		);
-
-		const digest = vi.fn(async () => {
-			throw { digest: "NEXT_REDIRECT;replace;/manage/incidents/y;307" };
-		});
-		const ignored = vi.fn(async () => {
-			throw "down";
-		});
-		const other = vi.fn(async () => {
-			throw { digest: "OTHER" };
-		});
-		const numberUrl = vi.fn(async () => {
-			throw { url: 1 };
-		});
-		const emptyUrl = vi.fn(async () => {
-			throw { digest: "NEXT_REDIRECT;replace;;307" };
-		});
-		render(
-			<form onSubmit={(event) => event.preventDefault()}>
-				<SendButton modal progressAction={digest} className="bg-brand">
-					Send
-				</SendButton>
-			</form>,
-		);
-		fireEvent.click(
-			screen.getAllByRole("button", { name: "Send" }).at(-1) as HTMLElement,
-		);
-		await waitFor(() =>
-			expect(assign).toHaveBeenCalledWith("/manage/incidents/y"),
-		);
-		render(
-			<form onSubmit={(event) => event.preventDefault()}>
-				<SendButton modal progressAction={ignored} className="bg-brand">
-					Send
-				</SendButton>
-			</form>,
-		);
-		fireEvent.click(
-			screen.getAllByRole("button", { name: "Send" }).at(-1) as HTMLElement,
-		);
-		await waitFor(() =>
-			expect(document.querySelectorAll("dialog")[2]?.open).toBe(false),
-		);
-		render(
-			<form onSubmit={(event) => event.preventDefault()}>
-				<SendButton modal progressAction={other} className="bg-brand">
-					Send
-				</SendButton>
-			</form>,
-		);
-		fireEvent.click(
-			screen.getAllByRole("button", { name: "Send" }).at(-1) as HTMLElement,
-		);
-		await waitFor(() => expect(assign).toHaveBeenCalledTimes(2));
-		for (const progressAction of [numberUrl, emptyUrl]) {
-			render(
+			<PageBoundary onError={caught}>
 				<form onSubmit={(event) => event.preventDefault()}>
 					<SendButton
 						modal
-						progressAction={progressAction}
+						progressAction={vi.fn(async () => {
+							throw redirected;
+						})}
 						className="bg-brand"
 					>
 						Send
 					</SendButton>
-				</form>,
-			);
-			fireEvent.click(
-				screen.getAllByRole("button", { name: "Send" }).at(-1) as HTMLElement,
-			);
-		}
-		await waitFor(() => expect(assign).toHaveBeenCalledTimes(2));
+				</form>
+			</PageBoundary>,
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Send" }));
+		await waitFor(() => expect(caught).toHaveBeenCalledWith(redirected));
+		expect(document.querySelector("dialog")).toBeNull();
+		expect(assign).not.toHaveBeenCalled();
+		log.mockRestore();
 		Object.defineProperty(window, "location", {
 			configurable: true,
 			value: location,
@@ -587,6 +552,48 @@ describe("queue progress banner", () => {
 			await vi.advanceTimersByTimeAsync(10_000);
 		});
 		expect(fetchMock.mock.calls.length).toBe(calls);
+	});
+
+	it("starts again when the dashboard gives the numbers of a new send", async () => {
+		vi.useFakeTimers();
+		const first: NotificationProgress = {
+			...activeProgress,
+			done: 2,
+			sent: 2,
+			active: 0,
+		};
+		const second: NotificationProgress = {
+			...first,
+			total: 4,
+			active: 1,
+		};
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(json({ progress: first }))
+			.mockResolvedValueOnce(json({ progress: second }))
+			.mockResolvedValueOnce(
+				json({ progress: { ...second, done: 4, sent: 4, active: 0 } }),
+			);
+		vi.stubGlobal("fetch", fetchMock);
+		const view = render(
+			<SendProgressBanner incidentId="inc_1" initial={activeProgress} />,
+		);
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(10_000);
+		});
+		expect(screen.getByText("Notifications complete: 2 of 2.")).toBeVisible();
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+
+		view.rerender(<SendProgressBanner incidentId="inc_1" initial={second} />);
+		expect(screen.getByText("Notifications complete: 2 of 4.")).toBeVisible();
+		expect(
+			screen.getByText("The queue sends the notifications."),
+		).toBeVisible();
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(2000);
+		});
+		expect(screen.getByText("Notifications complete: 4 of 4.")).toBeVisible();
+		expect(fetchMock).toHaveBeenCalledTimes(3);
 	});
 
 	it("stops when the progress route fails and retries a network error", async () => {
