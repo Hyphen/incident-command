@@ -2346,7 +2346,11 @@ describe("admin pages", () => {
 	});
 
 	it("shows the clear incidents tool in development mode", async () => {
-		const { app } = await setupApp({ NODE_ENV: "development" });
+		// The container image sets NODE_ENV to production. DEPLOYMENT marks the Worker.
+		const { app } = await setupApp({
+			NODE_ENV: "production",
+			DEPLOYMENT: "development",
+		});
 		await signIn(app, "admin");
 		render(await SettingsPage(flash()));
 		expect(

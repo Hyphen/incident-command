@@ -19,7 +19,7 @@ const INCIDENT_COLLECTIONS = [
 	"service_status_changes",
 ] as const satisfies readonly CollectionName[];
 
-/** Tools for a server in development mode (`NODE_ENV=development`). */
+/** Tools for a development server (`NODE_ENV` or `DEPLOYMENT` is `development`). */
 export class DevelopmentService {
 	private readonly ctx: ServiceContext;
 

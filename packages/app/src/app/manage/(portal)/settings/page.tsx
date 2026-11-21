@@ -112,10 +112,7 @@ export default async function SettingsPage({
 				</SubmitButton>
 			</form>
 			{services.development.enabled && (
-				<Card
-					title="Development"
-					description="The server runs in development mode (NODE_ENV=development)."
-				>
+				<Card title="Development" description="This deployment is development.">
 					<p className="text-sm text-muted">
 						Clear incidents deletes all incidents and maintenance, the drafts,
 						the notification history and the uptime history. Each service

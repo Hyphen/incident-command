@@ -47,14 +47,18 @@ const CLEARED = [
 ] as const;
 
 describe("DevelopmentService", () => {
-	it("is on only when NODE_ENV is development", () => {
-		const env = (NODE_ENV?: string) =>
-			createTestContext({ env: NODE_ENV ? { NODE_ENV } : {} }).services
-				.development.enabled;
-		expect(env("development")).toBe(true);
-		expect(env("production")).toBe(false);
-		expect(env("test")).toBe(false);
-		expect(env()).toBe(false);
+	it("is on for pnpm dev and for a development deployment", () => {
+		const enabled = (env: Record<string, string>) =>
+			createTestContext({ env }).services.development.enabled;
+		expect(enabled({ NODE_ENV: "development" })).toBe(true);
+		// The container image sets NODE_ENV to production. DEPLOYMENT marks the Worker.
+		expect(enabled({ NODE_ENV: "production", DEPLOYMENT: "development" })).toBe(
+			true,
+		);
+		expect(enabled({ NODE_ENV: "production" })).toBe(false);
+		expect(enabled({ NODE_ENV: "test" })).toBe(false);
+		expect(enabled({})).toBe(false);
+		expect(enabled({ DEPLOYMENT: "production" })).toBe(false);
 	});
 
 	it("clears the incidents and their records and keeps the rest", async () => {

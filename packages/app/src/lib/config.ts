@@ -45,8 +45,8 @@ export interface Config {
 	/** Seed demo services and incidents into an empty store on boot. */
 	seedDemo: boolean;
 	/**
-	 * True when `NODE_ENV` is `development`, for example with `pnpm dev`.
-	 * The portal then shows the development tools, such as "Clear incidents".
+	 * True for `pnpm dev`, and when `DEPLOYMENT` is `development`.
+	 * The portal then shows "Clear incidents".
 	 */
 	developmentMode: boolean;
 }
@@ -135,6 +135,11 @@ const envSchema = z.object({
 		.optional()
 		.transform((value) => value === "true" || value === "1"),
 	NODE_ENV: optional,
+	/**
+	 * `development` shows the development tools on a deployed server.
+	 * The container image keeps `NODE_ENV` as `production`.
+	 */
+	DEPLOYMENT: z.enum(["production", "development"]).optional(),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -207,6 +212,7 @@ export function loadConfig(
 			previousKeys: env.ENCRYPTION_KEY_PREVIOUS,
 		},
 		seedDemo: env.SEED_DEMO,
-		developmentMode: env.NODE_ENV === "development",
+		developmentMode:
+			env.NODE_ENV === "development" || env.DEPLOYMENT === "development",
 	};
 }

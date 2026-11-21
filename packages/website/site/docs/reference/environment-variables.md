@@ -21,7 +21,8 @@ A duration accepts `ms`, `s`, `m`, `h`, `hr` or `d`, for example `30s`, `15m` or
 | ---------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PORT`     | `3000`                    | The port that the server listens on.                                                                                                                                          |
 | `HOSTNAME` | `0.0.0.0` in the image    | The bind address. A container must use `0.0.0.0`.                                                                                                                             |
-| `NODE_ENV` | `production` in the image | When `SITE_URL` is not set, `production` makes the session cookie `Secure`. `development` (set by `pnpm dev`) shows the [development tools](/docs/guide/settings/#development). |
+| `NODE_ENV`   | `production` in the image | When `SITE_URL` is not set, `production` makes the session cookie `Secure`. `development` (set by `pnpm dev`) shows the [development tools](/docs/guide/settings/#development). |
+| `DEPLOYMENT` | Not set                   | `development` shows the [development tools](/docs/guide/settings/#development) on a deployed server. The development Worker sets this value. Leave it unset for production. The image keeps `NODE_ENV` as `production`. |
 
 ## Site
 
