@@ -2340,6 +2340,21 @@ describe("admin pages", () => {
 			}),
 		).toBeChecked();
 		expect(screen.queryByLabelText("Custom CSS")).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Clear incidents" }),
+		).not.toBeInTheDocument();
+	});
+
+	it("shows the clear incidents tool in development mode", async () => {
+		const { app } = await setupApp({ NODE_ENV: "development" });
+		await signIn(app, "admin");
+		render(await SettingsPage(flash()));
+		expect(
+			screen.getByRole("heading", { name: "Development" }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "Clear incidents" }),
+		).toBeInTheDocument();
 	});
 
 	it("renders branding with the current theme selected", async () => {

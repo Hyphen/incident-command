@@ -1,7 +1,7 @@
 ---
 title: Settings
 navTitle: Settings
-description: Change the name, links, uptime window and two-factor rule of your status page, and turn notification channels on and off.
+description: Change the name, links, uptime window and two-factor rule of your status page, turn notification channels on and off, and clear test incidents in development mode.
 order: 8
 ---
 
@@ -47,6 +47,30 @@ You must be an admin.
 When the option is on, a member without an authenticator must set one up before the member opens the portal. A member cannot turn off two-factor authentication. For the steps of a member, see [When two-factor authentication is necessary](/docs/guide/account/#when-two-factor-authentication-is-necessary).
 
 When you clear the option, members keep their authenticators.
+
+## Development
+
+The **General** section shows the **Development** card only when the server runs in development mode. The server is in development mode when `NODE_ENV` is `development`. The `pnpm dev` command sets this value. A server in production never shows this card. See [Environment variables](/docs/reference/environment-variables/).
+
+Use **Clear incidents** to delete your test data and start again. This action deletes these items:
+
+- All incidents and maintenance, also the incidents that a member deleted from the public view.
+- All drafts.
+- The history of the notification sends.
+- The uptime history of each service.
+
+Each service then becomes **Operational**. The services, regions, members, subscribers, agents and settings stay. The agent activity log also stays.
+
+## Clear the incidents in development mode
+
+You must be an admin. You cannot undo this action.
+
+1. Start the server with `pnpm dev`.
+2. Go to **Settings**.
+3. In the **Development** card, select **Clear incidents**.
+4. In the dialog, select **OK**.
+
+The page shows "All incidents are cleared. Each service is operational."
 
 ## Branding
 
