@@ -1,3 +1,4 @@
+import { SERVICE_REGIONS_REQUIRED } from "@/lib/domain/regions";
 import {
 	ConflictError,
 	ForbiddenError,
@@ -750,7 +751,7 @@ describe("DraftService", () => {
 		expect(kept.updates.at(-1)?.title).toBe("API restored");
 	});
 
-	it("keeps regions on a draft and can set them for an added service", async () => {
+	it("keeps regions on a draft and needs them for an added service", async () => {
 		const region = await t.services.regions.create(ADMIN, {
 			name: "United States",
 		});
@@ -791,6 +792,20 @@ describe("DraftService", () => {
 			{ serviceId: api.id, regionIds: [region.id] },
 			{ serviceId: web.id, regionIds: [region.id] },
 		]);
+		const db = await t.services.catalog.create(ADMIN, { name: "DB" });
+		await expect(
+			t.services.drafts.create(AGENT, {
+				incidentId: approved.incident.id,
+				message: "DB too",
+				serviceIds: [db.id],
+			}),
+		).rejects.toMatchObject({ message: SERVICE_REGIONS_REQUIRED });
+		// An update that adds no service keeps the regions and needs none.
+		const plain = await t.services.drafts.create(AGENT, {
+			incidentId: approved.incident.id,
+			message: "Still looking",
+		});
+		expect(plain.content.serviceRegions).toBeUndefined();
 		await expect(
 			t.services.drafts.create(AGENT, {
 				title: "Extra",

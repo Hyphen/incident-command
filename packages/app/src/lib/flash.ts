@@ -1,5 +1,9 @@
 import { BRAND_ASSET_MESSAGES } from "./domain/brand-asset";
 import {
+	REGION_ONLY_ONE_FOR_OPEN_INCIDENT,
+	SERVICE_REGIONS_REQUIRED,
+} from "./domain/regions";
+import {
 	INVALID_TWO_FACTOR_CODE,
 	TWO_FACTOR_ALREADY_OFF,
 	TWO_FACTOR_ALREADY_ON,
@@ -41,8 +45,9 @@ const MESSAGE_CODES: Record<string, FlashCode> = {
 		"invite_invalid",
 	"You cannot remove the last admin": "last_admin",
 	"A member with that email already exists": "member_email_exists",
-	"Global is the default region. Choose another name.": "region_name_global",
 	"A region with that name already exists": "region_name_taken",
+	[SERVICE_REGIONS_REQUIRED]: "service_regions_required",
+	[REGION_ONLY_ONE_FOR_OPEN_INCIDENT]: "region_only_one_for_open_incident",
 	"scheduledEnd must be after scheduledStart": "scheduled_end_before_start",
 	"Subscriptions are not enabled": "subscriptions_disabled",
 	"We couldn't send the confirmation. Please try again later.":
@@ -58,6 +63,9 @@ const MESSAGE_CODES: Record<string, FlashCode> = {
 		"encryption_key_missing",
 	"Somebody else changed these notification settings. Reload the page.":
 		"notification_settings_changed",
+	"Somebody else changed the queue settings. Reload the page.":
+		"notification_queue_changed",
+	"The connection URI is not correct for this provider.": "queue_uri_invalid",
 	"Somebody changed this agent. Examine the new values and save again.":
 		"agent_changed",
 	[BRAND_ASSET_MESSAGES.logo.type]: "logo_type",

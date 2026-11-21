@@ -115,19 +115,19 @@ describe("incident regions", () => {
 		).toEqual([{ serviceId: "svc_api", regionIds: ["reg_us"] }]);
 	});
 
-	it("names a region only when a region exists", () => {
+	it("names only the regions that the incident lists", () => {
 		const regions = [
 			{ id: "reg_us", name: "United States" },
 			{ id: "reg_eu", name: "Europe" },
 		];
 		expect(regionNameFor(incident({ regionId: "reg_us" }), [])).toBeUndefined();
-		expect(regionNameFor(incident(), regions)).toBe("Global");
+		expect(regionNameFor(incident(), regions)).toBeUndefined();
 		expect(regionNameFor(incident({ regionId: "reg_us" }), regions)).toBe(
 			"United States",
 		);
-		expect(regionNameFor(incident({ regionId: "reg_gone" }), regions)).toBe(
-			"Global",
-		);
+		expect(
+			regionNameFor(incident({ regionId: "reg_gone" }), regions),
+		).toBeUndefined();
 		expect(
 			regionNameFor(
 				incident({
@@ -146,7 +146,7 @@ describe("incident regions", () => {
 				}),
 				regions,
 			),
-		).toBe("Global, United States");
+		).toBe("United States");
 		expect(
 			regionNameFor(
 				incident({
@@ -163,6 +163,16 @@ describe("incident regions", () => {
 			"/?region=reg_us",
 		);
 		expect(regionTabPath(incident(), regions)).toBe("/");
+		// A service with no region does not send the reader to Overview.
+		expect(
+			regionTabPath(
+				incident({
+					serviceIds: ["svc_api", "svc_web"],
+					serviceRegions: [{ serviceId: "svc_api", regionIds: ["reg_us"] }],
+				}),
+				regions,
+			),
+		).toBe("/?region=reg_us");
 		expect(
 			regionTabPath(
 				incident({

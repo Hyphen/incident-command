@@ -8,18 +8,32 @@ import type {
 	ServiceStatusChange,
 } from "./types";
 
-/** The name of the default region. It is not a stored region. */
-export const GLOBAL_REGION_NAME = "Global";
-
 /** The public status tab that lists every outage. */
 export const STATUS_OVERVIEW_LABEL = "Overview";
+
+/**
+ * The error when a write leaves an affected service with no region.
+ * The portal maps this exact text to a flash code.
+ */
+export const SERVICE_REGIONS_REQUIRED =
+	"serviceRegions: give each affected service one or more regions. For an outage in all regions, select all regions.";
+
+/**
+ * The error when a region delete leaves a service on an open incident with no
+ * region. The portal maps this exact text to a flash code.
+ */
+export const REGION_ONLY_ONE_FOR_OPEN_INCIDENT =
+	"An open incident has a service that uses only this region. Give that service a different region, then delete this region.";
 
 type RegionalIncident = Pick<
 	Incident,
 	"serviceIds" | "serviceRegions" | "regionId"
 >;
 
-/** Regions stored for one service. An empty list means Global. */
+/**
+ * Regions stored for one service. An empty list means no region.
+ * A service with no region is not on a region tab.
+ */
 export function serviceRegionIds(
 	incident: RegionalIncident,
 	serviceId: string,
@@ -88,21 +102,8 @@ export function incidentRegionIds(incident: RegionalIncident): string[] {
 }
 
 /**
- * True when at least one affected service is Global.
- * An incident with no services is Global when it has no region.
- */
-function affectsEveryRegion(incident: RegionalIncident): boolean {
-	if (incident.serviceRegions) {
-		return incident.serviceIds.some(
-			(serviceId) => serviceRegionIds(incident, serviceId).length === 0,
-		);
-	}
-	return incident.regionId === undefined;
-}
-
-/**
  * True when this service lists this region.
- * A Global service is not down on a region tab.
+ * A service with no region is not down on a region tab.
  */
 export function serviceOnRegion(
 	incident: RegionalIncident,
@@ -117,7 +118,7 @@ export function serviceOnRegion(
 
 /**
  * True when the incident belongs on this region tab.
- * A service must list the region. A Global service does not.
+ * A service must list the region.
  * An old incident belongs only when its `regionId` matches.
  */
 export function incidentOnRegion(
@@ -134,7 +135,8 @@ export function incidentOnRegion(
 
 /**
  * True when a status change from this incident counts on the region tab.
- * A Global service does not count. An old incident counts only in its region.
+ * A service with no region does not count.
+ * An old incident counts only in its region.
  * A service that left the incident still counts when its region entry remains.
  */
 function countsOnRegion(
@@ -152,47 +154,32 @@ function countsOnRegion(
 }
 
 /**
- * The label of the incident regions. Returns nothing when no region exists,
- * so a page with no regions stays unchanged.
- * Several regions use the order of `regions`.
+ * The label of the incident regions, in the order of `regions`.
+ * Returns nothing when the incident has no known region.
+ * Thus a page with no regions stays unchanged.
  */
 export function regionNameFor(
 	incident: RegionalIncident,
 	regions: readonly Pick<Region, "id" | "name">[],
 ): string | undefined {
-	if (regions.length === 0) {
-		return undefined;
-	}
+	const ids = incidentRegionIds(incident);
 	const names = regions
-		.filter((region) => incidentRegionIds(incident).includes(region.id))
+		.filter((region) => ids.includes(region.id))
 		.map((region) => region.name);
-	if (names.length === 0) {
-		return GLOBAL_REGION_NAME;
-	}
-	if (affectsEveryRegion(incident)) {
-		return [GLOBAL_REGION_NAME, ...names].join(", ");
-	}
-	return names.join(", ");
+	return names.length > 0 ? names.join(", ") : undefined;
 }
 
 /**
  * The status page to open from an incident.
- * One region opens that tab. Global, or more than one region, opens Global.
+ * One region opens that tab. No region, or more than one region, opens Overview.
  */
 export function regionTabPath(
 	incident: RegionalIncident,
 	regions: readonly Pick<Region, "id">[],
 ): string {
-	if (affectsEveryRegion(incident)) {
-		return "/";
-	}
-	const known = regions.filter((region) =>
-		incidentRegionIds(incident).includes(region.id),
-	);
-	if (known.length === 1) {
-		return `/?region=${known[0]?.id}`;
-	}
-	return "/";
+	const ids = incidentRegionIds(incident);
+	const known = regions.filter((region) => ids.includes(region.id));
+	return known.length === 1 ? `/?region=${known[0]?.id}` : "/";
 }
 
 function byTime(a: ServiceStatusChange, b: ServiceStatusChange): number {
@@ -370,7 +357,7 @@ function replay(
 /**
  * The status of a service on one region tab.
  * A manual status stays. An incident in another region does not count.
- * A Global incident does not count.
+ * A service with no region does not count.
  * A closed incident keeps a status that its close recorded.
  */
 export function serviceStatusOnRegion(
@@ -395,7 +382,8 @@ export function serviceStatusOnRegion(
 
 /**
  * Status changes as one region sees them. Uptime for a region uses this list.
- * An outage in another region does not count. A Global outage does not count.
+ * An outage in another region does not count.
+ * An outage of a service with no region does not count.
  * An outage ends when its incident ends, unless another incident on this tab
  * still affects the service.
  */

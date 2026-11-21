@@ -304,6 +304,9 @@ describe("status page", () => {
 			message: "Wide",
 			impact: "major",
 			serviceIds: [api.id],
+			serviceRegions: [
+				{ serviceId: api.id, regionIds: [united.id, europe.id] },
+			],
 		});
 		await services.incidents.create(SYSTEM_ACTOR, {
 			title: "Split",
@@ -315,7 +318,7 @@ describe("status page", () => {
 				{ serviceId: web.id, regionIds: [europe.id] },
 			],
 		});
-		const global = render(await StatusPage());
+		const overview = render(await StatusPage());
 		const tabs = within(screen.getByRole("navigation", { name: "Regions" }));
 		expect(tabs.getByRole("link", { name: "Overview" })).toHaveAttribute(
 			"aria-current",
@@ -332,7 +335,7 @@ describe("status page", () => {
 			"data-status",
 			"major_outage",
 		);
-		global.unmount();
+		overview.unmount();
 
 		render(
 			await StatusPage({
@@ -349,7 +352,12 @@ describe("status page", () => {
 			.closest("article");
 		expect(split).toHaveTextContent("Affects Web");
 		expect(split).not.toHaveTextContent("API");
-		expect(screen.queryAllByText("Everywhere")).toEqual([]);
+		// An outage in all regions lists every region, so the Europe tab shows it.
+		const everywhere = screen
+			.getByRole("heading", { name: "Everywhere" })
+			.closest("article");
+		expect(everywhere).toHaveTextContent("Affects API");
+		expect(everywhere).toHaveTextContent("United States, Europe");
 		expect(screen.getAllByText("Partial outage").length).toBeGreaterThan(0);
 		expect(screen.queryAllByText("Major outage")).toEqual([]);
 		expect(
@@ -635,6 +643,12 @@ describe("history page", () => {
 			}),
 		);
 		expect(screen.getAllByText("United States").length).toBeGreaterThan(0);
+		expect(
+			within(screen.getByRole("navigation", { name: "Regions" })).getByRole(
+				"link",
+				{ name: "Overview" },
+			),
+		).toHaveAttribute("href", "/history?month=2026-05");
 		expect(screen.getByRole("link", { name: "Newer →" })).toHaveAttribute(
 			"href",
 			`/history?month=2026-08&region=${united.id}`,

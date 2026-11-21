@@ -7,6 +7,7 @@ import {
 	type IncidentKind,
 	MAINTENANCE_STATUSES,
 	PROVIDER_TYPES,
+	QUEUE_PROVIDER_IDS,
 	ROLES,
 	SERVICE_STATUSES,
 	type ServiceRegions,
@@ -88,8 +89,7 @@ const serviceRegionEntry = z.object({
 
 /**
  * Regions for each affected service.
- * An empty `regionIds` list means Global for that service.
- * An empty list of services means every service is Global.
+ * When a region exists, the incident service rejects an empty `regionIds` list.
  */
 const serviceRegionsSchema = z
 	.array(serviceRegionEntry)
@@ -162,7 +162,6 @@ export const incidentUpdateSchema = z.object({
 	/**
 	 * Regions for services in this update.
 	 * A service that is not in this list keeps its regions.
-	 * An empty `regionIds` list makes that service Global.
 	 */
 	serviceRegions: serviceRegionsSchema
 		.optional()
@@ -177,7 +176,8 @@ export const editIncidentSchema = z.object({
 	scheduledEnd: isoDate.optional(),
 	/**
 	 * Replaces the regions of every affected service.
-	 * `null` or `[]` makes every service Global.
+	 * `null` or `[]` clears every region. When a region exists, the incident
+	 * service rejects that change for an incident that has services.
 	 * Omit the field to keep the current regions.
 	 */
 	serviceRegions: serviceRegionsSchema
@@ -389,6 +389,15 @@ export const senderSchemas = {
  * form that is out of date cannot undo the change of a different admin.
  */
 const expectedRevision = z.number().int().nonnegative().optional();
+
+export const updateNotificationQueueSchema = z.object({
+	revision: z.number().int().nonnegative(),
+	provider: z.enum(QUEUE_PROVIDER_IDS).optional(),
+	uri: z.string().trim().max(2000).optional(),
+});
+export type UpdateNotificationQueueInput = z.input<
+	typeof updateNotificationQueueSchema
+>;
 
 export const updateNotificationChannelSchema = z.object({
 	revision: expectedRevision,

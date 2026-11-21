@@ -1206,10 +1206,12 @@ describe("incident pages", () => {
 		const list = render(await IncidentsPage(flash()));
 		expect(screen.getByText(/United States/)).toBeInTheDocument();
 		list.unmount();
+		// A new service starts with all regions. There is no Global choice.
 		const created = render(await NewIncidentPage(flash()));
 		expect(
 			screen.getByRole("checkbox", { name: "United States" }),
-		).not.toBeChecked();
+		).toBeChecked();
+		expect(screen.queryByText(/Global/)).not.toBeInTheDocument();
 		created.unmount();
 		const incidentPage = render(
 			await IncidentPage({
@@ -1724,28 +1726,40 @@ describe("notification draft pages", () => {
 		const region = await services.regions.create(SYSTEM_ACTOR, {
 			name: "United States",
 		});
+		const europe = await services.regions.create(SYSTEM_ACTOR, {
+			name: "Europe",
+		});
 		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
 		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
+		const checkedRegions = (serviceId: string) =>
+			[
+				...document.querySelectorAll<HTMLInputElement>(
+					`input[name="regionIds:${serviceId}"]`,
+				),
+			]
+				.filter((box) => box.checked)
+				.map((box) => box.value);
 		const withRegion = await services.drafts.create(AGENT, {
-			title: "US errors",
+			title: "Split errors",
 			message: "Looking",
 			serviceIds: [api.id, web.id],
-			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
+			serviceRegions: [
+				{ serviceId: api.id, regionIds: [region.id] },
+				{ serviceId: web.id, regionIds: [europe.id] },
+			],
 		});
-		const global = await services.drafts.create(AGENT, {
-			title: "Global errors",
+		const bare = await services.drafts.create(AGENT, {
+			title: "No service errors",
 			message: "Looking",
 		});
 		await signIn(app, "editor");
 		const editor = render(await draftPage(withRegion.id));
-		const checked = screen
-			.getAllByRole("checkbox", { name: "United States" })
-			.filter((box) => (box as HTMLInputElement).checked);
-		expect(checked).toHaveLength(1);
+		expect(checkedRegions(api.id)).toEqual([region.id]);
+		expect(checkedRegions(web.id)).toEqual([europe.id]);
 		editor.unmount();
 		await signIn(app, "viewer");
 		const named = render(await draftPage(withRegion.id));
-		expect(screen.getByText("Global, United States")).toBeInTheDocument();
+		expect(screen.getByText("United States, Europe")).toBeInTheDocument();
 		named.unmount();
 		const stored = await services.drafts.get(withRegion.id);
 		const { serviceRegions: _regions, ...rest } = stored.content;
@@ -1759,16 +1773,15 @@ describe("notification draft pages", () => {
 		});
 		await signIn(app, "editor");
 		const legacy = render(await draftPage(withRegion.id));
-		const legacyChecked = screen
-			.getAllByRole("checkbox", { name: "United States" })
-			.filter((box) => (box as HTMLInputElement).checked);
-		expect(legacyChecked).toHaveLength(1);
+		expect(checkedRegions(api.id)).toEqual([region.id]);
+		// A service with no saved regions starts with all regions.
+		expect(checkedRegions(web.id)).toEqual([region.id, europe.id]);
 		legacy.unmount();
 		const live = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "Live",
 			message: "x",
 			serviceIds: [api.id],
-			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
+			serviceRegions: [{ serviceId: api.id, regionIds: [europe.id] }],
 		});
 		const update = await services.drafts.create(AGENT, {
 			incidentId: live.id,
@@ -1776,18 +1789,14 @@ describe("notification draft pages", () => {
 			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
 		const review = render(await draftPage(update.id));
-		const reviewChecked = screen
-			.getAllByRole("checkbox", { name: "United States" })
-			.filter((box) => (box as HTMLInputElement).checked);
-		expect(reviewChecked).toHaveLength(1);
-		expect(reviewChecked[0]).toHaveAttribute("name", `regionIds:${api.id}`);
+		expect(checkedRegions(api.id)).toEqual([region.id]);
 		expect(document.querySelector(`input[name="boundServiceIds"]`)).toHaveValue(
 			api.id,
 		);
 		review.unmount();
-		render(await draftPage(global.id));
+		render(await draftPage(bare.id));
 		expect(
-			screen.queryByText("Region", { selector: "dt" }),
+			screen.queryByText("Regions", { selector: "dt" }),
 		).not.toBeInTheDocument();
 	});
 

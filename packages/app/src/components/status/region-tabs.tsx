@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { GLOBAL_REGION_NAME } from "@/lib/domain/regions";
+import { STATUS_OVERVIEW_LABEL } from "@/lib/domain/regions";
 import type { Region } from "@/lib/domain/types";
 
 /** A public URL that keeps the region and the other query fields. */
@@ -17,7 +17,7 @@ export function regionHref(
 }
 
 /**
- * One tab lists every outage. Then one tab lists each region.
+ * The Overview tab lists every outage. Then one tab lists each region.
  * The tabs render nothing when no region exists.
  *
  * Overflow on the nav clips the focus outline.
@@ -31,21 +31,18 @@ export function RegionTabs({
 	activeId,
 	path,
 	search,
-	defaultLabel = GLOBAL_REGION_NAME,
 }: {
 	regions: readonly Region[];
-	/** Set when a region tab is current. Omit it for the first tab. */
+	/** Set when a region tab is current. Omit it for the Overview tab. */
 	activeId?: string;
 	path: string;
 	search?: Record<string, string>;
-	/** Label of the tab that has no region. */
-	defaultLabel?: string;
 }) {
 	if (regions.length === 0) {
 		return null;
 	}
 	const tabs = [
-		{ id: undefined as string | undefined, label: defaultLabel },
+		{ id: undefined as string | undefined, label: STATUS_OVERVIEW_LABEL },
 		...regions.map((region) => ({ id: region.id, label: region.name })),
 	];
 	return (
@@ -58,7 +55,7 @@ export function RegionTabs({
 					const current = tab.id === activeId;
 					return (
 						<Link
-							key={tab.id ?? "global"}
+							key={tab.id ?? "overview"}
 							href={regionHref(path, tab.id, search)}
 							aria-current={current ? "page" : undefined}
 							className={`rounded-full px-3 py-1.5 text-sm whitespace-nowrap ${

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import {
 	editIncidentAction,
 	postIncidentUpdateAction,
+	postIncidentUpdateWithProgressAction,
 } from "@/app/manage/actions";
 import { DeleteIncidentDialog } from "@/components/manage/delete-incident-dialog";
 import { DraftList } from "@/components/manage/draft-list";
@@ -23,6 +24,8 @@ import {
 	incidentTab,
 } from "@/components/manage/incident-tabs";
 import { PostList } from "@/components/manage/post-list";
+import { SendButton } from "@/components/manage/send-button";
+import { SendProgressBanner } from "@/components/manage/send-progress-banner";
 import { type FlashParams, ManagePage } from "@/components/manage/shell";
 import {
 	ButtonLink,
@@ -44,6 +47,7 @@ import type {
 	Incident,
 	IncidentDeletion,
 	NotificationDraft,
+	NotificationProgress,
 	Region,
 	Service,
 } from "@/lib/domain/types";
@@ -79,12 +83,14 @@ function PostForm({
 	catalog,
 	regions,
 	tab,
+	modal,
 }: {
 	incident: Incident;
 	affected: Service[];
 	catalog: Service[];
 	regions: readonly Region[];
 	tab: IncidentTab;
+	modal: boolean;
 }) {
 	return (
 		<form
@@ -124,7 +130,14 @@ function PostForm({
 			/>
 			<Checkbox name="notify" label="Notify subscribers" defaultChecked />
 			<div className="flex flex-wrap gap-2">
-				<SubmitButton className={buttonClass.primary}>Post update</SubmitButton>
+				<SendButton
+					modal={modal}
+					progressAction={postIncidentUpdateWithProgressAction}
+					formAction={postIncidentUpdateAction}
+					className={buttonClass.primary}
+				>
+					Post update
+				</SendButton>
 				<Link
 					href={incidentHref(incident.id, tab)}
 					className={buttonClass.secondary}
@@ -146,6 +159,7 @@ function PostsCard({
 	reviewed,
 	tab,
 	limit,
+	modal,
 }: {
 	incident: Incident;
 	affected: Service[];
@@ -156,6 +170,7 @@ function PostsCard({
 	reviewed: NotificationDraft[];
 	tab: IncidentTab;
 	limit?: number;
+	modal: boolean;
 }) {
 	return (
 		<Card
@@ -176,6 +191,7 @@ function PostsCard({
 					catalog={catalog}
 					regions={regions}
 					tab={tab}
+					modal={modal}
 				/>
 			)}
 			<PostList incident={incident} drafts={reviewed} limit={limit} />
@@ -246,6 +262,7 @@ function IncidentBody({
 	showForm,
 	pending,
 	reviewed,
+	modal,
 }: {
 	tab: IncidentTab;
 	incident: Incident;
@@ -256,6 +273,7 @@ function IncidentBody({
 	showForm: boolean;
 	pending: NotificationDraft[];
 	reviewed: NotificationDraft[];
+	modal: boolean;
 }) {
 	return (
 		<div className="space-y-6">
@@ -270,6 +288,7 @@ function IncidentBody({
 					reviewed={reviewed}
 					tab="dashboard"
 					limit={LATEST_POSTS}
+					modal={modal}
 				/>
 			)}
 			{tab === "dashboard" && pending.length > 0 && (
@@ -297,6 +316,7 @@ function IncidentBody({
 					showForm={showForm}
 					reviewed={reviewed}
 					tab="posts"
+					modal={modal}
 				/>
 			)}
 		</div>
@@ -308,7 +328,7 @@ export default async function ManageIncidentPage({
 	searchParams,
 }: Props) {
 	const [{ id }, query] = await Promise.all([params, searchParams]);
-	const { member, services, app } = await requireMember();
+	const { member, actor, services, app } = await requireMember();
 	const incident = await services.incidents.find(id, { includeDeleted: true });
 	if (!incident) {
 		notFound();
@@ -341,6 +361,12 @@ export default async function ManageIncidentPage({
 	const regionName = regionNameFor(incident, regions);
 	const showForm =
 		(tab === "dashboard" || tab === "posts") && query.post === "1" && canEdit;
+	const queueProvider = canEdit
+		? await services.notificationQueue.provider()
+		: undefined;
+	const progress: NotificationProgress | undefined = canEdit
+		? await services.notificationJobs.incidentProgress(actor, incident.id)
+		: undefined;
 	return (
 		<ManagePage
 			title={incident.title}
@@ -368,6 +394,9 @@ export default async function ManageIncidentPage({
 			</div>
 			{deleted && <DeletionRecord incident={incident} />}
 			<IncidentTabs id={incident.id} active={tab} />
+			{tab === "dashboard" && progress && (
+				<SendProgressBanner incidentId={incident.id} initial={progress} />
+			)}
 			{tab === "dashboard" && timeline.services.length > 0 && (
 				<StatusTimeline {...timeline} />
 			)}
@@ -388,6 +417,7 @@ export default async function ManageIncidentPage({
 					showForm={showForm}
 					pending={pending}
 					reviewed={reviewed}
+					modal={canEdit && queueProvider === undefined}
 				/>
 				{tab === "dashboard" && canEdit && (
 					<div className="space-y-6">
