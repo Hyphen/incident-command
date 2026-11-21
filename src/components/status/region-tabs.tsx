@@ -22,6 +22,8 @@ export function regionHref(
  *
  * Overflow on the nav clips the focus outline. The padding leaves room
  * for that outline. The negative margin keeps the labels in place.
+ * The outer element has no margin of its own, so it keeps the space that
+ * the page puts between sections.
  */
 export function RegionTabs({
 	regions,
@@ -43,27 +45,29 @@ export function RegionTabs({
 		...regions.map((region) => ({ id: region.id, label: region.name })),
 	];
 	return (
-		<nav
-			aria-label="Regions"
-			className="ic-regions -m-1.5 flex gap-2 overflow-x-auto p-1.5"
-		>
-			{tabs.map((tab) => {
-				const current = tab.id === activeId;
-				return (
-					<Link
-						key={tab.id ?? "global"}
-						href={regionHref(path, tab.id, search)}
-						aria-current={current ? "page" : undefined}
-						className={`rounded-full px-3 py-1.5 text-sm whitespace-nowrap ${
-							current
-								? "bg-surface font-medium text-fg"
-								: "text-muted hover:bg-surface hover:text-fg"
-						}`}
-					>
-						{tab.label}
-					</Link>
-				);
-			})}
-		</nav>
+		<div className="flow-root">
+			<nav
+				aria-label="Regions"
+				className="ic-regions -m-1.5 flex gap-2 overflow-x-auto p-1.5"
+			>
+				{tabs.map((tab) => {
+					const current = tab.id === activeId;
+					return (
+						<Link
+							key={tab.id ?? "global"}
+							href={regionHref(path, tab.id, search)}
+							aria-current={current ? "page" : undefined}
+							className={`rounded-full px-3 py-1.5 text-sm whitespace-nowrap ${
+								current
+									? "bg-surface font-medium text-fg"
+									: "text-muted hover:bg-surface hover:text-fg"
+							}`}
+						>
+							{tab.label}
+						</Link>
+					);
+				})}
+			</nav>
+		</div>
 	);
 }
