@@ -111,7 +111,7 @@ function SendProgressDialog({
 						notifications.
 					</p>
 				)}
-				{job?.state === "done" && href && (
+				{(job?.state === "done" || error) && href && (
 					<a href={href} className="text-sm underline">
 						Continue
 					</a>

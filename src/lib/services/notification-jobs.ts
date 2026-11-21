@@ -65,6 +65,7 @@ export class NotificationJobService {
 	private readonly ready = new Map<string, PreparedSend>();
 	private lastRecover = 0;
 	private lastPrune = 0;
+	private recoverTimer: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(
 		ctx: ServiceContext,
@@ -248,8 +249,11 @@ export class NotificationJobService {
 			where: [{ field: "state", op: "eq", value: "active" }],
 		});
 		const stale: string[] = [];
+		let nextDue = Number.POSITIVE_INFINITY;
 		for (const job of jobs) {
-			if (new Date(job.heartbeatAt).getTime() > now - staleAfter(job)) {
+			const due = new Date(job.heartbeatAt).getTime() + staleAfter(job);
+			if (due > now) {
+				nextDue = Math.min(nextDue, due);
 				continue;
 			}
 			const claimed = await this.ctx.store.update(
@@ -268,7 +272,31 @@ export class NotificationJobService {
 			}
 			stale.push(job.id);
 		}
+		this.planRecover(
+			nextDue === Number.POSITIVE_INFINITY ? undefined : nextDue,
+		);
 		void this.runEach(stale);
+	}
+
+	/**
+	 * Runs another pass when the next heartbeat becomes old. A restart can
+	 * leave a fresh job, and no portal request is required to send it.
+	 */
+	private planRecover(dueAt: number | undefined): void {
+		if (this.recoverTimer) {
+			clearTimeout(this.recoverTimer);
+			this.recoverTimer = undefined;
+		}
+		if (dueAt === undefined) {
+			return;
+		}
+		const delay = Math.max(0, dueAt - this.ctx.now().getTime());
+		const timer = setTimeout(() => {
+			this.recoverTimer = undefined;
+			void this.recover();
+		}, delay);
+		timer.unref?.();
+		this.recoverTimer = timer;
 	}
 
 	/** One job, or nothing when the id is unknown. */
@@ -490,7 +518,8 @@ export class NotificationJobService {
 			return;
 		}
 		const counts = await this.counts(job);
-		if (counts.open > 0) {
+		// Separate counts can disagree. A done job must account for every row.
+		if (counts.open > 0 || counts.sent + counts.failed !== job.total) {
 			return;
 		}
 		const now = iso(this.ctx.now());

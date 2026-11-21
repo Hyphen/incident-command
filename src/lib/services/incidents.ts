@@ -183,15 +183,19 @@ export function incidentAsOf(
 	if (!update) {
 		return undefined;
 	}
-	return {
-		update,
-		incident: {
-			...incident,
-			title: update.title,
-			impact: update.impact,
-			status: update.status,
-		},
+	const snapshot: Incident = {
+		...incident,
+		title: update.title,
+		impact: update.impact,
+		status: update.status,
 	};
+	// The time belongs to this post. A later post does not change it.
+	if (isClosedStatus(update.status)) {
+		snapshot.resolvedAt = update.createdAt;
+	} else {
+		delete snapshot.resolvedAt;
+	}
+	return { update, incident: snapshot };
 }
 
 export class IncidentService {

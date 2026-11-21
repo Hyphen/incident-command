@@ -364,6 +364,125 @@ describe("NotificationJobService", () => {
 		});
 	});
 
+	it("sends a fresh memory job after the stale time", async () => {
+		vi.useFakeTimers();
+		try {
+			const person = await webhook(t);
+			const created = await incident(t);
+			const updateId = created.updates[0]?.id ?? "";
+			await t.store.insert(
+				"notification_jobs",
+				jobDocument(t, {
+					id: "njb_later",
+					incidentId: created.id,
+					updateId,
+					provider: "memory",
+				}),
+			);
+			await delivery(t, {
+				id: "ndl_later",
+				jobId: "njb_later",
+				subscriberId: person.id,
+				state: "pending",
+			});
+			await t.services.notificationJobs.recover();
+			expect((await t.store.get("notification_jobs", "njb_later"))?.state).toBe(
+				"active",
+			);
+			t.clock.advance(2 * MINUTE);
+			await vi.advanceTimersByTimeAsync(2 * MINUTE);
+			expect((await t.store.get("notification_jobs", "njb_later"))?.state).toBe(
+				"done",
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("keeps the resolution time of the queued post", async () => {
+		const person = await webhook(t);
+		const created = await incident(t);
+		const firstId = created.updates[0]?.id ?? "";
+		await t.store.insert(
+			"notification_jobs",
+			jobDocument(t, {
+				id: "njb_open",
+				incidentId: created.id,
+				updateId: firstId,
+				event: "incident.created",
+			}),
+		);
+		await delivery(t, {
+			id: "ndl_open",
+			jobId: "njb_open",
+			subscriberId: person.id,
+			state: "pending",
+		});
+		t.clock.advance(MINUTE);
+		const resolved = await t.services.incidents.postUpdate(ADMIN, created.id, {
+			status: "resolved",
+			message: "Fixed",
+			notify: false,
+		});
+		await t.services.notificationJobs.process("njb_open");
+		const open = t.notifier.incidents[0]?.notification.incident;
+		expect(open?.status).toBe("investigating");
+		expect(open?.resolvedAt).toBeUndefined();
+
+		const resolvedId = resolved.updates.at(-1)?.id ?? "";
+		await t.store.insert(
+			"notification_jobs",
+			jobDocument(t, {
+				id: "njb_closed",
+				incidentId: created.id,
+				updateId: resolvedId,
+				event: "incident.resolved",
+			}),
+		);
+		await delivery(t, {
+			id: "ndl_closed",
+			jobId: "njb_closed",
+			subscriberId: person.id,
+			state: "pending",
+		});
+		await t.services.incidents.postUpdate(ADMIN, created.id, {
+			status: "investigating",
+			message: "It is back",
+			notify: false,
+		});
+		await t.services.notificationJobs.process("njb_closed");
+		expect(t.notifier.incidents[1]?.notification.incident).toMatchObject({
+			status: "resolved",
+			resolvedAt: resolved.updates.at(-1)?.createdAt,
+		});
+	});
+
+	it("does not finish a job when the counts do not match the total", async () => {
+		const person = await webhook(t);
+		const created = await incident(t);
+		await t.store.insert(
+			"notification_jobs",
+			jobDocument(t, {
+				id: "njb_split",
+				incidentId: created.id,
+				updateId: created.updates[0]?.id ?? "",
+				queued: false,
+			}),
+		);
+		await delivery(t, {
+			id: "ndl_split",
+			jobId: "njb_split",
+			subscriberId: person.id,
+			state: "pending",
+		});
+		const spy = vi.spyOn(t.store, "count").mockImplementation(async () => 0);
+		await t.services.notificationJobs.process("njb_split");
+		expect((await t.store.get("notification_jobs", "njb_split"))?.state).toBe(
+			"active",
+		);
+		spy.mockRestore();
+	});
+
 	it("uses the longer limit for a durable provider", async () => {
 		const person = await webhook(t);
 		const created = await incident(t);

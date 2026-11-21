@@ -519,6 +519,10 @@ describe("send status window", () => {
 		expect(screen.getByRole("alert")).toHaveTextContent(
 			"The page cannot read the status.",
 		);
+		expect(screen.getByRole("link", { name: "Continue" })).toHaveAttribute(
+			"href",
+			"/manage/incidents/inc_1",
+		);
 		const stopped = fetchMock.mock.calls.length;
 		await act(async () => {
 			await vi.advanceTimersByTimeAsync(5000);
