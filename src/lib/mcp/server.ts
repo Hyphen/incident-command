@@ -56,11 +56,13 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
 - Schedule planned work with schedule_maintenance (statuses: scheduled -> in_progress -> verifying -> completed).
 - Regions belong to each affected service. Call list_regions before you set a region.
   Pass serviceRegions, for example [{"serviceId": "svc_api", "regionIds": ["reg_us", "reg_eu"]}].
-  Omit a service, or pass an empty regionIds list, for Global.
+  When a region exists, give each affected service one or more regions. There is no Global choice.
+  For an outage in all regions, list all region ids from list_regions.
   serviceRegions works with create_incident, schedule_maintenance, post_incident_update,
   draft_notification and edit_incident.
   On an update, serviceRegions sets regions for the services in that list. Other services keep their regions.
-  Pass an empty list or null to edit_incident to make every service Global. Omit it to keep the current regions.
+  A service that the update adds needs an entry.
+  On edit_incident, serviceRegions replaces the regions of every service. Omit it to keep the current regions.
   Pass regionId to get_status to read one region. Omit it to read Overview, which lists every outage.
   A region tab omits a service that has no region.
   With no regions, the status page is one page.
@@ -121,14 +123,11 @@ const legacyRegionId = z
 		if (value !== undefined) {
 			ctx.addIssue({
 				code: "custom",
-				message:
-					"regionId: set serviceRegions for each service. No regions means Global.",
+				message: "regionId: set serviceRegions for each affected service.",
 			});
 		}
 	})
-	.describe(
-		"Removed. Set serviceRegions for each service. No regions means Global.",
-	);
+	.describe("Removed. Set serviceRegions for each affected service.");
 const serviceRegions = z
 	.array(
 		z.object({
@@ -136,13 +135,13 @@ const serviceRegions = z
 			regionIds: z
 				.array(z.string())
 				.describe(
-					"Region ids from list_regions. An empty list means Global for this service.",
+					"Region ids from list_regions. Give one or more. For an outage in all regions, give all region ids.",
 				),
 		}),
 	)
 	.optional()
 	.describe(
-		"Regions for each affected service. Omit a service, or pass an empty regionIds list, for Global.",
+		"Regions for each affected service. When a region exists, each affected service needs an entry with one or more regions.",
 	);
 
 type ToolHandler<A> = (args: A) => Promise<unknown>;
@@ -389,7 +388,7 @@ export function createMcpServer(
 		{
 			title: "List regions",
 			description:
-				"Named regions in display order. An empty list means the status page is one page. Global is the default and is not in this list.",
+				"Named regions in display order. An empty list means the status page is one page. When a region exists, each affected service needs one or more regions.",
 			inputSchema: {},
 			readOnly: true,
 		},
@@ -511,7 +510,7 @@ export function createMcpServer(
 
 	const regionName = z
 		.string()
-		.describe("The region name. Do not use Global. That name is reserved.");
+		.describe("The region name. Each region needs a different name.");
 
 	tool(
 		"services.write",
@@ -550,7 +549,7 @@ export function createMcpServer(
 		{
 			title: "Delete region",
 			description:
-				"Deletes a region. A service that used only that region becomes Global. A service that also uses other regions keeps those regions.",
+				"Deletes a region. A service that used only that region has no region. The next change to the regions of that incident must give it a region. A service that also uses other regions keeps those regions.",
 			inputSchema: { id },
 		},
 		async (args) => {
@@ -622,7 +621,7 @@ export function createMcpServer(
 				serviceStatus,
 				serviceStatuses,
 				serviceRegions: serviceRegions.describe(
-					"Regions for services in this update. A service that is not in this list keeps its regions. An empty regionIds list makes that service Global.",
+					"Regions for services in this update. A service that is not in this list keeps its regions. A service that this update adds needs an entry with one or more regions.",
 				),
 				regionId: legacyRegionId,
 				notify,
@@ -660,7 +659,7 @@ export function createMcpServer(
 				serviceRegions: serviceRegions
 					.nullable()
 					.describe(
-						"Replaces the regions of every affected service. Pass an empty list or null to make every service Global. Omit this field to keep the current regions.",
+						"Replaces the regions of every affected service. When a region exists, give each affected service one or more regions. Omit this field to keep the current regions.",
 					),
 				regionId: legacyRegionId,
 			},

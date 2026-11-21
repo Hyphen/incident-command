@@ -1,5 +1,4 @@
 import { createId } from "../crypto";
-import { GLOBAL_REGION_NAME } from "../domain/regions";
 import {
 	type CreateRegionInput,
 	createRegionSchema,
@@ -58,7 +57,7 @@ export class RegionService {
 		this.ctx = ctx;
 	}
 
-	/** Regions in display order. Global is not in this list. */
+	/** Regions in display order. */
 	async list(): Promise<Region[]> {
 		return this.ctx.store.find("regions", {
 			sort: [{ field: "order" }, { field: "createdAt" }],
@@ -111,9 +110,9 @@ export class RegionService {
 
 	/**
 	 * Deletes a region.
-	 * A service that used only that region becomes Global.
+	 * A service that used only that region has no region after the delete.
+	 * The next change to the regions of that incident must give it a region.
 	 * A service that also uses other regions keeps those regions.
-	 * An old incident that used only that region becomes Global.
 	 */
 	async delete(actor: Actor, id: string): Promise<void> {
 		requirePermission(actor, "services.delete");
@@ -123,11 +122,6 @@ export class RegionService {
 	}
 
 	private async assertName(name: string, exceptId?: string): Promise<void> {
-		if (name.toLowerCase() === GLOBAL_REGION_NAME.toLowerCase()) {
-			throw new ValidationError(
-				"Global is the default region. Choose another name.",
-			);
-		}
 		const regions = await this.ctx.store.find("regions");
 		const taken = regions.some(
 			(region) =>

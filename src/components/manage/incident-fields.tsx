@@ -62,7 +62,20 @@ function regionIdsFor(
 }
 
 /**
- * Region choices for one service. No choice means Global.
+ * The checked regions of a service that a form adds.
+ * A service with no saved regions starts with all regions.
+ */
+function pickerRegionIds(
+	serviceId: string,
+	regions: readonly Region[],
+	values: readonly ServiceRegions[],
+): string[] {
+	const saved = regionIdsFor(serviceId, values);
+	return saved.length > 0 ? saved : regions.map((region) => region.id);
+}
+
+/**
+ * Region choices for one service. The service needs one or more regions.
  * The form sends each choice as `regionIds:<service id>`.
  */
 function ServiceRegionChoices({
@@ -86,7 +99,8 @@ function ServiceRegionChoices({
 			}
 		>
 			<p className="text-xs text-muted">
-				Regions for {service.name}. Select none for Global.
+				Regions for {service.name}. Select one or more. For an outage in all
+				regions, select all regions.
 			</p>
 			<div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
 				{regions.map((region) => (
@@ -108,7 +122,8 @@ function ServiceRegionChoices({
 
 /**
  * Regions for services that are already on the incident.
- * The form sends `serviceRegions` so an empty choice can clear a region.
+ * The form sends the list of each service. A service with no checked region
+ * fails the check, so the member must select a region for it.
  */
 export function ServiceRegionEditor({
 	services,
@@ -325,9 +340,9 @@ export function ServicePicker({
 	withStatus?: boolean;
 	/** The saved status of each service, for `withStatus`. */
 	statuses?: readonly ServiceStatusOverride[];
-	/** Named regions. Each selected service can use one, more than one, or none. */
+	/** Named regions. Each selected service needs one or more. */
 	regions?: readonly Region[];
-	/** The saved regions of each service. */
+	/** The saved regions of each service. A service with none starts with all regions. */
 	serviceRegions?: readonly ServiceRegions[];
 	legend?: string;
 	emptyLabel?: string;
@@ -404,7 +419,11 @@ export function ServicePicker({
 								<ServiceRegionChoices
 									service={service}
 									regions={regions}
-									selected={regionIdsFor(service.id, serviceRegions)}
+									selected={pickerRegionIds(
+										service.id,
+										regions,
+										serviceRegions,
+									)}
 									hiddenUntilChecked
 								/>
 							)}

@@ -1,3 +1,4 @@
+import { SERVICE_REGIONS_REQUIRED } from "@/lib/domain/regions";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import {
 	ADMIN,
@@ -941,6 +942,94 @@ describe("IncidentService", () => {
 		spy.mockRestore();
 	});
 
+	it("requires a region for each affected service only when a region exists", async () => {
+		const unbound = await t.services.incidents.create(EDITOR, {
+			title: "Before regions",
+			message: "x",
+			serviceIds: [api],
+			serviceRegions: [{ serviceId: api, regionIds: [] }],
+		});
+		expect(unbound.serviceRegions).toBeUndefined();
+		const us = await t.services.regions.create(EDITOR, { name: "US" });
+		const eu = await t.services.regions.create(EDITOR, { name: "EU" });
+		const required = { message: SERVICE_REGIONS_REQUIRED };
+
+		for (const serviceRegions of [
+			undefined,
+			[{ serviceId: api, regionIds: [us.id] }],
+			[
+				{ serviceId: api, regionIds: [us.id] },
+				{ serviceId: web, regionIds: [] },
+			],
+		]) {
+			await expect(
+				t.services.incidents.create(EDITOR, {
+					title: "Global",
+					message: "x",
+					serviceIds: [api, web],
+					serviceRegions,
+				}),
+			).rejects.toMatchObject(required);
+		}
+		const noServices = await t.services.incidents.create(EDITOR, {
+			title: "No services",
+			message: "x",
+		});
+		expect(noServices.serviceRegions).toBeUndefined();
+		const everywhere = await t.services.incidents.create(EDITOR, {
+			title: "All regions",
+			message: "x",
+			serviceIds: [api],
+			serviceRegions: [{ serviceId: api, regionIds: [us.id, eu.id] }],
+		});
+
+		await expect(
+			t.services.incidents.postUpdate(EDITOR, everywhere.id, {
+				message: "Add Web",
+				serviceIds: [web],
+				notify: false,
+			}),
+		).rejects.toMatchObject(required);
+		await expect(
+			t.services.incidents.postUpdate(EDITOR, everywhere.id, {
+				message: "Clear API",
+				serviceRegions: [{ serviceId: api, regionIds: [] }],
+				notify: false,
+			}),
+		).rejects.toMatchObject(required);
+		for (const serviceRegions of [null, []]) {
+			await expect(
+				t.services.incidents.edit(EDITOR, everywhere.id, { serviceRegions }),
+			).rejects.toMatchObject(required);
+		}
+		await expect(
+			t.services.incidents.edit(EDITOR, everywhere.id, {
+				serviceIds: [api, web],
+			}),
+		).rejects.toMatchObject(required);
+		await expect(
+			t.services.incidents.edit(EDITOR, everywhere.id, {
+				serviceIds: [api, web],
+				serviceRegions: [{ serviceId: api, regionIds: [us.id] }],
+			}),
+		).rejects.toMatchObject(required);
+
+		// A service from before the first region keeps no region until a change sets one.
+		const resolved = await t.services.incidents.resolve(
+			EDITOR,
+			unbound.id,
+			undefined,
+			false,
+		);
+		expect(resolved.status).toBe("resolved");
+		expect(resolved.serviceRegions).toBeUndefined();
+		await expect(
+			t.services.incidents.edit(EDITOR, unbound.id, {
+				serviceRegions: [{ serviceId: api, regionIds: [] }],
+			}),
+		).rejects.toMatchObject(required);
+	});
+
 	it("sets regions on each affected service", async () => {
 		const api = await t.services.catalog.create(EDITOR, { name: "API" });
 		const web = await t.services.catalog.create(EDITOR, { name: "Web" });
@@ -954,19 +1043,16 @@ describe("IncidentService", () => {
 			serviceIds: [api.id, web.id],
 			serviceRegions: [
 				{ serviceId: api.id, regionIds: [united.id, united.id, europe.id] },
-				{ serviceId: web.id, regionIds: [] },
+				{ serviceId: web.id, regionIds: [united.id] },
 			],
 		});
 		expect(incident.regionId).toBeUndefined();
 		expect(incident.serviceRegions).toEqual([
 			{ serviceId: api.id, regionIds: [united.id, europe.id] },
+			{ serviceId: web.id, regionIds: [united.id] },
 		]);
 		const kept = await t.services.incidents.edit(EDITOR, incident.id, {});
 		expect(kept.serviceRegions).toEqual(incident.serviceRegions);
-		const cleared = await t.services.incidents.edit(EDITOR, incident.id, {
-			serviceRegions: null,
-		});
-		expect(cleared.serviceRegions).toBeUndefined();
 		const moved = await t.services.incidents.edit(EDITOR, incident.id, {
 			serviceRegions: [
 				{ serviceId: api.id, regionIds: [europe.id] },
@@ -978,12 +1064,15 @@ describe("IncidentService", () => {
 			{ serviceId: web.id, regionIds: [united.id] },
 		]);
 		const added = await t.services.incidents.postUpdate(EDITOR, incident.id, {
-			message: "Web is global again",
-			serviceRegions: [{ serviceId: web.id, regionIds: [] }],
+			message: "Web is down in Europe too",
+			serviceRegions: [
+				{ serviceId: web.id, regionIds: [united.id, europe.id] },
+			],
 			notify: false,
 		});
 		expect(added.serviceRegions).toEqual([
 			{ serviceId: api.id, regionIds: [europe.id] },
+			{ serviceId: web.id, regionIds: [united.id, europe.id] },
 		]);
 		await expect(
 			t.services.incidents.create(EDITOR, {
@@ -1006,10 +1095,6 @@ describe("IncidentService", () => {
 				serviceRegions: [{ serviceId: web.id, regionIds: [united.id] }],
 			}),
 		).rejects.toThrow(/serviceRegions/);
-		const empty = await t.services.incidents.edit(EDITOR, incident.id, {
-			serviceRegions: [],
-		});
-		expect(empty.serviceRegions).toBeUndefined();
 		const both = await t.services.incidents.edit(EDITOR, incident.id, {
 			serviceIds: [api.id, web.id],
 			serviceRegions: [
@@ -1085,6 +1170,7 @@ describe("IncidentService", () => {
 			{
 				message: "Add Web",
 				serviceIds: [web.id],
+				serviceRegions: [{ serviceId: web.id, regionIds: [europe.id] }],
 				notify: false,
 			},
 		);
@@ -1092,12 +1178,18 @@ describe("IncidentService", () => {
 		expect(withWeb.serviceIds).toEqual([api.id, web.id]);
 		expect(withWeb.serviceRegions).toEqual([
 			{ serviceId: api.id, regionIds: [united.id] },
+			{ serviceId: web.id, regionIds: [europe.id] },
 		]);
 
+		const bothUnited = [
+			{ serviceId: api.id, regionIds: [united.id] },
+			{ serviceId: web.id, regionIds: [united.id] },
+		];
 		const legacy = await t.services.incidents.create(EDITOR, {
 			title: "Legacy pair",
 			message: "x",
 			serviceIds: [api.id, web.id],
+			serviceRegions: bothUnited,
 		});
 		const legacyDoc = await t.store.get("incidents", legacy.id);
 		if (!legacyDoc) {
@@ -1119,6 +1211,7 @@ describe("IncidentService", () => {
 			title: "Legacy regions",
 			message: "x",
 			serviceIds: [api.id, web.id],
+			serviceRegions: bothUnited,
 		});
 		const legacyRegionsDoc = await t.store.get("incidents", legacyRegions.id);
 		if (!legacyRegionsDoc) {
@@ -1131,12 +1224,16 @@ describe("IncidentService", () => {
 			EDITOR,
 			legacyRegions.id,
 			{
-				serviceRegions: [{ serviceId: api.id, regionIds: [europe.id] }],
+				serviceRegions: [
+					{ serviceId: api.id, regionIds: [europe.id] },
+					{ serviceId: web.id, regionIds: [united.id] },
+				],
 			},
 		);
 		expect(legacyEdited.regionId).toBeUndefined();
 		expect(legacyEdited.serviceRegions).toEqual([
 			{ serviceId: api.id, regionIds: [europe.id] },
+			{ serviceId: web.id, regionIds: [united.id] },
 		]);
 
 		const current = await t.services.incidents.create(EDITOR, {

@@ -99,15 +99,15 @@
 		"kind": "notice",
 		"text": "Region deleted"
 	},
-	"region_name_global": {
-		"id": "fls_h2c6regionglob",
-		"kind": "error",
-		"text": "Global is the default region. Choose another name."
-	},
 	"region_name_taken": {
 		"id": "fls_t5v1regiontake",
 		"kind": "error",
 		"text": "A region with that name already exists"
+	},
+	"service_regions_required": {
+		"id": "fls_m3d8svcregreqd",
+		"kind": "error",
+		"text": "Select one or more regions for each affected service. For an outage in all regions, select all regions."
 	},
 	"invite_revoked": {
 		"id": "fls_nfbb3lms7k97cwsd",

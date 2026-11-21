@@ -78,19 +78,11 @@ describe("RegionService", () => {
 		expect(await t.services.regions.list()).toEqual([]);
 	});
 
-	it("rejects a reserved name, a duplicate name and a missing region", async () => {
-		await expect(
-			t.services.regions.create(EDITOR, { name: " global " }),
-		).rejects.toThrow("Global is the default region. Choose another name.");
-		const region = await t.services.regions.create(EDITOR, {
-			name: "United States",
-		});
+	it("rejects a duplicate name and a missing region", async () => {
+		await t.services.regions.create(EDITOR, { name: "United States" });
 		await expect(
 			t.services.regions.create(EDITOR, { name: "united states" }),
 		).rejects.toBeInstanceOf(ValidationError);
-		await expect(
-			t.services.regions.update(EDITOR, region.id, { name: "Global" }),
-		).rejects.toThrow("Global is the default region. Choose another name.");
 		const other = await t.services.regions.create(EDITOR, { name: "Europe" });
 		await expect(
 			t.services.regions.update(EDITOR, other.id, { name: "UNITED STATES" }),

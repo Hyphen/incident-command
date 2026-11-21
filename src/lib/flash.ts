@@ -1,4 +1,5 @@
 import { BRAND_ASSET_MESSAGES } from "./domain/brand-asset";
+import { SERVICE_REGIONS_REQUIRED } from "./domain/regions";
 import {
 	INVALID_TWO_FACTOR_CODE,
 	TWO_FACTOR_ALREADY_OFF,
@@ -41,8 +42,8 @@ const MESSAGE_CODES: Record<string, FlashCode> = {
 		"invite_invalid",
 	"You cannot remove the last admin": "last_admin",
 	"A member with that email already exists": "member_email_exists",
-	"Global is the default region. Choose another name.": "region_name_global",
 	"A region with that name already exists": "region_name_taken",
+	[SERVICE_REGIONS_REQUIRED]: "service_regions_required",
 	"scheduledEnd must be after scheduledStart": "scheduled_end_before_start",
 	"Subscriptions are not enabled": "subscriptions_disabled",
 	"We couldn't send the confirmation. Please try again later.":

@@ -318,7 +318,8 @@ function serviceStatuses(form: FormData) {
 /**
  * Regions for the selected services.
  * Returns nothing when the form has no region choices.
- * A service in `serviceIds` with no checked region is Global.
+ * A service in `serviceIds` with no checked region gets an empty list.
+ * The incident service rejects that list.
  */
 function regionsByService(form: FormData, serviceIds?: readonly string[]) {
 	if (!form.has("serviceRegions")) {
