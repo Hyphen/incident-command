@@ -67,18 +67,18 @@ The portal deletes the service and its uptime history. It also removes the servi
 
 ## About regions
 
-Global is the default region. Global is not a region on the **Regions** page.
-
 - With no regions, the status page is one page.
 - With regions, the status page shows an **Overview** tab and one tab for each region.
 
-Regions belong to each affected service of an incident, not to the service itself. When you declare an incident or post an update, you select the regions of each affected service. A service with no region is Global.
+Regions belong to each affected service of an incident, not to the service itself. When you declare an incident or post an update, you select the regions of each affected service.
+
+When a region exists, each affected service needs one or more regions. For an outage in all regions, select all regions.
 
 The tabs show different data:
 
 - **Overview** shows each outage. It shows the status of each service for all incidents.
 - A region tab shows each service. On a region tab, an incident counts only for a service that has that region.
-- An incident for a Global service shows only on **Overview**.
+- A service with no region shows only on **Overview**. This occurs on an incident from before the first region, or on a closed incident after a region delete.
 - A status that you set by hand shows on all tabs.
 
 ## Add a region
@@ -90,7 +90,7 @@ You must be an editor or an admin.
 3. Optional: type a number in **Order**. A region with a lower number shows first.
 4. Select **Add region**.
 
-A region name can have 80 characters or fewer. Each name must be different. You cannot use the name "Global".
+A region name can have 80 characters or fewer. Each name must be different.
 
 ## Set the regions of an incident
 
@@ -98,7 +98,7 @@ You must be an editor or an admin.
 
 1. Declare an incident, schedule maintenance, or open the post form of an incident.
 2. Select an affected service.
-3. Under "Regions for …", select one or more regions. Select no region for Global.
+3. Under "Regions for …", select one or more regions. For an outage in all regions, select all regions.
 4. Complete the other fields of the form.
 5. Select **Declare incident**, **Schedule maintenance** or **Post update**.
 
@@ -122,4 +122,8 @@ To delete a region, do these steps:
 2. Next to the region, select **Delete**.
 3. In the dialog, select **OK**.
 
-When you delete a region, the portal removes it from each incident. A service that used only that region becomes Global. A service that also used other regions keeps those regions.
+When you delete a region, the portal removes it from each incident. These rules apply:
+
+- A service that also used other regions keeps those regions.
+- When other regions remain, the delete fails if an open incident has a service that uses only this region. Give that service a different region first.
+- On a closed incident, a service that used only this region has no region after the delete.

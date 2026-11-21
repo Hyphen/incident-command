@@ -34,7 +34,7 @@ You must be an editor or an admin.
 6. Type the first public update in **Message**.
 7. Under **Affected services**, select each service that the incident affects.
 8. Optional: select a status in the list next to a selected service. That status applies to that service only.
-9. Optional: when your status page has regions, select the regions of each selected service. Select no region for Global.
+9. When your status page has regions, select one or more regions for each selected service. For an outage in all regions, select all regions.
 10. Optional: in **Set affected services to**, select a status for all the affected services. **Automatic** uses the impact.
 11. Keep **Notify subscribers** selected to send a notification. Clear it to post without a notification.
 12. Select **Declare incident**.
@@ -72,6 +72,15 @@ You must be an editor or an admin.
 11. Select **Post update**.
 
 A new impact does not change the status of the services that the incident already affects. To change their status, use step 7 or step 8.
+
+### Follow the notifications
+
+When a post notifies subscribers, the portal shows the progress:
+
+- Without a queue, a window shows "Notifications complete" and the state of each notification: **Waiting**, **In progress**, **Sent** or **Failed**.
+- With a queue, the **Dashboard** tab of the incident shows a progress bar and the text "The queue sends the notifications." The bar updates until the queue is done.
+
+An admin selects the queue in **Settings**. See [Select a notification queue](/docs/guide/settings/#select-a-notification-queue).
 
 ## Resolve an incident
 

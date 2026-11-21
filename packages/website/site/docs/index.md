@@ -18,7 +18,7 @@ One Next.js server runs all three parts. You can run it on any container host. T
 ## Features
 
 - **Status page:** an overall status banner, active incidents, scheduled maintenance, and grouped services with 90-day uptime bars. It also has the incident history and a page for each incident. An incident page shows the status of each affected service for each minute. The status page has an RSS feed, a public JSON API, and light and dark modes. It works on a phone.
-- **Regions:** add a region when you need one. Each affected service can use one region, more than one region, or no region. No region means Global. With regions, the status page shows an Overview tab and a tab for each region.
+- **Regions:** add a region when you need one. When a region exists, each affected service needs one or more regions. For an outage in all regions, select all regions. With regions, the status page shows an Overview tab and a tab for each region.
 - **Pages for agents:** `/llms.txt`, `/history.md` and `/incidents/{id}.md` give the status page in Markdown. An agent can read them without credentials.
 - **MCP server:** each agent has its own permissions. A new agent can read the status page and write drafts. It cannot publish or notify subscribers until an admin gives it those permissions.
 - **Human review of notifications:** an agent can save a notification as a draft. A person reviews the draft, changes it if necessary, and approves it. Nothing goes out before the approval.

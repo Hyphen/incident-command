@@ -73,7 +73,7 @@ An incident or maintenance event:
 | `incident.startedAt`, `incident.resolvedAt`        | The start and the end of an incident. A field without a value is not in the payload.                                                                 |
 | `incident.scheduledStart`, `incident.scheduledEnd` | The window of a maintenance.                                                                                                                         |
 | `incident.services`                                | The affected services, each with its current status.                                                                                                 |
-| `incident.regionIds`                               | The regions of the incident. An empty list means Global.                                                                                             |
+| `incident.regionIds`                               | The regions of the incident. The list is empty when the status page has no regions.                                                                                             |
 | `update`                                           | The post that caused the notification.                                                                                                               |
 | `page`                                             | The name and the URL of the status page.                                                                                                             |
 | `timestamp`                                        | The time of the request.                                                                                                                             |

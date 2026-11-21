@@ -45,20 +45,20 @@ An agent publishes directly only when it has `incidents.publish`. It notifies su
 
 ## Regions
 
-Global is the default region. It is not a record. Regions belong to each affected service.
+Regions belong to each affected service.
 
 - Call `list_regions` before you set a region.
 - Pass `serviceRegions` to `create_incident`, `schedule_maintenance`, `post_incident_update`, `draft_notification` or `edit_incident`.
 - Use one entry for each service, for example `[{"serviceId": "svc_api", "regionIds": ["reg_us", "reg_eu"]}]`.
-- For Global, omit the service, or pass an empty `regionIds` list.
-- On an update, `serviceRegions` sets the regions for the services in that list. The other services keep their regions.
-- To make every service Global, pass `[]` or `null` to `edit_incident`.
+- When a region exists, give each affected service one or more regions. There is no Global choice. For an outage in all regions, list all region ids.
+- On an update, `serviceRegions` sets the regions for the services in that list. The other services keep their regions. A service that the update adds needs an entry.
+- On `edit_incident`, `serviceRegions` replaces the regions of every service. Give each service one or more regions.
 - To keep the current regions, omit `serviceRegions` on `edit_incident`.
 - To read one region, pass `regionId` to `get_status`.
 
 With no regions, the status page is one page. With regions, the page shows Overview and a tab for each region. Overview lists every outage. A region tab lists all services, but it shows an outage only for a service that the incident binds to that region.
 
-When you delete a region, a service that used only that region becomes Global. A service that also uses other regions keeps those regions. See [Services and regions](/docs/guide/services/) for the portal.
+When other regions remain, `delete_region` fails if an open incident has a service that uses only that region. Give that service a different region first. On a closed incident, such a service has no region after the delete. A service that also uses other regions keeps those regions. See [Services and regions](/docs/guide/services/) for the portal.
 
 ## How incidents affect services
 

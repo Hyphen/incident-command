@@ -14,8 +14,8 @@ This page gives the meaning of each word that the docs use. The portal, the API 
 | **Service**        | A part of your product that visitors care about, for example "API" or "Dashboard". Each service has a status.                                                                                                                                                                               |
 | **Group**          | A name that puts services together on the status page, for example "Core platform".                                                                                                                                                                                                         |
 | **Service status** | One of `operational`, `degraded_performance`, `partial_outage`, `major_outage` or `under_maintenance`. An open incident or maintenance sets it. An editor can also set it by hand.                                                                                                          |
-| **Region**         | A named area, for example "US East". With regions, the status page shows an Overview tab and a tab for each region. A service in an incident can be in one region, more than one region, or no region.                                                                                      |
-| **Global**         | No region. A Global outage shows only on the Overview tab. A region tab shows an outage only for the services in that region.                                                                                                                                                               |
+| **Region** | A named area, for example "US East". With regions, the status page shows an Overview tab and a tab for each region. When a region exists, each affected service of an incident needs one or more regions. For an outage in all regions, select all regions. |
+| **Overview** | The first tab of a status page with regions. It shows each outage. A region tab shows an outage only for the services in that region. |
 | **Uptime**         | The part of the tracked time that a service was up. A partial outage counts as 30% downtime and a major outage as 100%. Degraded performance and maintenance do not count. The status page shows one bar for each day. The uptime window is 90 days by default, and an admin can change it. |
 
 ## Incidents and maintenance
@@ -48,3 +48,4 @@ This page gives the meaning of each word that the docs use. The portal, the API 
 | **Channel**           | A way to send a notification: webhooks, email or text messages. Each channel has an on/off switch.                                        |
 | **Provider**          | The service that sends email or text messages for a channel: SendGrid, Amazon SES, Twilio or Amazon SNS.                                  |
 | **Delivery strategy** | How a channel with more than one provider sends: active/passive (fail-over) or load balanced (round-robin).                               |
+| **Queue** | An optional Redis, RabbitMQ or NATS service. With a queue, the server sends notifications in the background. |

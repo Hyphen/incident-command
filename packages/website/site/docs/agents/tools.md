@@ -31,7 +31,7 @@ At each connection, the server also sends instructions to the agent. They explai
 | ---------------- | ------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `get_status`     | `status.read` | Return the overall status, each visible service with status and uptime, and open incidents and maintenance.      |
 | `list_services`  | `status.read` | List all services in display order, with the hidden services.                                                    |
-| `list_regions`   | `status.read` | List the named regions in display order. Global is not in the list.                                              |
+| `list_regions`   | `status.read` | List the named regions in display order.                                              |
 | `list_incidents` | `status.read` | List incidents and maintenance, newest first. Filter by `kind` and `open`. The `limit` is 1 to 100 (default 20). |
 | `get_incident`   | `status.read` | Return one incident or maintenance with its full timeline. Each update has the title and the impact.             |
 
@@ -47,7 +47,7 @@ Pass `regionId` to `get_status` to read one region. Without `regionId`, the tool
 | `update_region`      | `services.write`      | Rename a region or change its display order.                                                 |
 | `set_service_status` | `services.set_status` | Change the status of a service without an incident. The change goes into the uptime history. |
 | `delete_service`     | `services.delete`     | Delete a service and its status history.                                                     |
-| `delete_region`      | `services.delete`     | Delete a region. A service that used only that region becomes Global.                        |
+| `delete_region`      | `services.delete`     | Delete a region. It fails while an open incident needs it as the only region of a service.                        |
 
 ## Incidents and maintenance
 

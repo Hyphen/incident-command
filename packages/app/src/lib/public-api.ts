@@ -36,7 +36,9 @@ export const publicIncidentSchema = z
 		impact: impactSchema.describe("The impact of the latest post."),
 		regions: z
 			.array(regionRefSchema)
-			.describe("The regions of the incident. An empty list means Global."),
+			.describe(
+				"The regions of the incident. The list is empty when the page has no regions.",
+			),
 		services: z
 			.array(z.string())
 			.describe("The ids of the affected services that the page shows."),
@@ -45,7 +47,7 @@ export const publicIncidentSchema = z
 				z.object({ serviceId: z.string(), regions: z.array(regionRefSchema) }),
 			)
 			.describe(
-				"The regions of each affected service. A service that is not in the list is Global.",
+				"The regions of each affected service. A service that is not in the list has no region.",
 			),
 		startedAt: timestamp,
 		resolvedAt: timestamp.nullable(),

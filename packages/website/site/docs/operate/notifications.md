@@ -51,6 +51,19 @@ Email and text messages need a sender. Set a default sender on the channel, or a
 - To post to a webhook in your own network, turn on **Allow private network addresses** in **Manage → Settings → Notifications → Webhooks**.
 - When `WEBHOOK_SECRET` is set, the server signs each request. Read [Webhooks](/docs/reference/webhooks/) for the payload and the signature.
 
+## Notification queue
+
+An admin selects one queue in **Manage → Settings → Notifications**, or **No queue**.
+
+- With no queue, the server sends the notifications when a member sends them. A window shows the state of each notification: **Waiting**, **In progress**, **Sent** or **Failed**.
+- With a queue, the server sends the notifications in the background. The **Dashboard** tab of the incident shows a progress bar until the queue is done.
+- The queue providers are Redis, RabbitMQ and NATS. Select one. Each provider keeps the tasks.
+- NATS needs JetStream. Do not put a user or a password in the NATS URI.
+- The server keeps the **Connection URI** encrypted with `ENCRYPTION_KEY`. Set the key before you save a queue.
+- The queue runs in the Node.js server. On Cloudflare, the container runs the queue, not the Worker.
+- After a restart, the server continues a job that stopped.
+- If the queue provider cannot load, the server sends the notifications in its own process.
+
 ## Providers from environment variables
 
 A channel without providers uses the providers from environment variables. When you add a provider to a channel in the portal, that channel no longer uses them.

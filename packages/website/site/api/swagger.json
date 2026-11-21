@@ -460,7 +460,7 @@
 						"items": {
 							"$ref": "#/components/schemas/RegionRef"
 						},
-						"description": "The regions of the incident. An empty list means Global."
+						"description": "The regions of the incident. The list is empty when the page has no regions."
 					},
 					"services": {
 						"type": "array",
@@ -489,7 +489,7 @@
 								"regions"
 							]
 						},
-						"description": "The regions of each affected service. A service that is not in the list is Global."
+						"description": "The regions of each affected service. A service that is not in the list has no region."
 					},
 					"startedAt": {
 						"type": "string",

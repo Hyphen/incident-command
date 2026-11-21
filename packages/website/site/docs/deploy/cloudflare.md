@@ -34,6 +34,7 @@ A build without the Docker layer cache, as in CI, gives a new image. So the firs
 The container is a Node.js server, so these items work as on other container hosts:
 
 - Subscriber notifications: webhooks, email and text messages.
+- The notification queue. It runs in the container. A restart continues a job that stopped.
 - A database connection pool in each container.
 - The cache of each container keeps the last known data while the database is offline.
 

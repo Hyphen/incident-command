@@ -58,7 +58,7 @@ The **Notifications** section has one card for each notification channel: **Webh
 
 For each provider and its credentials, see [Notification providers](/docs/operate/notifications/).
 
-![The Notifications section with the channel cards](/images/manage-notifications.png)
+![The Notifications section with the Queue card and the channel cards](/images/manage-notifications.png)
 
 The top right corner of each card shows the state of the channel:
 
@@ -67,6 +67,19 @@ The top right corner of each card shows the state of the channel:
 - **Not ready**: the channel is on, but it has no provider or no sender.
 
 When a channel cannot send, its subscribers get no notifications. The public subscribe page does not offer that channel.
+
+## Select a notification queue
+
+You must be an admin.
+
+With a queue, the server sends subscriber notifications in the background. Without a queue, the server sends them when you post. See [Notification queue](/docs/operate/notifications/#notification-queue).
+
+1. Go to **Settings**, then **Notifications**.
+2. In the **Queue** card, select a **Provider**: Redis, RabbitMQ or NATS. Select **No queue** to send without a queue.
+3. Type the **Connection URI** of the queue, for example `redis://localhost:6379`.
+4. Select **Save queue**.
+
+The portal can save the connection URI only when `ENCRYPTION_KEY` is set on the server.
 
 ## Turn a channel on or off
 

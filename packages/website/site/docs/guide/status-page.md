@@ -50,7 +50,7 @@ Some status pages have regions, for example "United States" and "Europe". These 
 - **Overview** shows each outage on all services.
 - A region tab shows the status of the services in that region only. An outage that is not in that region does not show on the tab.
 
-Select a tab to see the status for that region. The history page has the same tabs. On the history page, the first tab has the name **Global**.
+Select a tab to see the status for that region. The history page has the same tabs.
 
 ## Read the active incidents and maintenance
 
