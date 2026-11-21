@@ -1,7 +1,15 @@
+import path from "node:path";
 import type { NextConfig } from "next";
+
+// The app is a package of a pnpm workspace. The lockfile and the
+// node_modules/.pnpm store are at the repository root, so the build traces
+// files from there. The standalone server is at packages/app/server.js.
+const workspaceRoot = path.join(import.meta.dirname, "..", "..");
 
 const nextConfig: NextConfig = {
 	output: "standalone",
+	outputFileTracingRoot: workspaceRoot,
+	turbopack: { root: workspaceRoot },
 	poweredByHeader: false,
 	experimental: {
 		serverActions: {

@@ -60,7 +60,7 @@ jobs:
         run: pnpm typecheck
 
       - name: Test with coverage
-        run: pnpm vitest run --coverage
+        run: pnpm test
 
       - name: Build
         run: pnpm build
@@ -71,5 +71,5 @@ jobs:
         continue-on-error: true
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          directory: ./coverage
+          directory: ./packages/app/coverage
           fail_ci_if_error: false

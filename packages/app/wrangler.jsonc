@@ -2,7 +2,7 @@
 // The container runs the image from the Dockerfile (the Next.js server).
 //   pnpm cf:dev      run the Worker and the container locally (needs Docker)
 //   pnpm cf:deploy   build the image, push it and deploy (needs Docker)
-// Guide: deploy/cloudflare/README.md
+// Guide: https://incident-command.org/docs/deploy/cloudflare
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "incident-command",
@@ -22,7 +22,10 @@
 			"scheduling_policy": "durable_object",
 			"images": {
 				"base": {
-					"dockerfile": "./Dockerfile"
+					// The Dockerfile is at the repository root. The build context is
+					// the root too, because the image needs the workspace lockfile.
+					"dockerfile": "../../Dockerfile",
+					"build_context": "../.."
 				}
 			},
 			"observability": {
@@ -99,7 +102,8 @@
 					"scheduling_policy": "durable_object",
 					"images": {
 						"base": {
-							"dockerfile": "./Dockerfile"
+							"dockerfile": "../../Dockerfile",
+							"build_context": "../.."
 						}
 					},
 					"observability": {

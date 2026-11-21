@@ -1,18 +1,13 @@
-<!-- BEGIN:nextjs-agent-rules -->
-
-## This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
-
 ## Project guide for coding agents
 
 - **Toolchain:** Node 24, pnpm, Next.js 16 (App Router, Turbopack), TypeScript, Tailwind CSS v4, Biome, Vitest.
-- **Before you finish:** run `pnpm lint`, `pnpm typecheck` and `pnpm vitest run --coverage`. Coverage of `src/` must stay at 100% (lines, branches, functions, statements).
-- **Layout:**
+- **Monorepo:** the repository is a pnpm workspace.
+  - `packages/app` holds the app. `packages/app/AGENTS.md` holds the Next.js rules for the app.
+  - `packages/website` holds the docula documentation site.
+  - The root holds the `Dockerfile`, `docker-compose.yml`, `deploy/` and the workspace settings in `pnpm-workspace.yaml`.
+  - Run each command from the repository root. The root scripts run the app scripts with `pnpm --filter`.
+- **Before you finish:** run `pnpm lint`, `pnpm typecheck` and `pnpm test`. Coverage of `packages/app/src/` must stay at 100% (lines, branches, functions, statements).
+- **Layout** (paths relative to `packages/app`):
   - `src/lib/domain`: types, zod input schemas, status and uptime logic (pure).
   - `src/lib/store`: `DocumentStore` interface, adapters (memory, Postgres, Mongo) and the `CachedStore` wrapper. New adapters must pass `test/store/contract.ts`.
   - `src/lib/services`: business logic and permission checks (`requirePermission`). Pages, server actions and MCP tools call services; they never touch the store directly.

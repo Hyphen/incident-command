@@ -8,7 +8,12 @@
 #     -e SITE_URL=http://localhost:3000 \
 #     incident-command
 #
-# See docs/deployment.md for every environment variable.
+# The repository is a pnpm workspace. Build from the repository root: the
+# image needs the root lockfile and pnpm-workspace.yaml. The app is in
+# packages/app.
+#
+# See https://incident-command.org/docs/reference/environment-variables for
+# every environment variable.
 
 ARG NODE_VERSION=24
 
@@ -29,19 +34,26 @@ ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
 WORKDIR /app
 
 # pnpm-workspace.yaml carries `allowBuilds`, so it must sit next to the lockfile.
+# Copy each workspace manifest so that the frozen lockfile matches. Install only
+# the app and its dependencies.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY packages/app/package.json ./packages/app/
+RUN pnpm install --frozen-lockfile --filter @incident-command/app...
 
-COPY . .
+COPY packages/app ./packages/app
 
 # Next.js salts the server action ids with this key. Pass the same key to each
-# build so the ids stay the same between deploys. See docs/deployment.md.
+# build so the ids stay the same between deploys. `next build` writes the key
+# into the image files. See
+# https://incident-command.org/docs/operate/secrets.
 ARG NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
 ENV NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY}
-RUN pnpm build
+RUN pnpm --filter @incident-command/app build
 
 # ---------------------------------------------------------------------------
 # Runtime: only the standalone server, static assets and public files.
+# The standalone output keeps the workspace layout, so the server is at
+# packages/app/server.js.
 # ---------------------------------------------------------------------------
 FROM node:${NODE_VERSION}-alpine AS runtime
 
@@ -57,9 +69,9 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-COPY --from=build --chown=node:node /app/public ./public
-COPY --from=build --chown=node:node /app/.next/standalone ./
-COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/packages/app/.next/standalone ./
+COPY --from=build --chown=node:node /app/packages/app/.next/static ./packages/app/.next/static
+COPY --from=build --chown=node:node /app/packages/app/public ./packages/app/public
 
 # The official Node image ships an unprivileged `node` user (uid 1000).
 USER node
@@ -72,4 +84,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 
-CMD ["node", "server.js"]
+CMD ["node", "packages/app/server.js"]
