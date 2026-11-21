@@ -121,19 +121,29 @@ Global is the default region. It is not a record.
 
 Call `list_regions` before you set a region.
 
-Pass `regionId` to `create_incident`, `schedule_maintenance`, `draft_notification`, or `edit_incident`.
+Regions belong to each affected service.
 
-Pass `null` to `edit_incident` to move an incident to Global.
+Pass `serviceRegions` to `create_incident`, `schedule_maintenance`, `post_incident_update`, `draft_notification`, or `edit_incident`.
+
+Use one entry for each service, for example `[{"serviceId": "svc_api", "regionIds": ["reg_us", "reg_eu"]}]`.
+
+Omit a service, or pass an empty `regionIds` list, for Global.
+
+On an update, `serviceRegions` sets regions for the services in that list. Other services keep their regions.
+
+Pass `[]` or `null` to `edit_incident` to make every service Global.
+
+Omit `serviceRegions` on `edit_incident` to keep the current regions.
 
 Pass `regionId` to `get_status` to read one region.
 
 With no regions, the status page is one page.
 
-With regions, the page shows Global and a tab for each region.
+With regions, the page shows Overview and a tab for each region.
 
-A region tab shows only that region.
+Overview lists every outage. A region tab shows only the services bound to that region.
 
-Delete a region and its incidents move to Global.
+Delete a region. A service that used only that region becomes Global. A service that also uses other regions keeps those regions.
 
 ## Tools
 
@@ -151,11 +161,11 @@ Delete a region and its incidents move to Global.
 | `list_regions`                | `status.read`         | Named regions in display order. Global is not in the list.                                   |
 | `create_region`               | `services.write`      | Add a named region. The status page then shows a tab for it.                                 |
 | `update_region`               | `services.write`      | Rename a region or change its display order.                                                 |
-| `delete_region`               | `services.delete`     | Delete a region. Incidents in that region move to Global.                                    |
-| `create_incident`             | `incidents.publish`   | Declare an incident. Pass `regionId` to select a region. Omit it for Global.                 |
+| `delete_region`               | `services.delete`     | Delete a region. A service that used only that region becomes Global.                        |
+| `create_incident`             | `incidents.publish`   | Declare an incident. Pass `serviceRegions` to set the regions of each service.               |
 | `post_incident_update`        | `incidents.publish`   | Add a timeline update. It records the title and the impact, and it can change them.          |
 | `resolve_incident`            | `incidents.publish`   | Resolve an incident or complete maintenance; restores affected services.                     |
-| `edit_incident`               | `incidents.edit`      | Replace the service list, or change the window or the region. It does not change the title.  |
+| `edit_incident`               | `incidents.edit`      | Replace the service list or the regions of each service, or change the window.               |
 | `delete_incident`             | `incidents.delete`    | Delete an incident from the public view. The portal keeps the reason.                        |
 | `schedule_maintenance`        | `incidents.publish`   | Announce planned maintenance with a window.                                                  |
 | `draft_notification`          | `drafts.write`        | Save a notification for review by a person. Returns the `reviewUrl`.                         |

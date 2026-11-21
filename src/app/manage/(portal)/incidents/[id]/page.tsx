@@ -11,7 +11,7 @@ import { DraftList } from "@/components/manage/draft-list";
 import {
 	AddServices,
 	ImpactSelect,
-	RegionSelect,
+	ServiceRegionEditor,
 	ServiceStatusList,
 	ServiceStatusSelect,
 	StatusSelect,
@@ -41,7 +41,7 @@ import { Timeline } from "@/components/status/timeline";
 import { SubmitButton } from "@/components/submit-button";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
-import { regionNameFor } from "@/lib/domain/regions";
+import { boundServiceRegions, regionNameFor } from "@/lib/domain/regions";
 import { hasRole, isDeletedIncident } from "@/lib/domain/status";
 import type {
 	Incident,
@@ -81,12 +81,14 @@ function PostForm({
 	incident,
 	affected,
 	catalog,
+	regions,
 	tab,
 	modal,
 }: {
 	incident: Incident;
 	affected: Service[];
 	catalog: Service[];
+	regions: readonly Region[];
 	tab: IncidentTab;
 	modal: boolean;
 }) {
@@ -121,7 +123,11 @@ function PostForm({
 			</Field>
 			<ServiceStatusSelect hint="Automatic restores services when resolving and starts maintenance mode when in progress." />
 			<ServiceStatusList services={affected} />
-			<AddServices catalog={catalog} affectedIds={incident.serviceIds} />
+			<AddServices
+				catalog={catalog}
+				affectedIds={incident.serviceIds}
+				regions={regions}
+			/>
 			<Checkbox name="notify" label="Notify subscribers" defaultChecked />
 			<div className="flex flex-wrap gap-2">
 				<SendButton
@@ -147,6 +153,7 @@ function PostsCard({
 	incident,
 	affected,
 	catalog,
+	regions,
 	canEdit,
 	showForm,
 	reviewed,
@@ -157,6 +164,7 @@ function PostsCard({
 	incident: Incident;
 	affected: Service[];
 	catalog: Service[];
+	regions: readonly Region[];
 	canEdit: boolean;
 	showForm: boolean;
 	reviewed: NotificationDraft[];
@@ -181,6 +189,7 @@ function PostsCard({
 					incident={incident}
 					affected={affected}
 					catalog={catalog}
+					regions={regions}
 					tab={tab}
 					modal={modal}
 				/>
@@ -255,38 +264,12 @@ function DeletionRecord({
 	);
 }
 
-function DetailsCard({
-	incident,
-	regions,
-}: {
-	incident: Incident;
-	regions: readonly Region[];
-}) {
-	const isIncident = incident.kind === "incident";
-	return (
-		<Card title={isIncident ? "Region" : "Maintenance window"}>
-			<form action={editIncidentAction} className="max-w-md space-y-4">
-				<input type="hidden" name="id" value={incident.id} />
-				{!isIncident && (
-					<WindowFields
-						start={incident.scheduledStart}
-						end={incident.scheduledEnd}
-					/>
-				)}
-				<RegionSelect regions={regions} value={incident.regionId} />
-				<SubmitButton className={buttonClass.secondary}>
-					{isIncident ? "Save region" : "Save window"}
-				</SubmitButton>
-			</form>
-		</Card>
-	);
-}
-
 function IncidentBody({
 	tab,
 	incident,
 	affected,
 	catalog,
+	regions,
 	canEdit,
 	showForm,
 	pending,
@@ -297,6 +280,7 @@ function IncidentBody({
 	incident: Incident;
 	affected: Service[];
 	catalog: Service[];
+	regions: readonly Region[];
 	canEdit: boolean;
 	showForm: boolean;
 	pending: NotificationDraft[];
@@ -310,6 +294,7 @@ function IncidentBody({
 					incident={incident}
 					affected={affected}
 					catalog={catalog}
+					regions={regions}
 					canEdit={canEdit}
 					showForm={showForm}
 					reviewed={reviewed}
@@ -338,6 +323,7 @@ function IncidentBody({
 					incident={incident}
 					affected={affected}
 					catalog={catalog}
+					regions={regions}
 					canEdit={canEdit}
 					showForm={showForm}
 					reviewed={reviewed}
@@ -369,9 +355,20 @@ export default async function ManageIncidentPage({
 		services.drafts.list({ pending: true, incidentId: incident.id }),
 		services.drafts.list({ pending: false, incidentId: incident.id }),
 	]);
-	const affected = catalog.filter((service) =>
-		incident.serviceIds.includes(service.id),
-	);
+	const affected = incident.serviceIds.map((id) => {
+		const service = catalog.find((item) => item.id === id);
+		return (
+			service ?? {
+				id,
+				name: id,
+				status: "operational" as const,
+				order: 0,
+				hidden: true,
+				createdAt: incident.createdAt,
+				updatedAt: incident.updatedAt,
+			}
+		);
+	});
 	const isIncident = incident.kind === "incident";
 	const regionName = regionNameFor(incident, regions);
 	const showForm =
@@ -415,22 +412,51 @@ export default async function ManageIncidentPage({
 			{tab === "dashboard" && timeline.services.length > 0 && (
 				<StatusTimeline {...timeline} />
 			)}
-			<IncidentBody
-				tab={tab}
-				incident={incident}
-				affected={affected}
-				catalog={catalog}
-				canEdit={canEdit}
-				showForm={showForm}
-				pending={pending}
-				reviewed={reviewed}
-				modal={canEdit && queueProvider === undefined}
-			/>
-			{tab === "dashboard" &&
-				canEdit &&
-				(!isIncident || regions.length > 0) && (
-					<DetailsCard incident={incident} regions={regions} />
+			<div
+				className={
+					canEdit && tab === "dashboard"
+						? "grid gap-6 lg:grid-cols-[1fr_320px]"
+						: undefined
+				}
+			>
+				<IncidentBody
+					tab={tab}
+					incident={incident}
+					affected={affected}
+					catalog={catalog}
+					regions={regions}
+					canEdit={canEdit}
+					showForm={showForm}
+					pending={pending}
+					reviewed={reviewed}
+					modal={canEdit && queueProvider === undefined}
+				/>
+				{tab === "dashboard" && canEdit && (
+					<div className="space-y-6">
+						{(!isIncident || (regions.length > 0 && affected.length > 0)) && (
+							<Card title={isIncident ? "Regions" : "Maintenance window"}>
+								<form action={editIncidentAction} className="space-y-4">
+									<input type="hidden" name="id" value={incident.id} />
+									{!isIncident && (
+										<WindowFields
+											start={incident.scheduledStart}
+											end={incident.scheduledEnd}
+										/>
+									)}
+									<ServiceRegionEditor
+										services={affected}
+										regions={regions}
+										values={boundServiceRegions(incident)}
+									/>
+									<SubmitButton className={buttonClass.secondary}>
+										{isIncident ? "Save regions" : "Save window"}
+									</SubmitButton>
+								</form>
+							</Card>
+						)}
+					</div>
 				)}
+			</div>
 			{tab === "dashboard" && canEdit && (
 				<DeleteIncidentBanner incidentId={incident.id} />
 			)}

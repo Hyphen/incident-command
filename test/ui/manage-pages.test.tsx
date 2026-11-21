@@ -1,6 +1,5 @@
 import {
 	act,
-	cleanup,
 	fireEvent,
 	render,
 	screen,
@@ -1189,46 +1188,59 @@ describe("incident pages", () => {
 	it("shows a region on the incident forms", async () => {
 		const { app, services } = await setupApp();
 		await signIn(app, "editor");
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
 		const region = await services.regions.create(SYSTEM_ACTOR, {
 			name: "United States",
 		});
 		const incident = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "US down",
 			message: "Down",
-			regionId: region.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
 		const list = render(await IncidentsPage(flash()));
 		expect(screen.getByText(/United States/)).toBeInTheDocument();
 		list.unmount();
 		const created = render(await NewIncidentPage(flash()));
-		expect(screen.getByLabelText("Region")).toHaveValue("");
 		expect(
-			within(screen.getByLabelText("Region")).getByRole("option", {
-				name: "United States",
-			}),
-		).toBeInTheDocument();
+			screen.getByRole("checkbox", { name: "United States" }),
+		).not.toBeChecked();
 		created.unmount();
-		render(
+		const incidentPage = render(
 			await IncidentPage({
 				params: params({ id: incident.id }),
 				searchParams: params({}),
 			}),
 		);
 		expect(screen.getAllByText("United States").length).toBeGreaterThan(0);
-		expect(screen.getByLabelText("Region")).toHaveValue(region.id);
 		expect(
-			screen.getByRole("button", { name: "Save region" }),
+			screen.getByRole("checkbox", { name: "United States" }),
+		).toBeChecked();
+		expect(
+			screen.getByRole("button", { name: "Save regions" }),
 		).toBeInTheDocument();
-		cleanup();
-		render(
+		incidentPage.unmount();
+		const posts = render(
 			await IncidentPage({
 				params: params({ id: incident.id }),
 				searchParams: params({ tab: "posts" }),
 			}),
 		);
 		expect(
-			screen.queryByRole("button", { name: "Save region" }),
+			screen.queryByRole("button", { name: "Save regions" }),
 		).not.toBeInTheDocument();
+		posts.unmount();
+		await services.catalog.delete(SYSTEM_ACTOR, api.id);
+		render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({}),
+			}),
+		);
+		expect(screen.getByText(api.id)).toBeInTheDocument();
+		expect(
+			screen.getByRole("checkbox", { name: "United States" }),
+		).toBeChecked();
 	});
 
 	it("asks for a reason before it deletes an incident", async () => {
@@ -1707,10 +1719,13 @@ describe("notification draft pages", () => {
 		const region = await services.regions.create(SYSTEM_ACTOR, {
 			name: "United States",
 		});
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		const withRegion = await services.drafts.create(AGENT, {
 			title: "US errors",
 			message: "Looking",
-			regionId: region.id,
+			serviceIds: [api.id, web.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
 		const global = await services.drafts.create(AGENT, {
 			title: "Global errors",
@@ -1718,12 +1733,53 @@ describe("notification draft pages", () => {
 		});
 		await signIn(app, "editor");
 		const editor = render(await draftPage(withRegion.id));
-		expect(screen.getByLabelText("Region")).toHaveValue(region.id);
+		const checked = screen
+			.getAllByRole("checkbox", { name: "United States" })
+			.filter((box) => (box as HTMLInputElement).checked);
+		expect(checked).toHaveLength(1);
 		editor.unmount();
 		await signIn(app, "viewer");
 		const named = render(await draftPage(withRegion.id));
-		expect(screen.getByText("United States")).toBeInTheDocument();
+		expect(screen.getByText("Global, United States")).toBeInTheDocument();
 		named.unmount();
+		const stored = await services.drafts.get(withRegion.id);
+		const { serviceRegions: _regions, ...rest } = stored.content;
+		await app.store.update("notification_drafts", {
+			...stored,
+			content: {
+				...rest,
+				serviceIds: [api.id],
+				regionId: region.id,
+			} as typeof stored.content,
+		});
+		await signIn(app, "editor");
+		const legacy = render(await draftPage(withRegion.id));
+		const legacyChecked = screen
+			.getAllByRole("checkbox", { name: "United States" })
+			.filter((box) => (box as HTMLInputElement).checked);
+		expect(legacyChecked).toHaveLength(1);
+		legacy.unmount();
+		const live = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Live",
+			message: "x",
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
+		});
+		const update = await services.drafts.create(AGENT, {
+			incidentId: live.id,
+			message: "Now in the US",
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
+		});
+		const review = render(await draftPage(update.id));
+		const reviewChecked = screen
+			.getAllByRole("checkbox", { name: "United States" })
+			.filter((box) => (box as HTMLInputElement).checked);
+		expect(reviewChecked).toHaveLength(1);
+		expect(reviewChecked[0]).toHaveAttribute("name", `regionIds:${api.id}`);
+		expect(document.querySelector(`input[name="boundServiceIds"]`)).toHaveValue(
+			api.id,
+		);
+		review.unmount();
 		render(await draftPage(global.id));
 		expect(
 			screen.queryByText("Region", { selector: "dt" }),

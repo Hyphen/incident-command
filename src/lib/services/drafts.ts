@@ -11,6 +11,7 @@ import type {
 	IncidentKind,
 	IncidentUpdate,
 	NotificationDraft,
+	ServiceRegions,
 } from "../domain/types";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import type { Condition } from "../store/types";
@@ -30,6 +31,29 @@ import {
 /** The portal path where a person reviews a notification draft. */
 export function draftPath(id: string): string {
 	return `/manage/drafts/${encodeURIComponent(id)}`;
+}
+
+/**
+ * Regions stored on a draft.
+ * An old draft can still have `regionId`. That region applies to each service.
+ */
+export function regionsInDraft(
+	content: DraftContent & { regionId?: string },
+): ServiceRegions[] | undefined {
+	if (content.serviceRegions && content.serviceRegions.length > 0) {
+		return content.serviceRegions;
+	}
+	if (
+		!content.regionId ||
+		!content.serviceIds ||
+		content.serviceIds.length === 0
+	) {
+		return undefined;
+	}
+	return content.serviceIds.map((serviceId) => ({
+		serviceId,
+		regionIds: [content.regionId as string],
+	}));
 }
 
 export interface DraftListOptions {
@@ -58,12 +82,7 @@ type Target =
 	| { action: "update"; incidentId: string };
 
 /** Fields that only a new incident or maintenance uses. */
-const CREATE_ONLY_FIELDS = [
-	"kind",
-	"scheduledStart",
-	"scheduledEnd",
-	"regionId",
-] as const;
+const CREATE_ONLY_FIELDS = ["kind", "scheduledStart", "scheduledEnd"] as const;
 
 function targetOf(draft: NotificationDraft): Target {
 	return draft.action === "update"
@@ -306,6 +325,7 @@ export class DraftService {
 					serviceStatus: input.serviceStatus,
 					serviceStatuses: input.serviceStatuses,
 					serviceIds: input.serviceIds,
+					serviceRegions: input.serviceRegions,
 				},
 			);
 			const content: DraftContent = {
@@ -315,6 +335,9 @@ export class DraftService {
 				serviceStatuses: data.serviceStatuses,
 				serviceIds: data.serviceIds,
 			};
+			if (data.serviceRegions && data.serviceRegions.length > 0) {
+				content.serviceRegions = data.serviceRegions;
+			}
 			if (data.title !== undefined && data.title !== incident.title) {
 				content.title = data.title;
 			}
@@ -337,8 +360,8 @@ export class DraftService {
 			serviceStatus: data.serviceStatus,
 			serviceStatuses: data.serviceStatuses,
 		};
-		if (data.regionId) {
-			content.regionId = data.regionId;
+		if (data.serviceRegions && data.serviceRegions.length > 0) {
+			content.serviceRegions = data.serviceRegions;
 		}
 		if (target.kind === "maintenance") {
 			content.scheduledStart = data.scheduledStart;
@@ -355,6 +378,7 @@ export class DraftService {
 	): Promise<Incident> {
 		const { content } = draft;
 		const publishOptions: PublishOptions = { ...options, id };
+		const serviceRegions = regionsInDraft(content);
 		if (draft.action === "update") {
 			return this.incidents.postUpdate(
 				actor,
@@ -367,13 +391,22 @@ export class DraftService {
 					serviceStatus: content.serviceStatus,
 					serviceStatuses: content.serviceStatuses,
 					serviceIds: content.serviceIds,
+					serviceRegions,
 				},
 				publishOptions,
 			);
 		}
+		const { regionId: _legacy, ...rest } = content as DraftContent & {
+			regionId?: string;
+		};
 		return this.incidents.create(
 			actor,
-			{ ...content, kind: draft.kind, title: content.title as string },
+			{
+				...rest,
+				kind: draft.kind,
+				title: content.title as string,
+				serviceRegions,
+			},
 			publishOptions,
 		);
 	}

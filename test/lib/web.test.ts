@@ -296,7 +296,8 @@ describe("API routes", () => {
 		expect(body.page).toEqual({ name: "Status", url: null });
 		expect(body.region).toBeNull();
 		expect(body.regions).toEqual([]);
-		expect(body.incidents[0].region).toBeNull();
+		expect(body.incidents[0].regions).toEqual([]);
+		expect(body.incidents[0].serviceRegions).toEqual([]);
 	});
 
 	it("serves one region and 404 for an unknown region", async () => {
@@ -310,7 +311,7 @@ describe("API routes", () => {
 			message: "Looking",
 			impact: "critical",
 			serviceIds: [api.id],
-			regionId: region.id,
+			serviceRegions: [{ serviceId: api.id, regionIds: [region.id] }],
 		});
 		const response = await status(
 			new Request(`http://localhost/api/v1/status?region=${region.id}`),
@@ -318,10 +319,15 @@ describe("API routes", () => {
 		const body = await response.json();
 		expect(body.region).toEqual({ id: region.id, name: "United States" });
 		expect(body.regions).toEqual([{ id: region.id, name: "United States" }]);
-		expect(body.incidents[0].region).toEqual({
-			id: region.id,
-			name: "United States",
-		});
+		expect(body.incidents[0].regions).toEqual([
+			{ id: region.id, name: "United States" },
+		]);
+		expect(body.incidents[0].serviceRegions).toEqual([
+			{
+				serviceId: api.id,
+				regions: [{ id: region.id, name: "United States" }],
+			},
+		]);
 		const global = await status(
 			new Request("http://localhost/api/v1/status?region="),
 		);
@@ -339,7 +345,8 @@ describe("API routes", () => {
 			await status(new Request("http://localhost/api/v1/status"))
 		).json();
 		expect(dangling.incidents[0].id).toBe(incident.id);
-		expect(dangling.incidents[0].region).toBeNull();
+		expect(dangling.incidents[0].regions).toEqual([]);
+		expect(dangling.incidents[0].serviceRegions).toEqual([]);
 		expect(dangling.regions).toEqual([]);
 	});
 

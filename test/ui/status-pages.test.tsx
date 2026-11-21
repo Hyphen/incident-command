@@ -282,7 +282,7 @@ describe("status page", () => {
 		}
 	});
 
-	it("shows Global and one tab for each region", async () => {
+	it("shows every outage on Overview and one tab for each region", async () => {
 		const { services } = await setupApp();
 		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
 		const united = await services.regions.create(SYSTEM_ACTOR, {
@@ -296,17 +296,28 @@ describe("status page", () => {
 			message: "Down",
 			impact: "critical",
 			serviceIds: [api.id],
-			regionId: united.id,
+			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
 		});
+		const web = await services.catalog.create(SYSTEM_ACTOR, { name: "Web" });
 		await services.incidents.create(SYSTEM_ACTOR, {
 			title: "Everywhere",
 			message: "Wide",
 			impact: "major",
 			serviceIds: [api.id],
 		});
+		await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Split",
+			message: "Down",
+			impact: "major",
+			serviceIds: [api.id, web.id],
+			serviceRegions: [
+				{ serviceId: api.id, regionIds: [united.id] },
+				{ serviceId: web.id, regionIds: [europe.id] },
+			],
+		});
 		const global = render(await StatusPage());
 		const tabs = within(screen.getByRole("navigation", { name: "Regions" }));
-		expect(tabs.getByRole("link", { name: "Global" })).toHaveAttribute(
+		expect(tabs.getByRole("link", { name: "Overview" })).toHaveAttribute(
 			"aria-current",
 			"page",
 		);
@@ -316,7 +327,11 @@ describe("status page", () => {
 		);
 		expect(screen.getAllByText("US only").length).toBeGreaterThan(0);
 		expect(screen.getAllByText("Everywhere").length).toBeGreaterThan(0);
-		expect(screen.getAllByText("Global").length).toBeGreaterThan(1);
+		expect(screen.getAllByText("Split").length).toBeGreaterThan(0);
+		expect(document.querySelector(".ic-banner")).toHaveAttribute(
+			"data-status",
+			"major_outage",
+		);
 		global.unmount();
 
 		render(
@@ -329,9 +344,13 @@ describe("status page", () => {
 			"page",
 		);
 		expect(screen.queryAllByText("US only")).toEqual([]);
+		const split = screen
+			.getByRole("heading", { name: "Split" })
+			.closest("article");
+		expect(split).toHaveTextContent("Affects Web");
+		expect(split).not.toHaveTextContent("API");
 		expect(screen.queryAllByText("Everywhere")).toEqual([]);
-		expect(screen.getByText("We're fully operational")).toBeInTheDocument();
-		expect(screen.queryAllByText("Partial outage")).toEqual([]);
+		expect(screen.getAllByText("Partial outage").length).toBeGreaterThan(0);
 		expect(screen.queryAllByText("Major outage")).toEqual([]);
 		expect(
 			screen.getByRole("link", { name: "View history →" }),
@@ -419,10 +438,12 @@ describe("incident page", () => {
 		const united = await services.regions.create(SYSTEM_ACTOR, {
 			name: "United States",
 		});
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
 		const incident = await services.incidents.create(SYSTEM_ACTOR, {
 			title: "US down",
 			message: "Down",
-			regionId: united.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
 		});
 		const page = render(
 			await IncidentPage({ params: params({ id: incident.id }) }),
@@ -435,7 +456,30 @@ describe("incident page", () => {
 			screen.getByRole("link", { name: "← Back to status" }),
 		).toHaveAttribute("href", `/?region=${united.id}`);
 		page.unmount();
+		const europe = await services.regions.create(SYSTEM_ACTOR, {
+			name: "Europe",
+		});
+		const wide = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "Two regions",
+			message: "Down",
+			serviceIds: [api.id],
+			serviceRegions: [
+				{ serviceId: api.id, regionIds: [united.id, europe.id] },
+			],
+		});
+		const widePage = render(
+			await IncidentPage({ params: params({ id: wide.id }) }),
+		);
+		expect(screen.getByText("Regions", { selector: "dt" })).toBeInTheDocument();
+		expect(
+			screen.getByText("United States, Europe", { selector: "dd" }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "← Back to status" }),
+		).toHaveAttribute("href", "/");
+		widePage.unmount();
 		await app.store.delete("regions", united.id);
+		await app.store.delete("regions", europe.id);
 		render(await IncidentPage({ params: params({ id: incident.id }) }));
 		expect(
 			screen.queryByText("Region", { selector: "dt" }),
@@ -576,11 +620,13 @@ describe("history page", () => {
 			name: "United States",
 		});
 		clock.set("2026-05-05T00:00:00.000Z");
+		const api = await services.catalog.create(SYSTEM_ACTOR, { name: "API" });
 		await services.incidents.create(SYSTEM_ACTOR, {
 			title: "May blip",
 			message: "x",
 			status: "resolved",
-			regionId: united.id,
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [united.id] }],
 		});
 		clock.set("2026-11-02T12:00:00.000Z");
 		render(

@@ -1,4 +1,5 @@
 import type { AirhornTemplate } from "airhorn";
+import { incidentRegionIds } from "../domain/regions";
 import { EVENT_STATUS_LABELS } from "../domain/status";
 import type {
 	Incident,
@@ -245,7 +246,7 @@ export function webhookPayload(notification: IncidentNotification) {
 			resolvedAt: incident.resolvedAt,
 			scheduledStart: incident.scheduledStart,
 			scheduledEnd: incident.scheduledEnd,
-			regionId: incident.regionId ?? null,
+			regionIds: incidentRegionIds(incident),
 		},
 		update: {
 			id: notification.update.id,

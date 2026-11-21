@@ -318,20 +318,56 @@ function serviceStatuses(form: FormData) {
 		}));
 }
 
+/**
+ * Regions for the selected services.
+ * Returns nothing when the form has no region choices.
+ * A service in `serviceIds` with no checked region is Global.
+ */
+function regionsByService(form: FormData, serviceIds?: readonly string[]) {
+	if (!form.has("serviceRegions")) {
+		return undefined;
+	}
+	const entries: { serviceId: string; regionIds: string[] }[] = [];
+	const seen = new Set<string>();
+	for (const key of form.keys()) {
+		if (!key.startsWith("regionIds:")) {
+			continue;
+		}
+		const serviceId = key.slice("regionIds:".length);
+		if (seen.has(serviceId)) {
+			continue;
+		}
+		if (serviceIds && !serviceIds.includes(serviceId)) {
+			continue;
+		}
+		seen.add(serviceId);
+		entries.push({ serviceId, regionIds: list(form, key) });
+	}
+	if (serviceIds) {
+		for (const serviceId of serviceIds) {
+			if (!seen.has(serviceId)) {
+				entries.push({ serviceId, regionIds: [] });
+			}
+		}
+	}
+	return entries;
+}
+
 function incidentInput(form: FormData) {
 	const kind = (text(form, "kind") || "incident") as IncidentKind;
+	const serviceIds = list(form, "serviceIds");
 	return {
 		kind,
 		title: text(form, "title"),
 		message: text(form, "message"),
 		impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
 		status: nonEmpty(form, "status") as EventStatus | undefined,
-		serviceIds: list(form, "serviceIds"),
+		serviceIds,
 		serviceStatus: nonEmpty(form, "serviceStatus") as ServiceStatus | undefined,
 		serviceStatuses: serviceStatuses(form),
+		serviceRegions: regionsByService(form, serviceIds),
 		scheduledStart: dateTime(form, "scheduledStart"),
 		scheduledEnd: dateTime(form, "scheduledEnd"),
-		regionId: nonEmpty(form, "regionId"),
 		notify: checkbox(form, "notify"),
 	};
 }
@@ -428,14 +464,16 @@ function postedPath(id: string, tab: string): string {
 }
 
 function updateInput(form: FormData) {
+	const serviceIds = list(form, "addServiceIds");
 	return {
 		title: nonEmpty(form, "title"),
 		impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
 		status: nonEmpty(form, "status") as EventStatus | undefined,
 		message: text(form, "message"),
-		serviceIds: list(form, "addServiceIds"),
+		serviceIds,
 		serviceStatus: nonEmpty(form, "serviceStatus") as ServiceStatus | undefined,
 		serviceStatuses: serviceStatuses(form),
+		serviceRegions: regionsByService(form, serviceIds),
 		notify: checkbox(form, "notify"),
 	};
 }
@@ -483,8 +521,8 @@ export async function editIncidentAction(form: FormData): Promise<void> {
 		services.incidents.edit(actor, id, {
 			scheduledStart: dateTime(form, "scheduledStart"),
 			scheduledEnd: dateTime(form, "scheduledEnd"),
-			regionId: form.has("regionId")
-				? (nonEmpty(form, "regionId") ?? null)
+			serviceRegions: form.has("serviceRegions")
+				? regionsByService(form)
 				: undefined,
 		}),
 	);
@@ -506,17 +544,21 @@ export async function deleteIncidentAction(form: FormData): Promise<void> {
 function draftContent(form: FormData) {
 	const serviceIds = list(form, "serviceIds");
 	const addServiceIds = list(form, "addServiceIds");
+	const boundServiceIds = list(form, "boundServiceIds");
+	const ids = [
+		...new Set([...serviceIds, ...addServiceIds, ...boundServiceIds]),
+	];
 	return {
 		title: nonEmpty(form, "title"),
 		impact: nonEmpty(form, "impact") as IncidentImpact | undefined,
-		serviceIds: serviceIds.length > 0 ? serviceIds : addServiceIds,
+		serviceIds: ids,
 		scheduledStart: dateTime(form, "scheduledStart"),
 		scheduledEnd: dateTime(form, "scheduledEnd"),
 		status: nonEmpty(form, "status") as EventStatus | undefined,
 		message: text(form, "message"),
 		serviceStatus: nonEmpty(form, "serviceStatus") as ServiceStatus | undefined,
 		serviceStatuses: serviceStatuses(form),
-		regionId: form.has("regionId") ? nonEmpty(form, "regionId") : undefined,
+		serviceRegions: regionsByService(form, ids),
 	};
 }
 
