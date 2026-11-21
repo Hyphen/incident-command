@@ -35,9 +35,10 @@ WORKDIR /app
 
 # pnpm-workspace.yaml carries `allowBuilds`, so it must sit next to the lockfile.
 # Copy each workspace manifest so that the frozen lockfile matches. Install only
-# the app and its dependencies.
+# the app and its dependencies, not the documentation site.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/app/package.json ./packages/app/
+COPY packages/website/package.json ./packages/website/
 RUN pnpm install --frozen-lockfile --filter @incident-command/app...
 
 COPY packages/app ./packages/app

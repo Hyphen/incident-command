@@ -13,7 +13,7 @@
 	"containerDefinitions": [
 		{
 			"name": "app",
-			"image": "ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/incident-command:latest",
+			"image": "jaredwray/incident-command:<version>",
 			"essential": true,
 			"portMappings": [{ "containerPort": 3000, "protocol": "tcp" }],
 			"environment": [

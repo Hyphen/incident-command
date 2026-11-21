@@ -8,7 +8,7 @@ name: deploy-development
 #   CLOUDFLARE_ACCOUNT_ID  secret: the Cloudflare account ID
 # Worker secrets (DATABASE_URI, SETUP_TOKEN, ...) stay on the Worker. The
 # Worker gives them to the container.
-# See deploy/cloudflare/README.md.
+# See the "Development Worker" section of CONTRIBUTING.md.
 
 on:
   push:
@@ -71,6 +71,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if [ -z "$NEXT_SERVER_ACTIONS_ENCRYPTION_KEY" ]; then
-            echo "::warning::Set the NEXT_SERVER_ACTIONS_ENCRYPTION_KEY secret. Without it, this deploy changes the server action ids. See deploy/cloudflare/README.md."
+            echo "::warning::Set the NEXT_SERVER_ACTIONS_ENCRYPTION_KEY secret. Without it, this deploy changes the server action ids. See CONTRIBUTING.md."
           fi
           pnpm cf:deploy --env development

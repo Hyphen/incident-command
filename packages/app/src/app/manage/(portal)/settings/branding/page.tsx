@@ -175,7 +175,7 @@ export default async function BrandingPage({
 									. Use an <code>ic-*</code> class name to change one element,
 									e.g. <code>{".ic-banner { border-width: 2px; }"}</code>. The{" "}
 									<a
-										href="https://github.com/jaredwray/incident-command/blob/main/docs/theming.md#2-custom-css"
+										href="https://incident-command.org/docs/theming/custom-css/"
 										className="underline underline-offset-2 hover:text-fg"
 										target="_blank"
 										rel="noreferrer"

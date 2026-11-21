@@ -1,0 +1,96 @@
+{{!--
+  Incident Command: the sections below the hero of the home page.
+  This file replaces includes/home.hbs of the docula "modern" template.
+  docula renders site/README.md only when the site has no docs, so the home
+  page content is here. The contributor and changelog sections are the same
+  as in the docula template. The styles are in site/variables.css.
+--}}
+<div class="home-content ic-home">
+  <section>
+    <img class="ic-home-shot" src="/images/status-page-top.png" alt="The Incident Command status page" width="1100" height="750">
+  </section>
+
+  <section>
+    <h2 class="home-title">Start here</h2>
+    <div class="ic-cards">
+      <a class="ic-card" href="/docs/deploy/choose-a-platform/">
+        <strong>Deploy it</strong>
+        <span>Run the Docker image on any container host, or follow a guide for Cloudflare, DigitalOcean, Google Cloud, AWS or Azure.</span>
+      </a>
+      <a class="ic-card" href="/docs/guide/portal/">
+        <strong>Use the portal</strong>
+        <span>Declare incidents, post updates, schedule maintenance, and manage services, members and subscribers.</span>
+      </a>
+      <a class="ic-card" href="/docs/agents/connect/">
+        <strong>Connect an agent</strong>
+        <span>Give an AI agent its own permissions. It writes drafts, and a person approves them before anything goes out.</span>
+      </a>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="home-title">Try it in one command</h2>
+    <pre class="ic-command"><code>docker run --rm -p 3000:3000 -e SEED_DEMO=true -e SETUP_TOKEN=change-me jaredwray/incident-command:&lt;version&gt;</code></pre>
+    <p class="ic-note">Replace <code>&lt;version&gt;</code> with a release from <a href="https://hub.docker.com/r/jaredwray/incident-command/tags">Docker Hub</a>. Open <code>http://localhost:3000</code> for the status page and <code>/manage/setup</code> to create the first admin. Read the <a href="/docs/getting-started/quick-start/">quick start</a> for more ways to run it.</p>
+  </section>
+
+  <section>
+    <h2 class="home-title">Features</h2>
+    <ul class="ic-features">
+      <li><strong>Status page</strong> with regions, 90-day uptime bars, incident history, an RSS feed, a public JSON API, and light and dark modes.</li>
+      <li><strong>Management portal</strong> for incidents, maintenance, services, regions, members, agents, subscribers and settings.</li>
+      <li><strong>MCP server</strong> with permissions for each agent, and human review of each notification that an agent writes.</li>
+      <li><strong>Markdown pages for agents</strong> at <code>/llms.txt</code>, <code>/history.md</code> and <code>/incidents/{id}.md</code>.</li>
+      <li><strong>Notifications</strong> through signed webhooks, SendGrid or Amazon SES email, and Twilio or Amazon SNS text messages, with double opt-in.</li>
+      <li><strong>Two-factor authentication</strong> with an authenticator app and recovery codes.</li>
+      <li><strong>Themes, a logo and custom CSS</strong> from the portal.</li>
+      <li><strong>PostgreSQL, MongoDB or memory</strong>, with a read cache that keeps the status page online when the database is offline.</li>
+    </ul>
+    <p class="ic-note">Runs where you run containers: <a href="/docs/deploy/docker/">Docker and Compose</a> · <a href="/docs/deploy/cloudflare/">Cloudflare</a> · <a href="/docs/deploy/digitalocean/">DigitalOcean</a> · <a href="/docs/deploy/google-cloud/">Google Cloud</a> · <a href="/docs/deploy/aws/">AWS</a> · <a href="/docs/deploy/azure/">Azure</a> · <a href="/docs/deploy/other-hosts/">Fly.io, Render and Railway</a>. See a live example at <a href="https://dev.incident-command.org">dev.incident-command.org</a>.</p>
+  </section>
+
+  {{#if github}}
+  {{#if github.contributors}}
+  <section>
+    <h2 class="home-title">Contributors</h2>
+    <div class="facepile">
+      {{#each github.contributors}}
+      <a href="{{html_url}}" target="_blank" title="{{login}}" rel="noopener noreferrer">
+        <img src="{{avatar_url}}" alt="{{login}}">
+      </a>
+      {{/each}}
+    </div>
+  </section>
+  {{/if}}
+
+  {{#if github.releases}}
+  <section>
+    <h2 class="home-title">Changelog</h2>
+    {{#each github.releases as |release|}}
+    {{#if (lt @index 3)}}
+    <div class="release">
+      <div class="release-header">
+        <a class="release-title" href="{{release.html_url}}" target="_blank" rel="noopener noreferrer">{{release.name}}</a>
+        <span class="release-date">{{#moment release.published_at "MMMM DD, YYYY"}}{{/moment}}</span>
+      </div>
+      <div class="release-body">
+        {{#if release.body}}
+        {{#markdown}}{{release.body}}{{/markdown}}
+        {{/if}}
+      </div>
+    </div>
+    {{/if}}
+    {{/each}}
+
+    {{#if (gt github.releases.length 6)}}
+    <div>
+      <a class="release-btn" href="{{changelogUrl}}/">
+        Full Changelog
+        <span>&rarr;</span>
+      </a>
+    </div>
+    {{/if}}
+  </section>
+  {{/if}}
+  {{/if}}
+</div>

@@ -74,6 +74,44 @@ jobs:
           directory: ./packages/app/coverage
           fail_ci_if_error: false
 
+  # Build the documentation site and check its links. deploy-website.yml
+  # deploys it from main.
+  website:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Socket Firewall
+        uses: SocketDev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+        with:
+          mode: firewall-free
+          firewall-version: "1.16.0"
+
+      - name: Set up pnpm (version from package.json packageManager)
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: sfw pnpm install --frozen-lockfile --filter @incident-command/website...
+
+      # docula reads the GitHub releases for the changelog.
+      - name: Build the site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm website:build
+
+      - name: Check the links
+        run: pnpm --filter @incident-command/website check-links
+
   # Build the image from the root Dockerfile and smoke test it. The release
   # workflow (release-docker.yml) runs the same test before it pushes.
   docker:

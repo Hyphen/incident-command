@@ -1,0 +1,28 @@
+{
+	"name": "@incident-command/website",
+	"version": "0.1.0",
+	"description": "The Incident Command documentation site (https://incident-command.org), built with docula.",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"author": "Jared Wray <me@jaredwray.com>",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jaredwray/incident-command.git",
+		"directory": "packages/website"
+	},
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"build": "docula build --site ./site --output ./dist --clean",
+		"dev": "docula dev --site ./site --output ./dist",
+		"check-links": "node scripts/check-links.mjs dist",
+		"cf:deploy": "wrangler deploy",
+		"clean": "rm -rf dist site/.cache node_modules"
+	},
+	"devDependencies": {
+		"docula": "3.0.2",
+		"wrangler": "^4.156.2"
+	}
+}

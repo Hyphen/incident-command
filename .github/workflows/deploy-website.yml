@@ -1,0 +1,81 @@
+name: deploy-website
+
+# Builds the documentation site (packages/website) with docula and deploys it
+# to https://incident-command.org. A Cloudflare Worker serves the static
+# files (packages/website/wrangler.jsonc).
+#
+# The "website" GitHub environment holds the Cloudflare credentials:
+#   CLOUDFLARE_API_TOKEN   secret: API token that can deploy Workers and add a
+#                          custom domain on the incident-command.org zone
+#   CLOUDFLARE_ACCOUNT_ID  secret: the Cloudflare account ID
+#
+# docula reads the GitHub releases for the changelog with GITHUB_TOKEN. A
+# published release starts a deploy, so the changelog shows the release.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/website/**"
+      - ".github/workflows/deploy-website.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+# One deploy at a time. Do not cancel a deploy that is in progress.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-website:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout, and read the releases for the changelog
+    environment:
+      name: website
+      url: https://incident-command.org
+    steps:
+      # A release event points at the release tag. The site always shows the
+      # docs on main.
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Install Socket Firewall
+        uses: SocketDev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+        with:
+          mode: firewall-free
+          firewall-version: "1.16.0"
+
+      - name: Set up pnpm (version from package.json packageManager)
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      # This job deploys, so it does not restore a package cache (cache poisoning).
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: sfw pnpm install --frozen-lockfile --filter @incident-command/website...
+
+      - name: Build the site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm website:build
+
+      - name: Check the links
+        run: pnpm --filter @incident-command/website check-links
+
+      - name: Deploy with wrangler
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm website:deploy

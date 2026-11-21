@@ -3,76 +3,65 @@
 > Open source incident command: a beautiful, skinnable status page, a management portal for your team, and an MCP server so AI agents can run the whole thing. Deploy it anywhere.
 
 [![tests](https://github.com/jaredwray/incident-command/actions/workflows/tests.yml/badge.svg)](https://github.com/jaredwray/incident-command/actions/workflows/tests.yml)
+[![docker](https://img.shields.io/docker/v/jaredwray/incident-command?sort=semver&label=docker)](https://hub.docker.com/r/jaredwray/incident-command)
 [![license](https://img.shields.io/github/license/jaredwray/incident-command)](LICENSE)
 
-![Status page](docs/images/status-page.png)
+**Documentation: [incident-command.org](https://incident-command.org)**
+
+![Status page](packages/website/site/public/images/status-page.png)
 
 ## Features
 
-- **Status page:** overall status banner, active incidents, upcoming maintenance, grouped services with 90-day uptime bars, incident history, incident pages with the status of each affected service for each minute of the incident and the 2 hours before and after it, an RSS feed with one item for each incident update, and a public JSON API. Light and dark mode, mobile friendly.
-- **Regions:** Name a region when you need one. Each affected service can use one region, more than one region, or none. None means Global. With no regions, the status page is one page. With regions, the page shows Overview and a tab for each region. Overview lists every outage. A region tab shows only the services bound to that region.
-- **Pages for agents:** `/llms.txt` gives the status page in Markdown ([llms.txt](https://llmstxt.org)). The history and each incident page also have a Markdown version at `/history.md` and `/incidents/{id}.md`. An agent can read them without credentials.
-- **MCP server:** a Streamable HTTP endpoint at `/api/mcp`. Each agent has its own permissions. A new agent can read the status page and write drafts. It cannot publish or notify subscribers until an admin grants those permissions. See [docs/mcp.md](docs/mcp.md).
-- **Human review of notifications:** an agent can save a notification as a draft. The MCP server returns a review link. A person opens the link, changes the draft if necessary, and approves it. Nothing is published or sent before approval. See [docs/mcp.md](docs/mcp.md#notification-drafts).
-- **Manage portal** at `/manage`: declare incidents, post updates, review notification drafts on the incidents page, manage services, members (viewer/editor/admin, added with one-time invite links), connected agents and API tokens, subscribers, and settings in three sections: General, Branding and Notifications.
-- **Two-factor authentication:** A member can turn on an authenticator app and can save recovery codes. The setup page shows a QR code for a password manager. An admin can require it from Settings, General. The requirement starts on.
-- **Skinnable:** Tailwind CSS v4 on top of CSS design tokens. Pick a theme preset, upload a logo and a favicon, and add custom CSS from the portal, or add your own preset. An agent can do the same design with the MCP server. See [docs/theming.md](docs/theming.md).
-- **Runs anywhere:** Docker image for any container host, plus guides for Cloudflare, DigitalOcean, Google Cloud, AWS and Azure. See [docs/deployment.md](docs/deployment.md).
-- **Pluggable storage:** PostgreSQL, MongoDB or in-memory, chosen from `DATABASE_URI`. Adding an adapter means implementing one small interface.
-- **Keeps working when the database doesn't:** reads go through a [cacheable](https://cacheable.org) layer that never expires entries while the database is offline, so the status page keeps serving the last known state during an outage.
-- **Notifications with [airhorn](https://airhorn.org):** signed webhooks (Slack and Discord compatible), email through SendGrid or Amazon SES, and text messages through Twilio or Amazon SNS. Visitors subscribe through each channel that can send, with double opt-in. Email and text messaging can have more than one provider, active/passive or load balanced. Provider credentials are encrypted in the database with `ENCRYPTION_KEY`.
-- **Service choice:** a subscriber can choose the services that send a notification. Set the choice on the status page, in the portal, with the API, or with MCP. No choice sends a notification for every service.
+- **Status page:** an overall status banner, regions, grouped services with 90-day uptime bars, incident history, incident pages with the status of each service for each minute, an RSS feed and a public JSON API. Light and dark mode, mobile friendly.
+- **Management portal** at `/manage`: declare incidents, post updates, schedule maintenance, review notification drafts, and manage services, regions, members, agents, subscribers and settings.
+- **MCP server** at `/api/mcp`: each agent has its own permissions. A new agent can read the status page and write drafts. It cannot publish or notify subscribers until an admin allows it.
+- **Human review of notifications:** an agent saves a notification as a draft. A person approves it before anything goes out.
+- **Pages for agents:** `/llms.txt`, `/history.md` and `/incidents/{id}.md` give the status page in Markdown.
+- **Notifications** with [airhorn](https://airhorn.org): signed webhooks (Slack and Discord compatible), SendGrid or Amazon SES email, and Twilio or Amazon SNS text messages, with double opt-in.
+- **Two-factor authentication** with an authenticator app and recovery codes, required by default.
+- **Skinnable:** theme presets, a logo, a favicon and custom CSS from the portal.
+- **Pluggable storage:** PostgreSQL, MongoDB or memory, with a [cacheable](https://cacheable.org) read cache that keeps the status page online when the database is offline.
 
 <table>
 <tr>
-<td><img src="docs/images/manage-incident.png" alt="Managing an incident in the portal"></td>
-<td><img src="docs/images/status-page-dark.png" alt="Status page in dark mode"></td>
+<td><img src="packages/website/site/public/images/manage-incident.png" alt="Managing an incident in the portal"></td>
+<td><img src="packages/website/site/public/images/status-page-dark.png" alt="Status page in dark mode"></td>
 </tr>
 </table>
 
 ## Quick start
 
-Requires Node.js 24 and pnpm (`corepack enable`).
+Run the image from Docker Hub with demo data. Replace `<version>` with a [release version](https://hub.docker.com/r/jaredwray/incident-command/tags):
 
 ```bash
-pnpm install
+docker run --rm -p 3000:3000 -e SEED_DEMO=true -e SETUP_TOKEN=change-me jaredwray/incident-command:<version>
 ```
+
+Open http://localhost:3000 for the status page and http://localhost:3000/manage/setup to create the first admin with the `SETUP_TOKEN`. The image is `linux/amd64`. On an Arm computer, add `--platform linux/amd64`.
+
+With Docker Compose and PostgreSQL:
 
 ```bash
-SEED_DEMO=true SETUP_TOKEN=replace-me pnpm dev
+cp .env.example .env && docker compose up -d --build
 ```
 
-Open http://localhost:3000 for the status page and http://localhost:3000/manage/setup to create the first admin (use the `SETUP_TOKEN` above). Without `DATABASE_URI` the in-memory store is used, which is perfect for trying things out (data is lost on restart).
-
-With Docker and Postgres:
+From source (Node.js 24 and pnpm, `corepack enable`):
 
 ```bash
-docker compose up --build
+pnpm install && SEED_DEMO=true SETUP_TOKEN=change-me pnpm dev
 ```
 
-## Deploy
+## Documentation
 
-| Platform                     | Guide                                                |
-| ---------------------------- | ---------------------------------------------------- |
-| Any container host / VPS     | [deploy/docker](deploy/docker/README.md)             |
-| Cloudflare Containers        | [deploy/cloudflare](deploy/cloudflare/README.md)     |
-| DigitalOcean App Platform    | [deploy/digitalocean](deploy/digitalocean/README.md) |
-| Google Cloud Run             | [deploy/gcp](deploy/gcp/README.md)                   |
-| AWS App Runner / ECS Fargate | [deploy/aws](deploy/aws/README.md)                   |
-| Azure Container Apps         | [deploy/azure](deploy/azure/README.md)               |
-
-Every option is configured with environment variables; the full reference is in [docs/deployment.md](docs/deployment.md) and [`.env.example`](.env.example). The essentials:
-
-| Variable         | Purpose                                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URI`   | `postgres://…`, `mongodb://…` or unset for memory. Tables/indexes are created on boot.                            |
-| `SITE_URL`       | Public URL. Notifications, the RSS feed and the Markdown pages use it in links.                                   |
-| `SETUP_TOKEN`    | Required to create the first admin at `/manage/setup`. Without it, whoever reaches that page first becomes admin. |
-| `CACHE_TTL`      | How long cached reads are fresh (default `30s`).                                                                  |
-| `ENCRYPTION_KEY` | Encrypts provider credentials. Set it, then add providers in **Settings → Notifications**.                        |
-| `EMAIL_FROM`     | The default email sender.                                                                                         |
-
-Health check: `GET /healthz` returns `ok`, `degraded` (database offline, cached data still served) or `503` when the app cannot start.
+| Topic           | Link                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Getting started | [Quick start](https://incident-command.org/docs/getting-started/quick-start/) · [Concepts](https://incident-command.org/docs/getting-started/concepts/)                                                                                                                                                                                                                                                                                                                                   |
+| Deploy          | [Docker](https://incident-command.org/docs/deploy/docker/) · [Cloudflare](https://incident-command.org/docs/deploy/cloudflare/) · [DigitalOcean](https://incident-command.org/docs/deploy/digitalocean/) · [Google Cloud](https://incident-command.org/docs/deploy/google-cloud/) · [AWS](https://incident-command.org/docs/deploy/aws/) · [Azure](https://incident-command.org/docs/deploy/azure/) · [Fly.io, Render and Railway](https://incident-command.org/docs/deploy/other-hosts/) |
+| Operate         | [Databases](https://incident-command.org/docs/operate/databases/) · [Notifications](https://incident-command.org/docs/operate/notifications/) · [Secrets](https://incident-command.org/docs/operate/secrets/) · [Upgrades and backups](https://incident-command.org/docs/operate/upgrades/) · [Security](https://incident-command.org/docs/operate/security/)                                                                                                                             |
+| Use the portal  | [User guide](https://incident-command.org/docs/guide/portal/)                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Agents          | [Connect an agent](https://incident-command.org/docs/agents/connect/) · [MCP tools](https://incident-command.org/docs/agents/tools/)                                                                                                                                                                                                                                                                                                                                                      |
+| Reference       | [Environment variables](https://incident-command.org/docs/reference/environment-variables/) · [REST API](https://incident-command.org/api/) · [Webhooks](https://incident-command.org/docs/reference/webhooks/)                                                                                                                                                                                                                                                                           |
+| Theming         | [Branding](https://incident-command.org/docs/theming/branding/) · [Custom CSS](https://incident-command.org/docs/theming/custom-css/)                                                                                                                                                                                                                                                                                                                                                     |
 
 ## Connect an agent
 
@@ -82,56 +71,29 @@ Add the MCP endpoint to your agent. **Manage → Agents** shows the endpoint:
 claude mcp add --transport http incident-command https://status.example.com/api/mcp
 ```
 
-The agent opens the portal in your browser. Sign in and select **Allow**. A new agent can read the status page and write drafts. For a script that cannot sign in, an admin can add an API token on the agent page.
+The agent opens the portal in your browser. Sign in and select **Allow**. Read [Connect an agent](https://incident-command.org/docs/agents/connect/).
 
-Ask your agent something like _"We're seeing API errors in us-east, declare a major incident on the REST API and keep the status page updated"_. An agent only sees the tools that its permissions allow. Details in [docs/mcp.md](docs/mcp.md).
+## Repository
 
-## Subscriber API
+This repository is a pnpm workspace:
 
-The API uses the same bearer token as the MCP server.
-
-| Method  | Path                       | What it does                                                                               |
-| ------- | -------------------------- | ------------------------------------------------------------------------------------------ |
-| `GET`   | `/api/v1/subscribers`      | List subscribers. The response has no token.                                               |
-| `POST`  | `/api/v1/subscribers`      | Add a subscriber. Send `type`, `target`, and `serviceIds` when you want a limit.           |
-| `PATCH` | `/api/v1/subscribers/{id}` | Set `serviceIds`. An empty list clears the choice. The create response includes the token. |
-
-## Architecture
-
-```
-            ┌──────────── Next.js (App Router) ────────────┐
- browsers ─▶│ status page · /manage portal · /api/v1 · RSS  │
- agents ───▶│ /api/mcp (MCP SDK, stateless Streamable HTTP) │
-            └───────────────────────┬──────────────────────┘
-                                    ▼
-                      services (src/lib/services)
-        incidents · drafts · services · uptime · members
-     sessions · oauth · agents · subscribers · settings · status
-                     │                         │
-                     ▼                         ▼
-          CachedStore (cacheable)        Notifier (airhorn)
-     stale-while-offline read cache    webhooks · email · SMS
-                     │
-                     ▼
-     DocumentStore adapter: Postgres (jsonb) · MongoDB · memory
-```
-
-- **`src/lib/store`:** the `DocumentStore` interface (find/get/count/insert/update/delete with a small portable query language) and its adapters. A shared contract test suite (`test/store/contract.ts`) runs against every adapter, so a new adapter (SQLite, DynamoDB, Firestore, …) only has to pass it.
-- **`src/lib/store/cached.ts`:** wraps any adapter. Cached reads are fresh for `CACHE_TTL`; after that they are refreshed from the database, and if the database is unreachable the last known value is served instead of an error. Writes go straight to the database and mark cached reads stale without discarding them. Only public status data is cached here. The session service keeps a resolved portal session in memory for `SESSION_CACHE_TTL`; API tokens always hit the database.
-- **`src/lib/services`:** all business logic and authorization (`viewer` < `editor` < `admin`), shared by the portal, the MCP server and the public pages.
-- **`src/lib/notifications`:** one airhorn instance for each channel, with its providers and its send strategy (fail-over or round-robin): a signed webhook provider, SendGrid or SES (`@airhornjs/aws`) email, and Twilio (`@airhornjs/twilio`) or SNS (`@airhornjs/aws`) text messages.
-
-## Development
+| Path                                   | Contents                                                         |
+| -------------------------------------- | ---------------------------------------------------------------- |
+| [`packages/app`](packages/app)         | The Next.js app: status page, portal, MCP server and API.        |
+| [`packages/website`](packages/website) | The documentation site, built with [docula](https://docula.org). |
+| [`deploy`](deploy)                     | Config files for the deploy guides.                              |
+| [`Dockerfile`](Dockerfile)             | The container image. Build it from the repository root.          |
 
 ```bash
-pnpm dev          # start the dev server
-pnpm test         # lint (biome) + vitest with coverage
-pnpm typecheck    # tsc
-pnpm build        # production build (standalone output)
-pnpm cf:dev       # run the Cloudflare Worker and container locally (Docker)
+pnpm dev            # start the app in development mode
+pnpm test           # vitest with coverage
+pnpm lint           # biome
+pnpm typecheck      # tsc
+pnpm build          # production build (standalone output)
+pnpm website:dev    # start the documentation site
 ```
 
-The test suite enforces **100% line, branch, function and statement coverage** of `src/`. Postgres adapter tests run against a real in-process Postgres ([PGlite](https://pglite.dev)) and Mongo tests against [mongodb-memory-server](https://github.com/typegoose/mongodb-memory-server), so no external services are needed. The MCP server is tested end to end with the official MCP client.
+The test suite enforces **100% line, branch, function and statement coverage** of `packages/app/src`. Read [CONTRIBUTING.md](CONTRIBUTING.md) before you open a pull request.
 
 ## License
 

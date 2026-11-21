@@ -1,0 +1,26 @@
+// Cloudflare config for the documentation site at https://incident-command.org.
+// A Worker with static assets serves the docula output in ./dist.
+//   pnpm website:build                     build the site into packages/website/dist
+//   pnpm website:deploy                    deploy it (needs CLOUDFLARE_API_TOKEN)
+// .github/workflows/deploy-website.yml deploys it on each push to main that
+// changes packages/website, and on each published release (for the changelog).
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "incident-command-website",
+	"compatibility_date": "2026-11-01",
+	"assets": {
+		"directory": "./dist",
+		// docula writes each page as <path>/index.html.
+		"html_handling": "auto-trailing-slash"
+	},
+	// The Worker gets only the custom domain. The incident-command.org zone
+	// must be in the same Cloudflare account.
+	"routes": [
+		{
+			"pattern": "incident-command.org",
+			"custom_domain": true
+		}
+	],
+	"workers_dev": false,
+	"preview_urls": false
+}

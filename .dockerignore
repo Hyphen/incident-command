@@ -21,7 +21,10 @@
 **/.dev.vars
 **/.dev.vars.*
 
-# Not needed to build the server.
+# Not needed to build the server. The documentation site is not in the image,
+# but its manifest is: the frozen lockfile lists each workspace package.
+packages/website
+!packages/website/package.json
 packages/app/test
 deploy
 Dockerfile

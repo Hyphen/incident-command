@@ -1,0 +1,103 @@
+/*
+ * Colors of the documentation site. They follow the default theme of the app
+ * (packages/app/src/themes/default.css): a cool gray page, white surfaces,
+ * navy text and a blue brand color. The site follows the system theme.
+ */
+:root {
+	--bg: #101214;
+	--fg: #e3e7ec;
+	--border: #2c333a;
+	--border-strong: #3a434c;
+	--border-hover: #59646f;
+	--surface: #171a1d;
+	--surface-hover: #1d2125;
+	--muted: #9aa6b4;
+	--muted-fg: rgba(227, 231, 236, 0.65);
+	--code-bg: rgba(255, 255, 255, 0.075);
+	--pre-bg: #171a1d;
+	--link: #579dff;
+	--scrollbar: rgba(255, 255, 255, 0.2);
+	--header-height: 81px;
+}
+
+[data-theme="light"] {
+	--bg: #ffffff;
+	--fg: #172b4d;
+	--border: #dcdfe5;
+	--border-strong: #c7ccd4;
+	--border-hover: #9aa3b0;
+	--surface: #f4f5f7;
+	--surface-hover: #ebedf0;
+	--muted: #596780;
+	--muted-fg: rgba(23, 43, 77, 0.6);
+	--code-bg: rgba(9, 30, 66, 0.06);
+	--pre-bg: #f7f8fa;
+	--link: #0c5fd6;
+	--scrollbar: rgba(0, 0, 0, 0.2);
+}
+
+/* Home page sections (templates/modern/includes/home.hbs). */
+.ic-home .ic-home-shot {
+	display: block;
+	width: 100%;
+	height: auto;
+	border: 1px solid var(--border);
+	border-radius: 0.75rem;
+}
+
+.ic-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+	gap: 1rem;
+}
+
+.ic-card {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 1.25rem;
+	border: 1px solid var(--border);
+	border-radius: 0.75rem;
+	background: var(--surface);
+	color: var(--fg);
+	text-decoration: none;
+	transition: border-color 0.2s;
+}
+
+.ic-card:hover {
+	border-color: var(--link);
+}
+
+.ic-card,
+.ic-card:hover,
+.ic-card * {
+	text-decoration: none;
+}
+
+.ic-card strong {
+	color: var(--link);
+	font-size: 1.05rem;
+}
+
+.ic-card span {
+	color: var(--muted);
+	line-height: 1.5;
+}
+
+.ic-command {
+	overflow-x: auto;
+	padding: 1rem;
+	border: 1px solid var(--border);
+	border-radius: 0.5rem;
+	background: var(--pre-bg);
+}
+
+.ic-note {
+	color: var(--muted);
+	line-height: 1.6;
+}
+
+.ic-features {
+	padding-left: 1.25rem;
+	line-height: 1.7;
+}

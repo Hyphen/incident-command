@@ -17,6 +17,7 @@
   - `src/components`: presentational components. Colors come only from theme tokens (`bg-surface`, `text-muted`, `bg-operational`, …), never raw palette classes.
 - **Conventions:** timestamps are ISO strings; ids are prefixed (`inc_`, `cmp_`, …); expected failures throw `AppError` subclasses from `src/lib/errors.ts`; portal actions redirect with flash codes from `src/lib/flash-messages.json` (`?notice=` / `?error=`).
 - **Tests:** `test/**/*.test.ts` run in Node, `test/**/*.test.tsx` in jsdom with `next/headers` and `next/navigation` mocked (`test/ui/setup.ts`). Use `createTestContext()` (services) or `setupApp()` + `signIn()` (pages and actions).
+- **Docs:** the user documentation is in `packages/website/site/docs`. Update a page when a change alters a behavior that the page describes. Link to other pages with site paths, such as `/docs/deploy/docker/`. Check the site with `pnpm website:build` and `pnpm --filter @incident-command/website check-links`.
 
 ## Simplified Technical English
 
