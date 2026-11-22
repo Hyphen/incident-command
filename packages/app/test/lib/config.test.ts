@@ -151,6 +151,7 @@ describe("loadConfig", () => {
 		);
 		expect(() => loadConfig({ CACHE_TTL: "-5" })).toThrow(/CACHE_TTL/);
 		expect(() => loadConfig({ STORE: "redis" })).toThrow(/STORE/);
+		expect(() => loadConfig({ DEPLOYMENT: "staging" })).toThrow(/DEPLOYMENT/);
 	});
 });
 

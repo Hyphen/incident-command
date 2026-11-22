@@ -1306,7 +1306,11 @@ describe("subscriber and settings actions", () => {
 		);
 		expect(await production.services.incidents.list()).toHaveLength(1);
 
-		const { app, services } = await setupApp({ NODE_ENV: "development" });
+		// The container image sets NODE_ENV to production. DEPLOYMENT marks the Worker.
+		const { app, services } = await setupApp({
+			NODE_ENV: "production",
+			DEPLOYMENT: "development",
+		});
 		await signIn(app, "admin");
 		await services.incidents.create(SYSTEM_ACTOR, {
 			title: "API errors",

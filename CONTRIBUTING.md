@@ -91,6 +91,7 @@ The `development` environment in `wrangler.jsonc` sets these items:
 - The Worker has the custom domain `dev.incident-command.org`. The `workers.dev` URL and preview URLs are off.
 - Workers Logs keeps all `console` output and all invocation logs (`head_sampling_rate: 1`).
 - `SITE_URL` is `https://dev.incident-command.org`.
+- `DEPLOYMENT` is `development`. The **Settings** page then shows **Clear incidents**. The container keeps `NODE_ENV` as `production`.
 
 An environment does not inherit `vars`, `containers` or `durable_objects`. The `env.development` block repeats them.
 

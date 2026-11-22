@@ -50,7 +50,14 @@ When you clear the option, members keep their authenticators.
 
 ## Development
 
-The **General** section shows the **Development** card only when the server runs in development mode. The server is in development mode when `NODE_ENV` is `development`. The `pnpm dev` command sets this value. A server in production never shows this card. See [Environment variables](/docs/reference/environment-variables/).
+The **General** section shows the **Development** card when the server is in development mode. See [Environment variables](/docs/reference/environment-variables/).
+
+The server is in development mode in one of these cases:
+
+- `NODE_ENV` is `development`. The `pnpm dev` command sets this value.
+- `DEPLOYMENT` is `development`. The development Worker sets this value. The container image keeps `NODE_ENV` as `production`.
+
+Leave `DEPLOYMENT` unset on a production server. The card stays hidden.
 
 Use **Clear incidents** to delete your test data and start again. This action deletes these items:
 
@@ -65,10 +72,11 @@ Each service then becomes **Operational**. The services, regions, members, subsc
 
 You must be an admin. You cannot undo this action.
 
-1. Start the server with `pnpm dev`.
-2. Go to **Settings**.
-3. In the **Development** card, select **Clear incidents**.
-4. In the dialog, select **OK**.
+`pnpm dev` is a development server. <https://dev.incident-command.org> is a development server too.
+
+1. Go to **Settings**.
+2. In the **Development** card, select **Clear incidents**.
+3. In the dialog, select **OK**.
 
 The page shows "All incidents are cleared. Each service is operational."
 
