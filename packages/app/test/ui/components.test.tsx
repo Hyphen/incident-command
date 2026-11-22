@@ -387,6 +387,7 @@ describe("status components", () => {
 						uptime: null,
 						trackedMs: 0,
 						downtimeMs: 0,
+						windowMs: 86_400_000,
 						incidents: [],
 					},
 					{
@@ -395,6 +396,7 @@ describe("status components", () => {
 						uptime: 0.5,
 						trackedMs: 43_200_000,
 						downtimeMs: 21_600_000,
+						windowMs: 86_400_000,
 						incidents: [{ id: "i", title: "Outage", impact: "critical" }],
 					},
 				]}
@@ -417,6 +419,7 @@ describe("status components", () => {
 			uptime: 1,
 			trackedMs: 86_400_000,
 			downtimeMs: 0,
+			windowMs: 86_400_000,
 			incidents: [],
 		}));
 		const { container } = render(<UptimeBars days={days} />);

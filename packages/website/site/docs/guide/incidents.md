@@ -174,6 +174,10 @@ The portal records each change of a service status. The status page uses these r
 
 - A partial outage counts as 30% downtime.
 - A major outage counts as 100% downtime.
-- Degraded performance and maintenance do not count as downtime.
+- Degraded performance and maintenance count as uptime.
+
+The percentage uses the full window. Time before the service existed is not downtime. A day before the service existed shows "No data" on the bar. The uptime on a bar uses the time with data on that day.
 
 The uptime window is 90 days by default. An admin can change it. See [Settings](/docs/guide/settings/).
+
+A region tab counts only the outages in that region. Overview counts each outage.

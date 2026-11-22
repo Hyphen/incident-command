@@ -38,7 +38,7 @@ If you open a page that your role cannot use, the portal opens **Overview**. It 
 **Overview** is the first page after you sign in. It shows these items:
 
 - **Current status**: the overall status of the status page.
-- **Uptime**: the combined uptime of the visible services in the uptime window.
+- **Uptime**: the combined uptime of the visible services in the uptime window. Time before a service existed is not downtime.
 - **Open incidents**: the number of open incidents, and the number of active and scheduled maintenance.
 - **Services affected**: the services that are not operational.
 - **Open incidents and maintenance**: a link to each open incident and each open maintenance.
