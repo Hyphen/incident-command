@@ -33,11 +33,11 @@ The **System status** card lists each service. Services can be in groups. Each s
 - The uptime percentage when the service is operational, or the status when it has a problem.
 - A row of bars, one bar for each day.
 
-Each bar shows the worst status of the service on that day. Move the pointer onto a bar to see the date, the status, the uptime and the incidents of that day. A bar shows "No data" for a day before the company added the service.
+Each bar shows the worst status of the service on that day. Move the pointer onto a bar to see the date, the status, the uptime and the incidents of that day. A bar shows "No data" for a day before the company added the service. The uptime on a bar uses the time with data on that day.
 
 The bars show 90 days by default. The company can change this number. On a phone, the bars show the last 30 days.
 
-The uptime percentage counts a partial outage as 30% downtime and a major outage as 100% downtime. Degraded performance and maintenance do not count as downtime.
+The uptime percentage uses the full uptime window, through now. Time before the company added the service is not downtime. A partial outage counts as 30% downtime, and a major outage counts as 100% downtime. Degraded performance and maintenance count as uptime.
 
 The default theme follows the light or dark mode of your device.
 
@@ -47,8 +47,8 @@ The default theme follows the light or dark mode of your device.
 
 Some status pages have regions, for example "United States" and "Europe". These pages show a row of tabs above the banner.
 
-- **Overview** shows each outage on all services.
-- A region tab shows the status of the services in that region only. An outage that is not in that region does not show on the tab.
+- **Overview** shows each outage on all services. Its uptime counts each outage.
+- A region tab shows the status of the services in that region only. An outage that is not in that region does not show on the tab. The uptime on a region tab counts only the outages in that region.
 
 Select a tab to see the status for that region. The history page has the same tabs.
 
