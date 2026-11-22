@@ -77,7 +77,7 @@ A new impact does not change the status of the services that the incident alread
 
 When a post notifies subscribers, the portal shows the progress:
 
-- Without a queue, a window shows "Notifications complete" and the state of each notification: **Waiting**, **In progress**, **Sent** or **Failed**.
+- Without a queue, a window shows "Notifications complete", the number of successful notifications, and the number of failed notifications.
 - With a queue, the **Dashboard** tab of the incident shows a progress bar and the text "The queue sends the notifications." The bar updates until the queue is done.
 
 An admin selects the queue in **Settings**. See [Select a notification queue](/docs/guide/settings/#select-a-notification-queue).
