@@ -108,7 +108,11 @@ A new impact on an update does not change a service that the incident already af
 
 ### Uptime
 
-The history records each status change. The uptime bars show this history, by default for 90 days. A partial outage counts as 30% downtime, and a major outage as 100%. Degraded performance and maintenance do not count as downtime.
+The history records each status change. The uptime bars show this history, by default for 90 days. A partial outage counts as 30% downtime, and a major outage as 100%. Degraded performance and maintenance count as uptime.
+
+The percentage uses the full window. Time before the service existed is not downtime. A day before the service existed shows "No data". The uptime on a bar uses the time with data on that day.
+
+A region tab counts only the outages in that region. Overview counts each outage.
 
 ## Design the status page through MCP
 

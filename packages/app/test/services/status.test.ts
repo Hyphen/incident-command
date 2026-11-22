@@ -1,4 +1,5 @@
 import { NotFoundError } from "@/lib/errors";
+import type { StatusSummary } from "@/lib/services/status";
 import { ADMIN, createTestContext, EDITOR, type TestContext } from "../helpers";
 
 describe("StatusService", () => {
@@ -513,6 +514,50 @@ describe("StatusService", () => {
 		await expect(
 			t.services.status.history(undefined, 3, "reg_missing"),
 		).rejects.toBeInstanceOf(NotFoundError);
+	});
+
+	it("counts a long outage of a new service over the full window, by region", async () => {
+		t.clock.set("2026-11-02T10:00:00.000Z");
+		const europe = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const america = await t.services.regions.create(EDITOR, {
+			name: "North America",
+		});
+		t.clock.set("2026-11-02T11:00:00.000Z");
+		const bus = await t.services.catalog.create(EDITOR, {
+			name: "Message Bus",
+		});
+		t.clock.set("2026-11-02T11:01:00.000Z");
+		await t.services.incidents.create(EDITOR, {
+			title: "Bus down",
+			message: "Down",
+			impact: "critical",
+			serviceIds: [bus.id],
+			serviceRegions: [{ serviceId: bus.id, regionIds: [europe.id] }],
+		});
+		t.clock.set("2026-11-03T09:01:00.000Z");
+
+		const overview = await t.services.status.summary();
+		const windowMs =
+			overview.window.end.getTime() - overview.window.start.getTime();
+		const expected = 1 - (22 * 60 * 60 * 1000) / windowMs;
+		const on = (summary: StatusSummary) =>
+			summary.services.find((service) => service.id === bus.id);
+		const busView = on(overview);
+		expect(busView?.status).toBe("major_outage");
+		expect(busView?.uptime).toBeCloseTo(expected, 10);
+		expect(busView?.uptime).toBeGreaterThan(0.9);
+		expect(
+			busView?.days.find((day) => day.date === "2026-11-01"),
+		).toMatchObject({ status: null, uptime: null, trackedMs: 0 });
+
+		const europeView = await t.services.status.summary({ regionId: europe.id });
+		const americaView = await t.services.status.summary({
+			regionId: america.id,
+		});
+		expect(on(europeView)?.status).toBe("major_outage");
+		expect(on(europeView)?.uptime).toBeCloseTo(expected, 10);
+		expect(on(americaView)?.status).toBe("operational");
+		expect(on(americaView)?.uptime).toBe(1);
 	});
 
 	it("ends a regional outage when that incident ends", async () => {
