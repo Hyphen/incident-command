@@ -23,6 +23,7 @@ import { ProgressBar } from "@/components/manage/progress-bar";
 import { QueueSettingsCard } from "@/components/manage/queue-settings";
 import { SendButton } from "@/components/manage/send-button";
 import { SendProgressBanner } from "@/components/manage/send-progress-banner";
+import { buttonClass } from "@/components/manage/ui";
 import type {
 	NotificationJobView,
 	NotificationProgress,
@@ -447,6 +448,9 @@ describe("send status window", () => {
 		expect(
 			screen.getByText("The server prepares the notifications."),
 		).toBeInTheDocument();
+		expect(screen.getByRole("progressbar")).not.toHaveAttribute(
+			"aria-valuenow",
+		);
 		const cancel = new Event("cancel", { cancelable: true });
 		dialog?.dispatchEvent(cancel);
 		expect(cancel.defaultPrevented).toBe(true);
@@ -459,10 +463,13 @@ describe("send status window", () => {
 			screen.getByText("The list shows the first 200 notifications."),
 		).toBeInTheDocument();
 		expect(screen.getByText(/Some notifications failed/)).toBeInTheDocument();
-		expect(screen.getByRole("link", { name: "Continue" })).toHaveAttribute(
-			"href",
-			"/manage/incidents/inc_1",
+		expect(screen.getByRole("progressbar")).toHaveAttribute(
+			"aria-valuenow",
+			"1",
 		);
+		const next = screen.getByRole("link", { name: "Continue" });
+		expect(next).toHaveAttribute("href", "/manage/incidents/inc_1");
+		expect(next).toHaveClass(buttonClass.primary, { exact: true });
 	});
 
 	it("gives a failed send to the page and does not open a location", async () => {

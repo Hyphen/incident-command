@@ -8,6 +8,7 @@ import type {
 } from "@/lib/domain/types";
 import { SubmitButton } from "../submit-button";
 import { ProgressBar } from "./progress-bar";
+import { buttonClass } from "./ui";
 import { useProgress } from "./use-progress";
 
 const NOUN: Record<NotificationChannel, string> = {
@@ -60,9 +61,12 @@ function SendProgressDialog({
 					Notification status
 				</h4>
 				{prepare && !job && (
-					<p className="text-sm text-muted">
-						The server prepares the notifications.
-					</p>
+					<>
+						<p className="text-sm text-muted">
+							The server prepares the notifications.
+						</p>
+						<ProgressBar indeterminate />
+					</>
 				)}
 				{job && (
 					<>
@@ -112,9 +116,11 @@ function SendProgressDialog({
 					</p>
 				)}
 				{(job?.state === "done" || error) && href && (
-					<a href={href} className="text-sm underline">
-						Continue
-					</a>
+					<div className="flex flex-wrap items-center justify-end gap-2">
+						<a href={href} className={buttonClass.primary}>
+							Continue
+						</a>
+					</div>
 				)}
 			</div>
 		</dialog>
