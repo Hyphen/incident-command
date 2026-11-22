@@ -76,7 +76,7 @@ export const publicStatusSchema = z
 		regions: z.array(regionRefSchema),
 		status: z.object({
 			indicator: serviceStatusSchema.describe(
-				"The worst status of the services.",
+				"The worst status of the services on this view. An incident impact does not make it worse.",
 			),
 			description: z.string(),
 		}),

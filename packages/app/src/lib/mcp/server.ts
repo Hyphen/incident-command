@@ -66,6 +66,9 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
   Pass regionId to get_status to read one region. Omit it to read Overview, which lists every outage.
   A region tab omits a service that has no region.
   With no regions, the status page is one page.
+- The overall status is the worst status of the services on that view.
+  An incident impact does not make it worse. A region view counts a service only in its regions.
+  Maintenance shows when a service on that view is under maintenance.
 - When a person must review a notification first, use draft_notification and give that person the reviewUrl.
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
 - Everything you post is public on the status page and may notify subscribers. Write for customers.`;
@@ -333,7 +336,7 @@ export function createMcpServer(
 		{
 			title: "Get status",
 			description:
-				"Current overall status, every visible service with its status and uptime, open incidents and maintenance. Omit regionId to read Overview. Overview lists every outage. A region tab shows only that region.",
+				"Current overall status, every visible service with its status and uptime, open incidents and maintenance. The overall status is the worst status of the services on that view. An incident impact does not make it worse. Omit regionId to read Overview. Overview lists every outage. A region tab shows only that region.",
 			inputSchema: {
 				regionId: z
 					.string()
