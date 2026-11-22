@@ -75,6 +75,8 @@ When other regions remain, `delete_region` fails if an open incident has a servi
 | Any update with `serviceStatuses`                              | the status in its entry, for each service in the list    |
 | Update with `serviceIds`                                       | the status of the update, for the added services         |
 
+The status page banner uses these service statuses. The banner shows the worst status of the services on the tab. An incident impact does not make the banner worse. A region tab counts a service only in its regions. The banner shows maintenance when a service on the tab is under maintenance and no service is worse.
+
 ### A different status for each service
 
 `create_incident`, `post_incident_update` and `draft_notification` accept `serviceStatuses`. Use it to give each affected service a different status. Each entry replaces `serviceStatus` and the automatic status for its service only. The other affected services keep `serviceStatus` or the automatic status.

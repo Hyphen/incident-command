@@ -37,6 +37,8 @@ At each connection, the server also sends instructions to the agent. They explai
 
 Pass `regionId` to `get_status` to read one region. Without `regionId`, the tool reads Overview.
 
+The `overall` field is the worst status of the services on that view. An incident impact does not make it worse. A region view counts a service only in its regions. Maintenance shows when a service on that view is under maintenance.
+
 ## Services and regions
 
 | Tool                 | Permission            | What it does                                                                                 |

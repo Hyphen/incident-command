@@ -13,7 +13,9 @@ Operators can give this page to their visitors. The links on this page use paths
 
 ## Read the overall status
 
-The banner at the top shows the overall status. The overall status is the worst status of all the services and the active incidents.
+The banner at the top shows the overall status. The overall status is the worst status of the services on that tab. An incident impact does not make the banner worse than the worst service. On a region tab, a service counts only in its regions. A hidden service does not count.
+
+The banner shows maintenance when the worst service is under maintenance. Scheduled maintenance does not change the banner. An open incident or maintenance with no affected service does not change the banner.
 
 | Banner                                    | What it tells you                        |
 | ----------------------------------------- | ---------------------------------------- |
@@ -47,8 +49,8 @@ The default theme follows the light or dark mode of your device.
 
 Some status pages have regions, for example "United States" and "Europe". These pages show a row of tabs above the banner.
 
-- **Overview** shows each outage on all services. Its uptime counts each outage.
-- A region tab shows the status of the services in that region only. An outage that is not in that region does not show on the tab. The uptime on a region tab counts only the outages in that region.
+- **Overview** shows each outage on all services. The banner uses every visible service. Its uptime counts each outage.
+- A region tab shows the status of the services in that region only. An outage that is not in that region does not show on the tab. The banner uses only those services. The uptime on a region tab counts only the outages in that region.
 
 Select a tab to see the status for that region. The history page has the same tabs.
 

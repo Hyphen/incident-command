@@ -69,6 +69,10 @@ describe("StatusService", () => {
 			message: "Hmm",
 			impact: "major",
 		});
+		// The incident lists no service, so it does not change the banner.
+		const beforeMaintenance = await t.services.status.summary();
+		expect(beforeMaintenance.services[0]?.status).toBe("operational");
+		expect(beforeMaintenance.overall).toBe("operational");
 		const soon = await t.services.incidents.create(EDITOR, {
 			kind: "maintenance",
 			title: "Later",
@@ -100,8 +104,8 @@ describe("StatusService", () => {
 			soon.id,
 		]);
 		expect(summary.recentIncidents.map((i) => i.id)).not.toContain(soon.id);
-		expect(summary.overall).toBe("partial_outage");
 		expect(summary.services[0]?.status).toBe("under_maintenance");
+		expect(summary.overall).toBe("under_maintenance");
 
 		await t.services.incidents.resolve(EDITOR, incident.id);
 		expect((await t.services.status.summary()).overall).toBe(
@@ -657,5 +661,180 @@ describe("StatusService", () => {
 		await t.services.incidents.resolve(EDITOR, wide.id);
 		const after = await t.services.status.summary({ regionId: united.id });
 		expect(after.services[0]?.status).toBe("operational");
+	});
+
+	it("sets the overall status from the worst service on the view", async () => {
+		const api = await t.services.catalog.create(EDITOR, { name: "API" });
+		const web = await t.services.catalog.create(EDITOR, { name: "Web App" });
+		const bus = await t.services.catalog.create(EDITOR, {
+			name: "Message Bus",
+		});
+		const north = await t.services.regions.create(EDITOR, {
+			name: "North America",
+		});
+		const europe = await t.services.regions.create(EDITOR, { name: "Europe" });
+		const asia = await t.services.regions.create(EDITOR, { name: "Asia" });
+		const regions = [north.id, europe.id, asia.id];
+		const bound = (regionIds: string[]) => [
+			{ serviceId: api.id, regionIds },
+			{ serviceId: web.id, regionIds: [north.id] },
+			{ serviceId: bus.id, regionIds: [europe.id, asia.id] },
+		];
+		t.clock.set("2026-11-02T12:10:00.000Z");
+		const incident = await t.services.incidents.create(EDITOR, {
+			title: "Errors",
+			message: "Looking",
+			impact: "critical",
+			serviceIds: [api.id, web.id, bus.id],
+			serviceRegions: [
+				{ serviceId: api.id, regionIds: regions },
+				{ serviceId: web.id, regionIds: regions },
+				{ serviceId: bus.id, regionIds: regions },
+			],
+		});
+		expect((await t.services.status.summary()).overall).toBe("major_outage");
+
+		t.clock.set("2026-11-02T12:20:00.000Z");
+		const identified = await t.services.incidents.postUpdate(
+			EDITOR,
+			incident.id,
+			{
+				status: "identified",
+				message: "North America is recovering",
+				serviceStatuses: [
+					{ serviceId: api.id, status: "degraded_performance" },
+					{ serviceId: web.id, status: "operational" },
+				],
+				serviceRegions: bound(regions),
+			},
+		);
+		expect(identified.impact).toBe("critical");
+
+		const statuses = (
+			services: { name: string; status: string }[],
+		): [string, string][] =>
+			services.map((service) => [service.name, service.status]);
+		const overview = await t.services.status.summary();
+		expect(statuses(overview.services)).toEqual([
+			["API", "degraded_performance"],
+			["Web App", "operational"],
+			["Message Bus", "major_outage"],
+		]);
+		expect(overview.overall).toBe("major_outage");
+		expect(overview.activeIncidents[0]?.impact).toBe("critical");
+
+		const northView = await t.services.status.summary({
+			regionId: north.id,
+		});
+		expect(statuses(northView.services)).toEqual([
+			["API", "degraded_performance"],
+			["Web App", "operational"],
+			["Message Bus", "operational"],
+		]);
+		expect(northView.overall).toBe("degraded_performance");
+
+		const europeView = await t.services.status.summary({
+			regionId: europe.id,
+		});
+		expect(statuses(europeView.services)).toEqual([
+			["API", "degraded_performance"],
+			["Web App", "operational"],
+			["Message Bus", "major_outage"],
+		]);
+		expect(europeView.overall).toBe("major_outage");
+
+		t.clock.set("2026-11-02T12:20:00.000Z");
+		const partial = await t.services.incidents.postUpdate(EDITOR, incident.id, {
+			message: "The bus is partly back",
+			serviceStatuses: [{ serviceId: bus.id, status: "partial_outage" }],
+		});
+		expect(partial.impact).toBe("critical");
+		expect((await t.services.status.summary()).overall).toBe("partial_outage");
+		expect(
+			(await t.services.status.summary({ regionId: north.id })).overall,
+		).toBe("degraded_performance");
+		expect(
+			(await t.services.status.summary({ regionId: europe.id })).overall,
+		).toBe("partial_outage");
+		expect(
+			(await t.services.status.summary({ regionId: asia.id })).overall,
+		).toBe("partial_outage");
+
+		t.clock.set("2026-11-02T12:30:00.000Z");
+		const degraded = await t.services.incidents.postUpdate(
+			EDITOR,
+			incident.id,
+			{
+				message: "Every service is slow",
+				serviceStatuses: [
+					{ serviceId: api.id, status: "degraded_performance" },
+					{ serviceId: bus.id, status: "degraded_performance" },
+				],
+			},
+		);
+		expect(degraded.impact).toBe("critical");
+		const during = await t.services.status.summary();
+		expect(during.activeIncidents.map((item) => item.id)).toEqual([
+			incident.id,
+		]);
+		expect(during.overall).toBe("degraded_performance");
+		expect(
+			(await t.services.status.summary({ regionId: north.id })).overall,
+		).toBe("degraded_performance");
+		expect(
+			(await t.services.status.summary({ regionId: europe.id })).overall,
+		).toBe("degraded_performance");
+
+		t.clock.set("2026-11-02T12:40:00.000Z");
+		await t.services.incidents.resolve(EDITOR, incident.id);
+		expect((await t.services.status.summary()).overall).toBe("operational");
+		expect((await t.services.status.summary()).activeIncidents).toEqual([]);
+		expect(
+			(await t.services.status.summary({ regionId: north.id })).overall,
+		).toBe("operational");
+		expect(
+			(await t.services.status.summary({ regionId: europe.id })).overall,
+		).toBe("operational");
+		expect(
+			(await t.services.status.summary({ regionId: asia.id })).overall,
+		).toBe("operational");
+
+		t.clock.set("2026-11-02T12:50:00.000Z");
+		await t.services.incidents.create(EDITOR, {
+			kind: "maintenance",
+			title: "No services",
+			message: "Work with no service",
+			status: "in_progress",
+			scheduledStart: "2026-11-02T12:50:00.000Z",
+			scheduledEnd: "2026-11-02T14:00:00.000Z",
+		});
+		expect((await t.services.status.summary()).activeMaintenance).toHaveLength(
+			1,
+		);
+		expect((await t.services.status.summary()).overall).toBe("operational");
+
+		t.clock.set("2026-11-02T13:00:00.000Z");
+		await t.services.incidents.create(EDITOR, {
+			kind: "maintenance",
+			title: "API work",
+			message: "Work on the API",
+			status: "in_progress",
+			serviceIds: [api.id],
+			serviceRegions: [{ serviceId: api.id, regionIds: [north.id] }],
+			scheduledStart: "2026-11-02T13:00:00.000Z",
+			scheduledEnd: "2026-11-02T14:00:00.000Z",
+		});
+		expect((await t.services.status.summary()).overall).toBe(
+			"under_maintenance",
+		);
+		expect(
+			(await t.services.status.summary({ regionId: north.id })).overall,
+		).toBe("under_maintenance");
+		expect(
+			(await t.services.status.summary({ regionId: europe.id })).overall,
+		).toBe("operational");
+		expect(
+			(await t.services.status.summary({ regionId: asia.id })).overall,
+		).toBe("operational");
 	});
 });

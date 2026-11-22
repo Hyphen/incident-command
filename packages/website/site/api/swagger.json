@@ -308,7 +308,7 @@
 									"partial_outage",
 									"major_outage"
 								],
-								"description": "The worst status of the services."
+								"description": "The worst status of the services on this view. An incident impact does not make it worse."
 							},
 							"description": {
 								"type": "string"
