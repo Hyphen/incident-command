@@ -2,26 +2,11 @@
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { SendResult } from "@/app/manage/actions";
-import type {
-	NotificationChannel,
-	NotificationJobView,
-} from "@/lib/domain/types";
+import type { NotificationJobView } from "@/lib/domain/types";
 import { SubmitButton } from "../submit-button";
 import { ProgressBar } from "./progress-bar";
+import { buttonClass } from "./ui";
 import { useProgress } from "./use-progress";
-
-const NOUN: Record<NotificationChannel, string> = {
-	email: "Email",
-	sms: "Text message",
-	webhook: "Webhook",
-};
-
-const ROW_STATE = {
-	pending: "Waiting",
-	sending: "In progress",
-	sent: "Sent",
-	failed: "Failed",
-} as const;
 
 function SendProgressDialog({
 	dialogRef,
@@ -60,9 +45,12 @@ function SendProgressDialog({
 					Notification status
 				</h4>
 				{prepare && !job && (
-					<p className="text-sm text-muted">
-						The server prepares the notifications.
-					</p>
+					<>
+						<p className="text-sm text-muted">
+							The server prepares the notifications.
+						</p>
+						<ProgressBar indeterminate />
+					</>
 				)}
 				{job && (
 					<>
@@ -70,24 +58,20 @@ function SendProgressDialog({
 							Notifications complete: {done} of {job.total}.
 						</p>
 						<ProgressBar value={done} max={job.total} tone={tone} />
-						<ul className="max-h-64 space-y-2 overflow-y-auto text-sm">
-							{job.deliveries.map((row) => (
-								<li
-									key={row.id}
-									className="flex items-center justify-between gap-3"
-								>
-									<span>
-										{row.label ?? `${NOUN[row.channel]} ${row.order + 1}`}
-									</span>
-									<span className="text-muted">{ROW_STATE[row.state]}</span>
-								</li>
-							))}
-						</ul>
-						{job.truncated && (
-							<p className="text-xs text-muted">
-								The list shows the first 200 notifications.
-							</p>
-						)}
+						<p className="flex items-baseline justify-between gap-3 text-sm">
+							<span>Successful</span>
+							<span className="text-lg font-semibold tabular-nums">
+								{" "}
+								{job.sent}
+							</span>
+						</p>
+						<p className="flex items-baseline justify-between gap-3 text-sm">
+							<span>Failed</span>
+							<span className="text-lg font-semibold tabular-nums">
+								{" "}
+								{job.failed}
+							</span>
+						</p>
 						{job.state === "active" && (
 							<p className="text-sm text-muted">
 								You can leave this page. The server continues to send the
@@ -98,10 +82,7 @@ function SendProgressDialog({
 							<p className="text-sm">All notifications were sent.</p>
 						)}
 						{job.state === "done" && job.failed > 0 && (
-							<p className="text-sm">
-								Some notifications failed. Sent: {job.sent}. Failed:{" "}
-								{job.failed}.
-							</p>
+							<p className="text-sm">Some notifications failed.</p>
 						)}
 					</>
 				)}
@@ -112,9 +93,11 @@ function SendProgressDialog({
 					</p>
 				)}
 				{(job?.state === "done" || error) && href && (
-					<a href={href} className="text-sm underline">
-						Continue
-					</a>
+					<div className="flex flex-wrap items-center justify-end gap-2">
+						<a href={href} className={buttonClass.primary}>
+							Continue
+						</a>
+					</div>
 				)}
 			</div>
 		</dialog>
@@ -122,7 +105,7 @@ function SendProgressDialog({
 }
 
 /**
- * Submits a notify form. With no queue, a window shows each notification.
+ * Submits a notify form. With no queue, a window shows the counts.
  * With a queue, the form action opens the incident dashboard.
  */
 export function SendButton({
