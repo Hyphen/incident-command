@@ -23,6 +23,7 @@ import {
 	IncidentTabs,
 	incidentTab,
 } from "@/components/manage/incident-tabs";
+import { NotificationLogCard } from "@/components/manage/notification-log";
 import { PostList } from "@/components/manage/post-list";
 import { SendButton } from "@/components/manage/send-button";
 import { SendProgressBanner } from "@/components/manage/send-progress-banner";
@@ -41,12 +42,14 @@ import { Timeline } from "@/components/status/timeline";
 import { SubmitButton } from "@/components/submit-button";
 import { LocalTime } from "@/components/time";
 import { requireMember } from "@/lib/auth";
+import { can } from "@/lib/domain/permissions";
 import { boundServiceRegions, regionNameFor } from "@/lib/domain/regions";
 import { hasRole, isDeletedIncident } from "@/lib/domain/status";
 import type {
 	Incident,
 	IncidentDeletion,
 	NotificationDraft,
+	NotificationLog,
 	NotificationProgress,
 	Region,
 	Service,
@@ -262,6 +265,7 @@ function IncidentBody({
 	showForm,
 	reviewed,
 	modal,
+	log,
 }: {
 	tab: IncidentTab;
 	incident: Incident;
@@ -272,9 +276,11 @@ function IncidentBody({
 	showForm: boolean;
 	reviewed: NotificationDraft[];
 	modal: boolean;
+	log: NotificationLog | undefined;
 }) {
 	return (
 		<div className="space-y-6">
+			{log && <NotificationLogCard log={log} />}
 			{tab === "dashboard" && (
 				<PostsCard
 					incident={incident}
@@ -321,16 +327,21 @@ export default async function ManageIncidentPage({
 	if (!incident) {
 		notFound();
 	}
-	const tab = incidentTab(query.tab);
+	const canReadLog = can(actor, "notifications.send");
+	const tab = incidentTab(query.tab, canReadLog);
 	const deleted = isDeletedIncident(incident);
 	const canEdit = hasRole(member.role, "editor") && !deleted;
-	const [catalog, regions, timeline, pending, reviewed] = await Promise.all([
-		services.catalog.list(),
-		services.regions.list(),
-		services.status.incidentTimeline(incident),
-		services.drafts.list({ pending: true, incidentId: incident.id }),
-		services.drafts.list({ pending: false, incidentId: incident.id }),
-	]);
+	const [catalog, regions, timeline, pending, reviewed, log] =
+		await Promise.all([
+			services.catalog.list(),
+			services.regions.list(),
+			services.status.incidentTimeline(incident),
+			services.drafts.list({ pending: true, incidentId: incident.id }),
+			services.drafts.list({ pending: false, incidentId: incident.id }),
+			tab === "notifications"
+				? services.notificationJobs.incidentLog(actor, incident)
+				: undefined,
+		]);
 	const affected = incident.serviceIds.map((id) => {
 		const service = catalog.find((item) => item.id === id);
 		return (
@@ -381,7 +392,7 @@ export default async function ManageIncidentPage({
 				{regionName && <span className="text-sm text-muted">{regionName}</span>}
 			</div>
 			{deleted && <DeletionRecord incident={incident} />}
-			<IncidentTabs id={incident.id} active={tab} />
+			<IncidentTabs id={incident.id} active={tab} notifications={canReadLog} />
 			{tab === "dashboard" && pending.length > 0 && (
 				<Card title="Drafts" description="These drafts wait for review.">
 					<DraftList
@@ -415,6 +426,7 @@ export default async function ManageIncidentPage({
 					showForm={showForm}
 					reviewed={reviewed}
 					modal={canEdit && queueProvider === undefined}
+					log={log}
 				/>
 				{tab === "dashboard" && canEdit && (
 					<div className="space-y-6">

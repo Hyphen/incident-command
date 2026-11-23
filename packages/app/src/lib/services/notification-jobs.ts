@@ -4,9 +4,12 @@ import type {
 	Actor,
 	DeliveryFailure,
 	DeliveryState,
+	Incident,
 	NotificationDelivery,
 	NotificationJob,
 	NotificationJobView,
+	NotificationLog,
+	NotificationLogEntry,
 	NotificationProgress,
 	QueueFallback,
 	Service,
@@ -30,6 +33,8 @@ import type { SettingsService } from "./settings";
 
 const BATCH = 20;
 const DETAIL_LIMIT = 200;
+/** The notification log shows this many sends. */
+const LOG_LIMIT = 50;
 const RECOVER_INTERVAL_MS = 10_000;
 const DIRECT_STALE_MS = 2 * 60 * 1000;
 const DURABLE_STALE_MS = 15 * 60 * 1000;
@@ -367,6 +372,54 @@ export class NotificationJobService {
 				...(row.error ? { error: row.error } : {}),
 			})),
 		};
+	}
+
+	/**
+	 * The sends of one incident, newest first.
+	 * The result has no delivery rows.
+	 */
+	async incidentLog(
+		actor: Actor,
+		incident: Incident,
+	): Promise<NotificationLog> {
+		requirePermission(actor, "notifications.send");
+		await this.recover();
+		await this.prune();
+		const jobs = await this.ctx.store.find("notification_jobs", {
+			where: [{ field: "incidentId", op: "eq", value: incident.id }],
+			sort: [{ field: "createdAt", direction: "desc" }],
+			limit: LOG_LIMIT + 1,
+		});
+		const truncated = jobs.length > LOG_LIMIT;
+		const shown = truncated ? jobs.slice(0, LOG_LIMIT) : jobs;
+		const posts = new Map(
+			incident.updates.map((update) => [update.id, update]),
+		);
+		const entries: NotificationLogEntry[] = [];
+		for (const job of shown) {
+			const counts = await this.counts(job);
+			const update = posts.get(job.updateId);
+			entries.push({
+				id: job.id,
+				updateId: job.updateId,
+				state: job.state,
+				total: job.total,
+				sent: counts.sent,
+				failed: counts.failed,
+				...(job.fallback ? { fallback: job.fallback } : {}),
+				createdAt: job.createdAt,
+				...(update
+					? {
+							post: {
+								status: update.status,
+								title: update.title,
+								author: update.author,
+							},
+						}
+					: {}),
+			});
+		}
+		return { entries, truncated };
 	}
 
 	/**

@@ -1272,4 +1272,227 @@ describe("NotificationJobService", () => {
 		expect(await t.store.find("notification_jobs", {})).toEqual([]);
 		expect(created.title).toBe("Quiet");
 	});
+
+	it("lists the sends of one incident, newest first, with the post of each send", async () => {
+		await webhook(t, "https://hooks.example.com/ok");
+		await webhook(t, "https://hooks.example.com/bad");
+		t.notifier.failTargets.add("https://hooks.example.com/bad");
+		const created = await t.services.incidents.create(ADMIN, {
+			title: "API errors",
+			message: "Looking",
+			notify: true,
+		});
+		t.clock.advance(MINUTE);
+		const quiet = await t.services.incidents.postUpdate(ADMIN, created.id, {
+			message: "Quiet",
+			notify: false,
+		});
+		t.clock.advance(MINUTE);
+		const latest = await t.services.incidents.postUpdate(ADMIN, created.id, {
+			title: "API outage",
+			message: "Worse",
+			notify: true,
+		});
+		const other = await t.services.incidents.create(ADMIN, {
+			title: "Other",
+			message: "Elsewhere",
+			notify: true,
+		});
+		t.clock.advance(11 * MINUTE);
+		const log = await t.services.notificationJobs.incidentLog(EDITOR, latest);
+		const firstId = created.updates[0]?.id;
+		const quietId = quiet.updates.at(-1)?.id;
+		const latestId = latest.updates.at(-1)?.id;
+		expect(log.truncated).toBe(false);
+		expect(log.entries.map((entry) => entry.updateId)).toEqual([
+			latestId,
+			firstId,
+		]);
+		expect(log.entries[0]).toMatchObject({
+			state: "done",
+			total: 2,
+			sent: 1,
+			failed: 1,
+			post: {
+				status: "investigating",
+				title: "API outage",
+				author: authorRef(ADMIN),
+			},
+		});
+		expect(log.entries[1]?.post).toMatchObject({
+			title: "API errors",
+			author: authorRef(ADMIN),
+		});
+		expect(log.entries.some((entry) => entry.updateId === quietId)).toBe(false);
+		expect(
+			log.entries.some((entry) => entry.updateId === other.updates[0]?.id),
+		).toBe(false);
+		expect(JSON.stringify(log)).not.toContain("hooks.example.com");
+		await expect(
+			t.services.notificationJobs.incidentLog(VIEWER, latest),
+		).rejects.toBeInstanceOf(PermissionDeniedError);
+	});
+
+	it("shows an active send and its counts", async () => {
+		await webhook(t);
+		const created = await incident(t);
+		const release = t.notifier.hold();
+		const updated = await t.services.incidents.postUpdate(
+			ADMIN,
+			created.id,
+			{ message: "Still looking", notify: true },
+			{ delivery: "background", jobId: "njb_log_active" },
+		);
+		const log = await t.services.notificationJobs.incidentLog(EDITOR, updated);
+		expect(log.entries).toHaveLength(1);
+		expect(log.entries[0]).toMatchObject({
+			id: "njb_log_active",
+			state: "active",
+			total: 1,
+			sent: 0,
+			failed: 0,
+		});
+		release();
+		await vi.waitFor(async () => {
+			expect(
+				(await t.services.notificationJobs.lookup(ADMIN, "njb_log_active"))
+					?.state,
+			).toBe("done");
+		});
+	});
+
+	it("reports the current counts of an active send", async () => {
+		const created = await incident(t);
+		await t.store.insert(
+			"notification_jobs",
+			jobDocument(t, {
+				id: "njb_counts",
+				incidentId: created.id,
+				updateId: created.updates[0]?.id ?? "",
+				state: "active",
+				queued: false,
+				total: 3,
+				sent: 0,
+				failed: 0,
+			}),
+		);
+		await delivery(t, {
+			id: "ndl_c1",
+			jobId: "njb_counts",
+			subscriberId: "sub_a",
+			state: "sent",
+		});
+		await delivery(t, {
+			id: "ndl_c2",
+			jobId: "njb_counts",
+			subscriberId: "sub_b",
+			state: "failed",
+			error: "provider",
+			order: 1,
+		});
+		await delivery(t, {
+			id: "ndl_c3",
+			jobId: "njb_counts",
+			subscriberId: "sub_c",
+			state: "pending",
+			order: 2,
+		});
+		const log = await t.services.notificationJobs.incidentLog(ADMIN, created);
+		expect(log.entries[0]).toMatchObject({
+			id: "njb_counts",
+			state: "active",
+			total: 3,
+			sent: 1,
+			failed: 1,
+		});
+	});
+
+	it("recovers a stale send when the log is read", async () => {
+		const created = await incident(t);
+		const old = new Date(t.clock.now().getTime() - 20 * MINUTE).toISOString();
+		await t.store.insert(
+			"notification_jobs",
+			jobDocument(t, {
+				id: "njb_stale_log",
+				incidentId: created.id,
+				updateId: created.updates[0]?.id ?? "",
+				heartbeatAt: old,
+			}),
+		);
+		await delivery(t, {
+			id: "ndl_stale_log",
+			jobId: "njb_stale_log",
+			subscriberId: "sub_x",
+			state: "sending",
+		});
+		const log = await t.services.notificationJobs.incidentLog(ADMIN, created);
+		expect(log.entries[0]?.fallback).toBe("stalled");
+		expect(
+			await t.store.get("notification_deliveries", "ndl_stale_log"),
+		).toMatchObject({ state: "failed", error: "interrupted" });
+	});
+
+	it("keeps the newest 50 records and reports more", async () => {
+		const created = await incident(t);
+		const base = t.clock.now().getTime();
+		for (let index = 0; index < 51; index += 1) {
+			const at = new Date(base + index * 1000).toISOString();
+			await t.store.insert(
+				"notification_jobs",
+				jobDocument(t, {
+					id: `njb_${index}`,
+					incidentId: created.id,
+					updateId: "upd_missing",
+					state: "done",
+					total: 1,
+					sent: 1,
+					failed: 0,
+					createdAt: at,
+					finishedAt: at,
+					...(index === 50 ? { fallback: "enqueue" } : {}),
+				}),
+			);
+		}
+		const log = await t.services.notificationJobs.incidentLog(ADMIN, created);
+		expect(log.truncated).toBe(true);
+		expect(log.entries).toHaveLength(50);
+		expect(log.entries[0]).toMatchObject({
+			id: "njb_50",
+			fallback: "enqueue",
+		});
+		expect(log.entries[0]?.post).toBeUndefined();
+		expect(log.entries[1]?.fallback).toBeUndefined();
+		expect(log.entries.at(-1)?.id).toBe("njb_1");
+		expect(log.entries.some((entry) => entry.id === "njb_0")).toBe(false);
+	});
+
+	it("does not list a send that is older than 30 days", async () => {
+		const created = await incident(t);
+		const old = new Date(t.clock.now().getTime() - 31 * DAY).toISOString();
+		await t.store.insert(
+			"notification_jobs",
+			jobDocument(t, {
+				id: "njb_old",
+				incidentId: created.id,
+				updateId: "upd_old",
+				createdAt: old,
+				state: "done",
+				sent: 1,
+			}),
+		);
+		await t.store.insert(
+			"notification_jobs",
+			jobDocument(t, {
+				id: "njb_recent",
+				incidentId: created.id,
+				updateId: created.updates[0]?.id ?? "",
+				state: "done",
+				sent: 1,
+			}),
+		);
+		const log = await t.services.notificationJobs.incidentLog(ADMIN, created);
+		expect(await t.store.get("notification_jobs", "njb_old")).toBeUndefined();
+		expect(log.entries.map((entry) => entry.id)).toEqual(["njb_recent"]);
+		expect(log.entries[0]?.post?.title).toBe(created.title);
+	});
 });

@@ -19,6 +19,7 @@ import {
 } from "@/app/manage/actions";
 import { GET as incidentRoute } from "@/app/manage/progress/incidents/[id]/route";
 import { GET as jobRoute } from "@/app/manage/progress/jobs/[id]/route";
+import { LogEntryStatus } from "@/components/manage/notification-log-entry";
 import { ProgressBar } from "@/components/manage/progress-bar";
 import { QueueSettingsCard } from "@/components/manage/queue-settings";
 import { SendButton } from "@/components/manage/send-button";
@@ -26,6 +27,7 @@ import { SendProgressBanner } from "@/components/manage/send-progress-banner";
 import { buttonClass } from "@/components/manage/ui";
 import type {
 	NotificationJobView,
+	NotificationLogEntry,
 	NotificationProgress,
 } from "@/lib/domain/types";
 import { NotificationQueue } from "@/lib/notifications/queue";
@@ -992,5 +994,215 @@ describe("queue pages", () => {
 			}),
 		);
 		expect(document.querySelector("dialog")).toBeNull();
+	});
+});
+
+const logEntry = (
+	overrides: Partial<NotificationLogEntry> = {},
+): NotificationLogEntry => ({
+	id: "njb_1",
+	updateId: "upd_1",
+	state: "done",
+	total: 2,
+	sent: 2,
+	failed: 0,
+	createdAt: "2026-11-02T12:00:00.000Z",
+	...overrides,
+});
+
+describe("notification log record", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.useRealTimers();
+	});
+
+	it("loads the notifications of a record on request", async () => {
+		let resolve: (response: Response) => void = () => {};
+		const fetchMock = vi.fn(
+			() =>
+				new Promise<Response>((settle) => {
+					resolve = settle;
+				}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+		render(<LogEntryStatus entry={logEntry()} />);
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(
+			screen.getByText("The server sent all the notifications."),
+		).toBeInTheDocument();
+		fireEvent.click(
+			screen.getByRole("button", { name: "Show the notifications" }),
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/manage/progress/jobs/njb_1",
+			expect.objectContaining({ cache: "no-store" }),
+		);
+		expect(
+			screen.getByText("The page loads the notifications."),
+		).toBeInTheDocument();
+		await act(async () => {
+			resolve(
+				json({
+					job: jobView({
+						state: "done",
+						total: 2,
+						sent: 1,
+						failed: 1,
+						truncated: true,
+						deliveries: [
+							{
+								id: "ndl_1",
+								channel: "email",
+								order: 0,
+								state: "sent",
+								label: "a***@example.com",
+							},
+							{
+								id: "ndl_2",
+								channel: "webhook",
+								order: 1,
+								state: "failed",
+								error: "provider",
+							},
+						],
+					}),
+				}),
+			);
+		});
+		expect(screen.getByText("a***@example.com")).toBeInTheDocument();
+		expect(screen.getByText("Webhook 2")).toBeInTheDocument();
+		expect(screen.getByText("Failed")).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"The provider or the webhook did not accept the notification.",
+			),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText("The list shows the first 200 notifications."),
+		).toBeInTheDocument();
+		expect(screen.getByText("Some notifications failed.")).toBeInTheDocument();
+		fireEvent.click(
+			screen.getByRole("button", { name: "Hide the notifications" }),
+		);
+		expect(screen.queryByText("a***@example.com")).not.toBeInTheDocument();
+		expect(
+			screen.queryByText("The list shows the first 200 notifications."),
+		).not.toBeInTheDocument();
+	});
+
+	it("follows an active record until it is done", async () => {
+		vi.useFakeTimers();
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				json({
+					job: jobView({
+						state: "active",
+						total: 2,
+						sent: 1,
+						failed: 0,
+						deliveries: [],
+					}),
+				}),
+			)
+			.mockResolvedValueOnce(
+				json({
+					job: jobView({
+						state: "done",
+						total: 2,
+						sent: 1,
+						failed: 1,
+						fallback: "stalled",
+						truncated: false,
+						deliveries: [
+							{
+								id: "ndl_9",
+								channel: "sms",
+								order: 0,
+								state: "sent",
+							},
+						],
+					}),
+				}),
+			);
+		vi.stubGlobal("fetch", fetchMock);
+		render(
+			<LogEntryStatus
+				entry={logEntry({ state: "active", total: 2, sent: 0, failed: 0 })}
+			/>,
+		);
+		expect(
+			screen.getByText("The server sends the notifications now."),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText("Notifications complete: 0 of 2. Sent: 0. Failed: 0."),
+		).toBeInTheDocument();
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(
+			screen.getByText("Notifications complete: 1 of 2. Sent: 1. Failed: 0."),
+		).toBeInTheDocument();
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(2000);
+		});
+		expect(screen.getByText("Some notifications failed.")).toBeInTheDocument();
+		expect(
+			screen.getByText("Notifications complete: 2 of 2. Sent: 1. Failed: 1."),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"The queue was not available. The server sent these notifications without the queue.",
+			),
+		).toBeInTheDocument();
+		const calls = fetchMock.mock.calls.length;
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(10_000);
+		});
+		expect(fetchMock.mock.calls.length).toBe(calls);
+		fireEvent.click(
+			screen.getByRole("button", { name: "Show the notifications" }),
+		);
+		expect(screen.getByText("Text message 1")).toBeInTheDocument();
+		expect(screen.getByText("Sent")).toBeInTheDocument();
+		expect(
+			screen.queryByText("The list shows the first 200 notifications."),
+		).not.toBeInTheDocument();
+	});
+
+	it("tells the member when the page cannot read the notifications", async () => {
+		vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({}, 404)));
+		render(<LogEntryStatus entry={logEntry()} />);
+		fireEvent.click(
+			screen.getByRole("button", { name: "Show the notifications" }),
+		);
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(screen.getByRole("alert")).toHaveTextContent(
+			"The page cannot read the notifications. Reload the page.",
+		);
+		fireEvent.click(
+			screen.getByRole("button", { name: "Hide the notifications" }),
+		);
+		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+	});
+
+	it("tells the member when an active record cannot be read", async () => {
+		vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({}, 404)));
+		render(
+			<LogEntryStatus
+				entry={logEntry({ state: "active", sent: 0, failed: 0 })}
+			/>,
+		);
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(
+			screen.getByRole("button", { name: "Show the notifications" }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("alert")).toHaveTextContent(
+			"The page cannot read the notifications. Reload the page.",
+		);
 	});
 });
