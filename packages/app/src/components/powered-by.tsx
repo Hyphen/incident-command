@@ -1,10 +1,10 @@
-import { WatchtowerLogo } from "@/components/watchtower-logo";
+import { ProductMark } from "@/components/product-mark";
 
 /** The product credit at the bottom of a page. */
 export function PoweredBy() {
 	return (
 		<span className="inline-flex items-center gap-1.5">
-			<WatchtowerLogo />
+			<ProductMark />
 			<span>
 				Powered by{" "}
 				<a
