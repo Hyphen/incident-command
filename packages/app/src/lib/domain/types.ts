@@ -269,6 +269,28 @@ export interface NotificationProgress {
 	fallback: boolean;
 }
 
+/** One record of the notification log. The record is one send and has no rows. */
+export interface NotificationLogEntry {
+	/** The id of the send job. */
+	id: string;
+	updateId: string;
+	state: "active" | "done";
+	total: number;
+	sent: number;
+	failed: number;
+	fallback?: QueueFallback;
+	createdAt: string;
+	/** Absent when the incident has no post for this send. */
+	post?: { status: EventStatus; title: string; author: AuthorRef };
+}
+
+/** The notification log of one incident. The newest record is first. */
+export interface NotificationLog {
+	entries: NotificationLogEntry[];
+	/** True when the incident has more sends than the log shows. */
+	truncated: boolean;
+}
+
 /** The queue choice, without the connection URI. */
 export interface PublicNotificationQueue {
 	provider?: QueueProviderId;

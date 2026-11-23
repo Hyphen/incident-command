@@ -69,6 +69,7 @@ The permission names in this table are the same names that agents use. See [Agen
 | Read notification drafts                                       | `drafts.read`                            | Yes    | Yes    | Yes   |
 | Declare incidents, schedule maintenance and post updates       | `incidents.publish`                      | No     | Yes    | Yes   |
 | Notify subscribers when you post                               | `notifications.send`                     | No     | Yes    | Yes   |
+| Read the notification log of an incident                       | `notifications.send`                     | No     | Yes    | Yes   |
 | Save, approve or discard notification drafts                   | `drafts.review`                          | No     | Yes    | Yes   |
 | Change the maintenance window and the regions of an incident   | `incidents.edit`                         | No     | Yes    | Yes   |
 | Delete an incident from the public view                        | `incidents.delete`                       | No     | Yes    | Yes   |

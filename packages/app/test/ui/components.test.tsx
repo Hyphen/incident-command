@@ -15,6 +15,7 @@ import { CopyInviteLinkButton } from "@/components/manage/copy-invite-link-butto
 import { CreateTokenForm } from "@/components/manage/create-token-form";
 import { statusesFor } from "@/components/manage/incident-fields";
 import { InviteMemberForm } from "@/components/manage/invite-member-form";
+import { NotificationLogCard } from "@/components/manage/notification-log";
 import { eventColorStatus, StatusBadge } from "@/components/status/badges";
 import { IncidentList } from "@/components/status/recent-incidents";
 import { StatusTimeline } from "@/components/status/status-timeline";
@@ -645,5 +646,35 @@ describe("status components", () => {
 	it("lists statuses per kind", () => {
 		expect(statusesFor("incident")).toContain("monitoring");
 		expect(statusesFor("maintenance")).toContain("verifying");
+	});
+});
+
+describe("NotificationLogCard", () => {
+	it("shows a missing post and the limit note", () => {
+		render(
+			<NotificationLogCard
+				log={{
+					truncated: true,
+					entries: [
+						{
+							id: "njb_1",
+							updateId: "upd_missing",
+							state: "done",
+							total: 1,
+							sent: 1,
+							failed: 0,
+							createdAt: "2026-11-02T12:00:00.000Z",
+						},
+					],
+				}}
+			/>,
+		);
+		expect(
+			screen.getByText("The portal cannot find the post of this record."),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText("The log shows the newest 50 records."),
+		).toBeInTheDocument();
+		expect(screen.queryByText(/· /)).not.toBeInTheDocument();
 	});
 });

@@ -2,26 +2,14 @@
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { SendResult } from "@/app/manage/actions";
-import type {
-	NotificationChannel,
-	NotificationJobView,
-} from "@/lib/domain/types";
+import {
+	CHANNEL_NOUNS,
+	DELIVERY_STATE_LABELS,
+} from "@/lib/domain/delivery-text";
+import type { NotificationJobView } from "@/lib/domain/types";
 import { SubmitButton } from "../submit-button";
 import { ProgressBar } from "./progress-bar";
 import { useProgress } from "./use-progress";
-
-const NOUN: Record<NotificationChannel, string> = {
-	email: "Email",
-	sms: "Text message",
-	webhook: "Webhook",
-};
-
-const ROW_STATE = {
-	pending: "Waiting",
-	sending: "In progress",
-	sent: "Sent",
-	failed: "Failed",
-} as const;
 
 function SendProgressDialog({
 	dialogRef,
@@ -77,9 +65,12 @@ function SendProgressDialog({
 									className="flex items-center justify-between gap-3"
 								>
 									<span>
-										{row.label ?? `${NOUN[row.channel]} ${row.order + 1}`}
+										{row.label ??
+											`${CHANNEL_NOUNS[row.channel]} ${row.order + 1}`}
 									</span>
-									<span className="text-muted">{ROW_STATE[row.state]}</span>
+									<span className="text-muted">
+										{DELIVERY_STATE_LABELS[row.state]}
+									</span>
 								</li>
 							))}
 						</ul>

@@ -45,11 +45,12 @@ The incident page opens and shows "Incident declared".
 
 ## The incident page
 
-Open an incident from **Incidents** or **Overview**. The page has three tabs:
+Open an incident from **Incidents** or **Overview**. The page has these tabs:
 
 - **Dashboard**: the status of the affected services for each minute, the 5 latest posts, and the drafts for this incident. Editors and admins also see the side card and the delete area.
 - **Timeline**: each event of the incident, with its author.
 - **Posts**: all the posts, newest first.
+- **Notifications**: the notification log. Only editors and admins see this tab.
 
 Each post shows its author. It also tells if the author notified subscribers. Select **View public page** to open the incident on the status page.
 
@@ -80,7 +81,26 @@ When a post notifies subscribers, the portal shows the progress:
 - Without a queue, a window shows "Notifications complete" and the state of each notification: **Waiting**, **In progress**, **Sent** or **Failed**.
 - With a queue, the **Dashboard** tab of the incident shows a progress bar and the text "The queue sends the notifications." The bar updates until the queue is done.
 
+The **Notifications** tab keeps the result. See [Read the notification log](/docs/guide/incidents/#read-the-notification-log).
+
 An admin selects the queue in **Settings**. See [Select a notification queue](/docs/guide/settings/#select-a-notification-queue).
+
+### Read the notification log
+
+You must be an editor or an admin.
+
+1. Open the incident.
+2. Select **Notifications**.
+
+The log has one record for each post that notified subscribers. The newest record is first. Each record shows the post, the time, and the number of notifications that are complete, sent and failed. A record updates while the server sends the notifications.
+
+1. Select **Show the notifications**.
+2. Read each notification. The state is **Waiting**, **In progress**, **Sent** or **Failed**.
+3. Read the cause under a failed notification.
+
+The list shows the first 200 notifications. An admin sees a masked address, for example `j***@example.com`. An editor sees the channel and a number, for example "Email 1".
+
+A post has no record when the author did not notify subscribers, or when no subscriber can receive the notification. The portal keeps each record for 30 days. The log shows the newest 50 records. A deleted incident keeps its log.
 
 ## Resolve an incident
 
@@ -147,7 +167,7 @@ The **Incidents** page opens and shows "Incident deleted from the public view". 
 - Subscribers do not get a message. The messages that the status page sent before stay with the subscribers.
 - The services keep their status. If necessary, set their status again on the **Services** page.
 - You cannot edit or restore the incident. **Overview** does not count it.
-- The portal keeps the incident and its posts. The **Deleted** card shows who deleted it, when, and why.
+- The portal keeps the incident, its posts and its notification log. The **Deleted** card shows who deleted it, when, and why.
 
 ## How incidents change the service status
 

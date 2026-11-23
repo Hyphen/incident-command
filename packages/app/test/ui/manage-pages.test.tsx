@@ -790,6 +790,10 @@ describe("incident pages", () => {
 			"href",
 			`/manage/incidents/${incident.id}?tab=posts`,
 		);
+		expect(screen.getByRole("link", { name: "Notifications" })).toHaveAttribute(
+			"href",
+			`/manage/incidents/${incident.id}?tab=notifications`,
+		);
 		expect(
 			screen.getByRole("heading", { name: "Status of the affected services" }),
 		).toBeInTheDocument();
@@ -989,6 +993,122 @@ describe("incident pages", () => {
 		);
 		expect(
 			screen.queryByRole("link", { name: "Create a post" }),
+		).not.toBeInTheDocument();
+	});
+
+	it("shows the notification log of an incident", async () => {
+		const { app, services, notifier } = await setupApp();
+		const { actor } = await signIn(app, "editor");
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Looking",
+			notify: false,
+		});
+		const empty = render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "notifications" }),
+			}),
+		);
+		expect(screen.getByRole("link", { name: "Notifications" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		expect(
+			screen.getByText(
+				"The log is empty. No post notified subscribers in the last 30 days.",
+			),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"A post has no record when the author did not notify subscribers, or when no subscriber can receive the notification.",
+			),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("heading", { name: "Posts" }),
+		).not.toBeInTheDocument();
+		empty.unmount();
+
+		await services.subscribers.addWebhook(SYSTEM_ACTOR, {
+			url: "https://hooks.example.com/bad",
+		});
+		notifier.failTargets.add("https://hooks.example.com/bad");
+		await services.incidents.postUpdate(SYSTEM_ACTOR, incident.id, {
+			message: "Worse",
+			notify: true,
+		});
+		const filled = render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "notifications" }),
+			}),
+		);
+		const card = screen
+			.getByRole("heading", { name: "Notification log" })
+			.closest("section") as HTMLElement;
+		expect(within(card).getByText("Investigating")).toBeInTheDocument();
+		expect(within(card).getByText("API errors")).toBeInTheDocument();
+		expect(within(card).getByText(/· System/)).toBeInTheDocument();
+		expect(
+			within(card).getByText("Some notifications failed."),
+		).toBeInTheDocument();
+		expect(
+			within(card).getByText(
+				"Notifications complete: 1 of 1. Sent: 0. Failed: 1.",
+			),
+		).toBeInTheDocument();
+		filled.unmount();
+
+		await services.incidents.delete(actor, incident.id, {
+			reason: "Duplicate report",
+		});
+		render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "notifications" }),
+			}),
+		);
+		expect(screen.getByText("Some notifications failed.")).toBeInTheDocument();
+		expect(
+			screen.getByRole("region", { name: "Deleted from the public view" }),
+		).toBeInTheDocument();
+	});
+
+	it("hides the notification log from a viewer", async () => {
+		const { app, services } = await setupApp();
+		await signIn(app, "viewer");
+		const incident = await services.incidents.create(SYSTEM_ACTOR, {
+			title: "API errors",
+			message: "Looking",
+			notify: false,
+		});
+		const dashboard = render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({}),
+			}),
+		);
+		expect(
+			screen.queryByRole("link", { name: "Notifications" }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("heading", { name: "Notification log" }),
+		).not.toBeInTheDocument();
+		dashboard.unmount();
+
+		render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "notifications" }),
+			}),
+		);
+		expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		expect(screen.getByText("Looking")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("heading", { name: "Notification log" }),
 		).not.toBeInTheDocument();
 	});
 
