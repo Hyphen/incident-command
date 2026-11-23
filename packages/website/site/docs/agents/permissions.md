@@ -42,10 +42,12 @@ The portal shows each permission with its label. The tools and the API use the k
 | `members.manage`      | Manage members                    | Admin        | Invite, change and remove members.                                                                    | Yes               |
 | `subscribers.read`    | Read subscribers                  | Admin        | Read subscribers.                                                                                     | Yes               |
 | `subscribers.manage`  | Manage subscribers                | Admin        | Add, change and remove subscribers.                                                                   | Yes               |
-| `settings.read`       | Read settings                     | Admin        | Read the settings and the branding.                                                                   | Yes               |
-| `settings.write`      | Change settings                   | Admin        | Change the settings, the theme, the custom CSS, the logo, the favicon and the two-factor requirement. | Yes               |
-| `channels.read`       | Read notification channels        | Admin        | Read the notification channels and their providers, without credentials.                              | Yes               |
-| `channels.write`      | Change notification channels      | Admin        | Turn a channel on or off. Set its delivery strategy or its sender.                                    | Yes               |
+| `settings.general.read`  | Read general settings        | Admin        | Read the name, the links, the description, the uptime window and the two-factor requirement. | Yes               |
+| `settings.general.write` | Change general settings      | Admin        | Change the name, the links, the description, the uptime window and the two-factor requirement. | Yes               |
+| `settings.branding.read` | Read branding                | Admin        | Read the theme, the custom CSS, the logo, the favicon and the "Powered by" line.               | Yes               |
+| `settings.branding.write` | Change branding             | Admin        | Change the theme, the custom CSS, the logo, the favicon and the "Powered by" line.             | Yes               |
+| `channels.read`       | Read notification settings        | Admin        | Read the notification channels and their providers, without credentials.                              | Yes               |
+| `channels.write`      | Change notification settings      | Admin        | Turn a channel on or off. Set its delivery strategy or its sender.                                    | Yes               |
 | `channels.providers`  | Change notification providers     | Admin        | Add notification providers and their credentials.                                                     | No                |
 | `agents.read`         | Read agents                       | Admin        | Read agents, their credentials and their activity.                                                    | Yes               |
 | `agents.manage`       | Manage agents                     | Admin        | Create, change and delete agents. Create and revoke their tokens.                                     | Yes               |
@@ -73,7 +75,7 @@ The permissions that an agent uses in a request are its effective permissions. T
 - **OAuth connection:** the agent acts as the member who selected **Allow**. Its effective permissions are the agent permissions that the role of that member also has.
 - **API token:** the token is not linked to a member. The agent uses all of its permissions.
 
-For example, an agent has `settings.write`. An editor connects it with OAuth. Through that connection, the agent cannot change settings, because an editor does not have `settings.write`. When an admin connects the same agent, the agent can change settings.
+For example, an agent has `settings.general.write`. An editor connects it with OAuth. Through that connection, the agent cannot change general settings, because an editor does not have `settings.general.write`. When an admin connects the same agent, the agent can change general settings.
 
 The server calculates the effective permissions for each request. Thus a new role of the member applies immediately. The `whoami` tool returns the effective permissions and the credential type, `oauth` or `token`.
 
@@ -86,7 +88,7 @@ The portal shows this text next to `members.manage` and `agents.manage`: "An age
 
 Give these permissions only to an agent that you trust as an admin.
 
-Also give `settings.write` with care. The public status page shows a new design immediately, without a review by a person. The same permission also controls the two-factor requirement for members.
+Also give `settings.branding.write` with care. The public status page shows a new design immediately, before a person reviews it. Give `settings.general.write` with care too. It controls the two-factor requirement for members.
 
 ## Attribution
 
@@ -118,6 +120,22 @@ An agent notifies subscribers only when it has `notifications.send`. Without tha
 
 - Pass `notify: false`. Otherwise the call fails with a `forbidden` error.
 - Use `draft_notification`. A person approves the draft, and the approval notifies subscribers. See [Agent workflows](/docs/agents/workflows/#notification-drafts-with-human-review).
+
+## Settings areas
+
+The **Settings** page has three areas. You can give each area on its own.
+
+- **General** uses `settings.general.read` and `settings.general.write`. This area has the name, the links, the description, the uptime window and the two-factor requirement.
+- **Branding** uses `settings.branding.read` and `settings.branding.write`. This area has the theme, the custom CSS, the logo, the favicon and the "Powered by" line.
+- **Notifications** uses `channels.read` and `channels.write`. This area has the notification channels. `channels.providers` stays with a person.
+
+`get_settings` returns only the areas that the agent can read or change. `update_settings` accepts fields from one area or from both. A field from an area needs the write permission for that area. When one permission is missing, the call changes nothing.
+
+## Old settings permissions
+
+A previous release used `settings.read` and `settings.write` for general settings and branding together. An agent that still has `settings.read` can read both areas. An agent that still has `settings.write` can change both areas. The agent page shows the new permissions as selected. Save the agent to store the new permissions. You can then clear one area.
+
+A new agent cannot receive `settings.read` or `settings.write`. Those keys are unknown.
 
 ## Agents from an earlier release
 

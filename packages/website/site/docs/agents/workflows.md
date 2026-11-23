@@ -116,7 +116,7 @@ A region tab counts only the outages in that region. Overview counts each outage
 
 ## Design the status page through MCP
 
-An agent with `settings.read` and `settings.write` can do the full design of the status page. It selects a theme, uploads the logo and the favicon, and writes custom CSS.
+An agent with `settings.branding.read` and `settings.branding.write` can do the full design of the status page. It selects a theme, uploads the logo and the favicon, and writes custom CSS. General settings use `settings.general.write`. The two-factor requirement needs that permission.
 
 1. The agent calls `get_design_guide`. The result lists the theme presets, the design tokens, the CSS selectors, the rules, the limits and an example stylesheet.
 2. The agent calls `update_settings` with `theme`.
@@ -161,7 +161,7 @@ A value of `customCss` replaces the stored stylesheet. Thus the agent must call 
 
 To remove "Powered by Incident Command" from the public pages, set `showPoweredBy` to `false`. To show the line again, set it to `true`. Do not hide the line with `customCss`.
 
-The public status page shows the new design without a review by a person. Give `settings.write` only to an agent that you trust with the look of the page.
+The public status page shows the new design before a person reviews it. Give `settings.branding.write` only to an agent that you trust with the look of the page.
 
 ## Example prompts
 

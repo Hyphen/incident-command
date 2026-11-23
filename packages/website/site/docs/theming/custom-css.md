@@ -14,7 +14,7 @@ To add the custom CSS in the portal:
 3. Enter the stylesheet in **Custom CSS**.
 4. Select **Save branding**.
 
-An agent sets the custom CSS with `customCss` in the `update_settings` MCP tool. See [Design the status page through MCP](/docs/agents/workflows/#design-the-status-page-through-mcp).
+An agent with `settings.branding.write` sets the custom CSS with `customCss` in the `update_settings` MCP tool. See [Design the status page through MCP](/docs/agents/workflows/#design-the-status-page-through-mcp).
 
 The app puts the stylesheet in a `<style>` element on each page. It escapes each `<` character. Thus the stylesheet cannot close its `<style>` element and add markup.
 

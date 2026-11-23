@@ -99,12 +99,21 @@ describe("DevelopmentService", () => {
 		await expect(t.services.incidents.find(outage.id)).resolves.toBeDefined();
 	});
 
-	it("requires the admin role", async () => {
+	it("requires permission to change general settings", async () => {
 		const t = createTestContext({ env: { NODE_ENV: "development" } });
 		const { outage } = await seed(t);
 		await expect(
 			t.services.development.clearIncidents(EDITOR),
 		).rejects.toBeInstanceOf(PermissionDeniedError);
+		await expect(
+			t.services.development.clearIncidents(
+				agentActor(["settings.branding.write"]),
+			),
+		).rejects.toMatchObject({ permission: "settings.general.write" });
 		await expect(t.services.incidents.find(outage.id)).resolves.toBeDefined();
+		await t.services.development.clearIncidents(
+			agentActor(["settings.general.write"]),
+		);
+		await expect(t.services.incidents.find(outage.id)).resolves.toBeUndefined();
 	});
 });

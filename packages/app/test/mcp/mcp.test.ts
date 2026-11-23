@@ -707,7 +707,11 @@ describe("MCP handler", () => {
 	it("lets an agent upload and remove the logo and the favicon", async () => {
 		const { client, call } = await connect(
 			t,
-			await tokenFor(t, ["settings.read", "settings.write"], "design bot"),
+			await tokenFor(
+				t,
+				["settings.branding.read", "settings.branding.write"],
+				"design bot",
+			),
 		);
 		expect(client.getInstructions()).toContain("get_design_guide");
 		const stored = (kind: "logo" | "favicon") =>
@@ -795,7 +799,11 @@ describe("MCP handler", () => {
 	it("gives the limits of the service in the design guide", async () => {
 		const { call } = await connect(
 			t,
-			await tokenFor(t, ["settings.read", "settings.write"], "design bot"),
+			await tokenFor(
+				t,
+				["settings.branding.read", "settings.branding.write"],
+				"design bot",
+			),
 		);
 		const guide = (await call("get_design_guide")).data;
 		expect(guide.themes.map((theme: { id: string }) => theme.id)).toContain(
@@ -823,6 +831,157 @@ describe("MCP handler", () => {
 		expect((await svg(assetMaxBytes + 1)).text).toBe(
 			"bad_request: The logo must be 512 KB or smaller.",
 		);
+	});
+
+	it("separates general settings, branding and notification settings", async () => {
+		const general = await connect(
+			t,
+			await tokenFor(
+				t,
+				["settings.general.read", "settings.general.write"],
+				"general bot",
+			),
+		);
+		const generalTools = (await general.client.listTools()).tools.map(
+			(tool) => tool.name,
+		);
+		expect(generalTools).toContain("get_settings");
+		expect(generalTools).toContain("update_settings");
+		expect(generalTools).not.toContain("get_design_guide");
+		expect(generalTools).not.toContain("upload_brand_asset");
+		expect(generalTools).not.toContain("get_notification_settings");
+		expect(general.client.getInstructions()).not.toContain("get_design_guide");
+		const saved = (
+			await general.call("update_settings", {
+				siteName: "Acme",
+				uptimeDays: 30,
+			})
+		).data;
+		expect(saved).toMatchObject({ siteName: "Acme", uptimeDays: 30 });
+		expect(saved).not.toHaveProperty("theme");
+		expect(saved).not.toHaveProperty("showPoweredBy");
+		const theme = await general.call("update_settings", { theme: "carbon" });
+		expect(theme.isError).toBe(true);
+		expect(theme.text).toContain("settings.branding.write");
+		expect((await general.call("get_settings")).data.siteName).toBe("Acme");
+		expect((await general.call("get_settings")).data).not.toHaveProperty(
+			"theme",
+		);
+		expect((await t.services.settings.get()).theme).toBe("default");
+		await general.client.close();
+
+		const brand = await connect(
+			t,
+			await tokenFor(
+				t,
+				["settings.branding.read", "settings.branding.write"],
+				"brand bot",
+			),
+		);
+		const brandTools = (await brand.client.listTools()).tools.map(
+			(tool) => tool.name,
+		);
+		expect(brandTools).toEqual(
+			expect.arrayContaining([
+				"get_settings",
+				"get_design_guide",
+				"update_settings",
+				"upload_brand_asset",
+				"remove_brand_asset",
+			]),
+		);
+		expect(brandTools).not.toContain("get_notification_settings");
+		expect(brand.client.getInstructions()).toContain("get_design_guide");
+		const styled = (
+			await brand.call("update_settings", {
+				theme: "carbon",
+				showPoweredBy: false,
+			})
+		).data;
+		expect(styled).toMatchObject({ theme: "carbon", showPoweredBy: false });
+		expect(styled).not.toHaveProperty("siteName");
+		const twoFactor = await brand.call("update_settings", {
+			requireTwoFactor: false,
+		});
+		expect(twoFactor.isError).toBe(true);
+		expect(twoFactor.text).toContain("settings.general.write");
+		expect((await t.services.settings.get()).requireTwoFactor).toBe(true);
+		await brand.client.close();
+
+		const notes = await connect(
+			t,
+			await tokenFor(t, ["channels.read", "channels.write"], "channel bot"),
+		);
+		const noteTools = (await notes.client.listTools()).tools.map(
+			(tool) => tool.name,
+		);
+		expect(noteTools).toEqual(
+			expect.arrayContaining([
+				"get_notification_settings",
+				"update_notification_channel",
+			]),
+		);
+		expect(noteTools).not.toContain("get_settings");
+		expect(noteTools).not.toContain("update_settings");
+		const channel = (
+			await notes.call("update_notification_channel", {
+				channel: "email",
+				enabled: false,
+			})
+		).data;
+		expect(channel).toMatchObject({ id: "email", enabled: false });
+		await notes.client.close();
+	});
+
+	it("keeps both areas for an agent that has the old settings permissions", async () => {
+		const created = await t.services.agents.create(ADMIN, {
+			name: "Old design bot",
+			permissions: ["status.read"],
+		});
+		const stored = await t.store.get("agents", created.id);
+		if (!stored) {
+			throw new Error("missing agent");
+		}
+		await t.store.update("agents", {
+			...stored,
+			permissions: ["settings.read", "settings.write"],
+		});
+		const token = (await t.services.agents.createToken(ADMIN, created.id, {}))
+			.token;
+		const { client, call } = await connect(t, token);
+		expect((await call("whoami")).data.permissions).toEqual([
+			"settings.general.read",
+			"settings.general.write",
+			"settings.branding.read",
+			"settings.branding.write",
+		]);
+		await call("update_settings", { siteName: "Legacy", theme: "ocean" });
+		expect(await t.services.settings.get()).toMatchObject({
+			siteName: "Legacy",
+			theme: "ocean",
+		});
+		const current = await t.services.agents.get(ADMIN, created.id);
+		expect(current.permissions).toEqual([
+			"settings.general.read",
+			"settings.general.write",
+			"settings.branding.read",
+			"settings.branding.write",
+		]);
+		await t.services.agents.update(ADMIN, created.id, {
+			permissions: ["settings.general.write"],
+			revision: current.revision,
+		});
+		expect((await call("whoami")).data.permissions).toEqual([
+			"settings.general.write",
+		]);
+		const denied = await call("update_settings", { theme: "mono" });
+		expect(denied.isError).toBe(true);
+		expect(denied.text).toContain("settings.branding.write");
+		expect((await t.services.settings.get()).theme).toBe("ocean");
+		expect(
+			(await call("update_settings", { siteName: "Narrow" })).data.siteName,
+		).toBe("Narrow");
+		await client.close();
 	});
 
 	it("denies a tool the agent cannot call and keeps secrets out of the log", async () => {

@@ -1,4 +1,5 @@
 import { inspectBrandAsset } from "../domain/brand-asset";
+import { can, type Permission } from "../domain/permissions";
 import {
 	type UpdateSettingsInput,
 	updateSettingsSchema,
@@ -10,6 +11,7 @@ import {
 	type BrandAssetKind,
 	type Settings,
 } from "../domain/types";
+import { ValidationError } from "../errors";
 import type { ReadOptions } from "../store/types";
 import { iso, parse, requirePermission, type ServiceContext } from "./context";
 
@@ -29,6 +31,100 @@ const VERSION_FIELD = {
 
 /** Settings that older versions stored. These settings are gone. */
 const REMOVED_SETTINGS = ["allowSubscriptions", "brandColor"];
+
+/** Fields on the General section of the settings page. */
+const GENERAL_SETTING_KEYS = [
+	"siteName",
+	"description",
+	"siteUrl",
+	"supportUrl",
+	"uptimeDays",
+	"requireTwoFactor",
+] as const satisfies readonly (keyof Settings)[];
+
+/** Fields on the Branding section, including the file versions. */
+const BRANDING_SETTING_KEYS = [
+	"theme",
+	"customCss",
+	"showPoweredBy",
+	"logoUpdatedAt",
+	"faviconUpdatedAt",
+] as const satisfies readonly (keyof Settings)[];
+
+const GENERAL_SETTING_SET = new Set<string>(GENERAL_SETTING_KEYS);
+const BRANDING_SETTING_SET = new Set<string>(BRANDING_SETTING_KEYS);
+
+/** The keys in a patch that the caller set. `undefined` means "leave it". */
+function definedKeys(patch: object): string[] {
+	return Object.entries(patch)
+		.filter((entry) => entry[1] !== undefined)
+		.map((entry) => entry[0]);
+}
+
+/** Rejects a patch that sets an area the actor cannot change. */
+function requireSettingsChange(actor: Actor, patch: object): void {
+	const keys = definedKeys(patch);
+	const general = keys.some((key) => GENERAL_SETTING_SET.has(key));
+	const branding = keys.some((key) => BRANDING_SETTING_SET.has(key));
+	if (!general && !branding) {
+		throw new ValidationError("Give a setting to change.");
+	}
+	if (general) {
+		requirePermission(actor, "settings.general.write");
+	}
+	if (branding) {
+		requirePermission(actor, "settings.branding.write");
+	}
+}
+
+function canUseArea(
+	actor: Actor,
+	read: Permission,
+	write: Permission,
+): boolean {
+	return can(actor, read) || can(actor, write);
+}
+
+function assignDefined(
+	target: Record<string, unknown>,
+	settings: Settings,
+	keys: readonly (keyof Settings)[],
+): void {
+	for (const key of keys) {
+		const value = settings[key];
+		if (value !== undefined) {
+			target[key] = value;
+		}
+	}
+}
+
+/**
+ * The settings an actor can read or change.
+ * General fields and branding fields stay in their own areas.
+ */
+export function visibleSettings(
+	actor: Actor,
+	settings: Settings,
+	links: { logoUrl?: string; faviconUrl?: string } = {},
+): Record<string, unknown> {
+	const view: Record<string, unknown> = {
+		id: settings.id,
+		updatedAt: settings.updatedAt,
+	};
+	if (canUseArea(actor, "settings.general.read", "settings.general.write")) {
+		assignDefined(view, settings, GENERAL_SETTING_KEYS);
+	}
+	if (canUseArea(actor, "settings.branding.read", "settings.branding.write")) {
+		assignDefined(view, settings, BRANDING_SETTING_KEYS);
+		if (links.logoUrl) {
+			view.logoUrl = links.logoUrl;
+		}
+		if (links.faviconUrl) {
+			view.faviconUrl = links.faviconUrl;
+		}
+	}
+	return view;
+}
 
 /** The stored settings without the removed settings. */
 function withoutRemovedSettings(stored: object | undefined): Partial<Settings> {
@@ -85,8 +181,9 @@ export class SettingsService {
 	}
 
 	async update(actor: Actor, input: UpdateSettingsInput): Promise<Settings> {
-		requirePermission(actor, "settings.write");
-		return this.apply(parse(updateSettingsSchema, input));
+		const patch = parse(updateSettingsSchema, input);
+		requireSettingsChange(actor, patch);
+		return this.apply(patch);
 	}
 
 	/**
@@ -99,8 +196,11 @@ export class SettingsService {
 		input: UpdateSettingsInput,
 		assets: BrandAssetChanges = {},
 	): Promise<Settings> {
-		requirePermission(actor, "settings.write");
+		requirePermission(actor, "settings.branding.write");
 		const patch: Record<string, unknown> = parse(updateSettingsSchema, input);
+		if (definedKeys(patch).some((key) => GENERAL_SETTING_SET.has(key))) {
+			requirePermission(actor, "settings.general.write");
+		}
 		const updatedAt = iso(this.ctx.now());
 		const changes: { kind: BrandAssetKind; asset?: BrandAsset }[] = [];
 		for (const kind of BRAND_ASSET_KINDS) {
