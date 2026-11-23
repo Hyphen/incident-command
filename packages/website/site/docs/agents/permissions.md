@@ -131,11 +131,7 @@ The **Settings** page has three areas. You can give each area on its own.
 
 `get_settings` returns only the areas that the agent can read or change. `update_settings` accepts fields from one area or from both. A field from an area needs the write permission for that area. When one permission is missing, the call changes nothing.
 
-## Old settings permissions
-
-A previous release used `settings.read` and `settings.write` for general settings and branding together. An agent that still has `settings.read` can read both areas. An agent that still has `settings.write` can change both areas. The agent page shows the new permissions as selected. Save the agent to store the new permissions. You can then clear one area.
-
-A new agent cannot receive `settings.read` or `settings.write`. Those keys are unknown.
+The keys `settings.read` and `settings.write` are unknown. An agent that has only those keys cannot read or change settings.
 
 ## Agents from an earlier release
 

@@ -933,7 +933,7 @@ describe("MCP handler", () => {
 		await notes.client.close();
 	});
 
-	it("keeps both areas for an agent that has the old settings permissions", async () => {
+	it("ignores the old settings permissions", async () => {
 		const created = await t.services.agents.create(ADMIN, {
 			name: "Old design bot",
 			permissions: ["status.read"],
@@ -944,43 +944,24 @@ describe("MCP handler", () => {
 		}
 		await t.store.update("agents", {
 			...stored,
-			permissions: ["settings.read", "settings.write"],
+			permissions: ["settings.read", "settings.write", "status.read"],
 		});
 		const token = (await t.services.agents.createToken(ADMIN, created.id, {}))
 			.token;
 		const { client, call } = await connect(t, token);
-		expect((await call("whoami")).data.permissions).toEqual([
-			"settings.general.read",
-			"settings.general.write",
-			"settings.branding.read",
-			"settings.branding.write",
-		]);
-		await call("update_settings", { siteName: "Legacy", theme: "ocean" });
-		expect(await t.services.settings.get()).toMatchObject({
+		expect((await call("whoami")).data.permissions).toEqual(["status.read"]);
+		const tools = (await client.listTools()).tools.map((tool) => tool.name);
+		expect(tools).not.toContain("get_settings");
+		expect(tools).not.toContain("update_settings");
+		const denied = await call("update_settings", {
 			siteName: "Legacy",
 			theme: "ocean",
 		});
-		const current = await t.services.agents.get(ADMIN, created.id);
-		expect(current.permissions).toEqual([
-			"settings.general.read",
-			"settings.general.write",
-			"settings.branding.read",
-			"settings.branding.write",
-		]);
-		await t.services.agents.update(ADMIN, created.id, {
-			permissions: ["settings.general.write"],
-			revision: current.revision,
-		});
-		expect((await call("whoami")).data.permissions).toEqual([
-			"settings.general.write",
-		]);
-		const denied = await call("update_settings", { theme: "mono" });
 		expect(denied.isError).toBe(true);
-		expect(denied.text).toContain("settings.branding.write");
-		expect((await t.services.settings.get()).theme).toBe("ocean");
-		expect(
-			(await call("update_settings", { siteName: "Narrow" })).data.siteName,
-		).toBe("Narrow");
+		expect(denied.text).toContain("settings.general.write");
+		const settings = await t.services.settings.get();
+		expect(settings.siteName).not.toBe("Legacy");
+		expect(settings.theme).toBe("default");
 		await client.close();
 	});
 

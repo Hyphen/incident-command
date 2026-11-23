@@ -198,24 +198,9 @@ export const DEFAULT_AGENT_PERMISSIONS = [
 
 const AGENT_PERMISSION_SET = new Set<string>(AGENT_PERMISSIONS);
 
-/**
- * Permissions from before general settings and branding were separate.
- * Each old permission grants both areas. A save stores the new permissions.
- */
-const LEGACY_SETTINGS_READ = "settings.read";
-const LEGACY_SETTINGS_WRITE = "settings.write";
-
 /** Drops unknown and person-only values. Keeps catalog order. */
 export function normalizePermissions(values: readonly string[]): Permission[] {
-	const selected = new Set<string>(values);
-	if (selected.has(LEGACY_SETTINGS_READ)) {
-		selected.add("settings.general.read");
-		selected.add("settings.branding.read");
-	}
-	if (selected.has(LEGACY_SETTINGS_WRITE)) {
-		selected.add("settings.general.write");
-		selected.add("settings.branding.write");
-	}
+	const selected = new Set(values);
 	return AGENT_PERMISSIONS.filter((permission) => selected.has(permission));
 }
 
@@ -226,10 +211,7 @@ export function permissionsForRole(role: Role): Permission[] {
 	);
 }
 
-/**
- * Stored agent permissions that the member role still allows.
- * Old settings permissions expand to the general area and the branding area.
- */
+/** Stored agent permissions that the member role still allows. */
 export function permissionsInEffect(
 	stored: readonly string[],
 	role: Role,
