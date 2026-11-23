@@ -24,7 +24,7 @@ Any member can open and read a draft. You can find drafts in these places:
 
 - **Overview** shows a message, for example "1 notification draft waits for review." Select **Review drafts →**.
 - On **Incidents**, the **Drafts** card lists each draft that waits for review. Each row shows the title, the kind, the agent that wrote it and the time. Select **Review** to open the draft.
-- On an incident page, the **Dashboard** tab lists the drafts for that incident.
+- On an incident page, the **Dashboard** tab shows the drafts for that incident at the top.
 - Open the review link from the agent. If you are not signed in, the portal opens the draft after you sign in.
 
 ## Who can review a draft
