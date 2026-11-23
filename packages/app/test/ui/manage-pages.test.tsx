@@ -1049,6 +1049,19 @@ describe("incident pages", () => {
 		expect(
 			screen.getByRole("link", { name: /^Please review this/ }),
 		).toHaveAttribute("href", `/manage/drafts/${pending.id}`);
+		const draftsHeading = screen.getByRole("heading", { name: "Drafts" });
+		expect(
+			draftsHeading.compareDocumentPosition(
+				screen.getByRole("heading", {
+					name: "Status of the affected services",
+				}),
+			) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+		expect(
+			draftsHeading.compareDocumentPosition(
+				screen.getByRole("heading", { name: "Posts" }),
+			) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
 		expect(screen.queryByText("Drop this.")).not.toBeInTheDocument();
 		dashboard.unmount();
 

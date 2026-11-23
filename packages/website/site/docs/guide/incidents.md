@@ -47,7 +47,7 @@ The incident page opens and shows "Incident declared".
 
 Open an incident from **Incidents** or **Overview**. The page has three tabs:
 
-- **Dashboard**: the status of the affected services for each minute, the 5 latest posts, and the drafts for this incident. Editors and admins also see the side card and the delete area.
+- **Dashboard**: The tab shows drafts that wait for review at the top. Then it shows the status of each affected service and the 5 latest posts. The drafts card shows only when a draft waits. Editors and admins also see the side card and the delete area.
 - **Timeline**: each event of the incident, with its author.
 - **Posts**: all the posts, newest first.
 
