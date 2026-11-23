@@ -16,7 +16,7 @@ This page gives the meaning of each word that the docs use. The portal, the API 
 | **Service status** | One of `operational`, `degraded_performance`, `partial_outage`, `major_outage` or `under_maintenance`. An open incident or maintenance sets it. An editor can also set it by hand.                                                                                                          |
 | **Region** | A named area, for example "US East". With regions, the status page shows an Overview tab and a tab for each region. When a region exists, each affected service of an incident needs one or more regions. For an outage in all regions, select all regions. |
 | **Overview** | The first tab of a status page with regions. It shows each outage. A region tab shows an outage only for the services in that region. |
-| **Uptime**         | The part of the tracked time that a service was up. A partial outage counts as 30% downtime and a major outage as 100%. Degraded performance and maintenance do not count. The status page shows one bar for each day. The uptime window is 90 days by default, and an admin can change it. |
+| **Uptime**         | The share of the uptime window that a service was up. Time before the service existed is not downtime. A day before the service existed shows "No data". A partial outage counts as 30% downtime, and a major outage counts as 100% downtime. Degraded performance and maintenance count as uptime. The uptime window is 90 days by default, and an admin can change it. |
 
 ## Incidents and maintenance
 

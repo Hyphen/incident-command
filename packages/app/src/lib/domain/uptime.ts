@@ -27,12 +27,20 @@ export interface DayStatus {
 	date: string;
 	/** Worst status during the day, or `null` when there is no data (before the service existed). */
 	status: ServiceStatus | null;
-	/** Fraction between 0 and 1, or `null` when there is no data. */
+	/**
+	 * Uptime of the time with data on this day, from 0 to 1.
+	 * `null` when the day has no data.
+	 */
 	uptime: number | null;
-	/** The time with data during the day, in milliseconds. */
+	/** The time with data on this day, in milliseconds. */
 	trackedMs: number;
-	/** The weighted downtime during the day, in milliseconds (see `DOWNTIME_WEIGHT`). */
+	/** The weighted downtime on this day, in milliseconds (see `DOWNTIME_WEIGHT`). */
 	downtimeMs: number;
+	/**
+	 * The length of this day in the window, in milliseconds.
+	 * The window percentage uses this length. Time with no data is not downtime.
+	 */
+	windowMs: number;
 	incidents: DayIncident[];
 }
 
@@ -139,9 +147,12 @@ function buildSegments(
 }
 
 /**
- * Computes the uptime of a service across a window of days from its status
- * change history. Partial outages count as 30% downtime and major outages as
- * 100%; degraded performance and maintenance do not count as downtime.
+ * The uptime of one service for the window, from its status changes.
+ * The result divides the weighted downtime by the full window.
+ * Time before the service existed is not downtime.
+ * The uptime of one day uses only the time with data on that day.
+ * A partial outage counts as 30% downtime, and a major outage counts as 100% downtime.
+ * Degraded performance and maintenance count as uptime.
  */
 export function computeUptime(
 	service: Service,
@@ -155,8 +166,6 @@ export function computeUptime(
 			incident.kind === "incident" && incident.serviceIds.includes(service.id),
 	);
 	const now = window.end.getTime();
-	let totalTracked = 0;
-	let totalDown = 0;
 	const days: DayStatus[] = [];
 
 	for (let index = 0; index < window.days; index++) {
@@ -180,19 +189,18 @@ export function computeUptime(
 				worst = segment.status;
 			}
 		}
-		totalTracked += tracked;
-		totalDown += down;
 		days.push({
 			date: toDateKey(new Date(dayStart)),
 			status: worst,
 			uptime: ratio(tracked, down),
 			trackedMs: tracked,
 			downtimeMs: down,
+			windowMs: dayEnd - dayStart,
 			incidents: dayIncidents(affecting, dayStart, now),
 		});
 	}
 
-	return { uptime: ratio(totalTracked, totalDown), days };
+	return { uptime: periodUptime(days, days.length), days };
 }
 
 /**
@@ -268,10 +276,12 @@ export function minuteTimeline(
 }
 
 /**
- * Combines the uptime of services into one result for the same window. Each
- * day adds the tracked time and the downtime of all services. A day shows
- * the worst status of the services and each incident that overlaps it, also
- * an incident without services.
+ * Combines the uptime of services for one window.
+ * Each service uses the full window, and time before it existed is not downtime.
+ * A service with no data does not change the result.
+ * A day shows the worst status of the services that have data on that day.
+ * A day also lists each incident that overlaps it, and an incident with no services.
+ * The uptime of one day uses only the time with data on that day.
  */
 export function combineUptime(
 	results: readonly UptimeResult[],
@@ -282,45 +292,59 @@ export function combineUptime(
 		(incident) => incident.kind === "incident",
 	);
 	const now = window.end.getTime();
+	const live = results.filter((result) =>
+		result.days.some((day) => day.trackedMs > 0),
+	);
 	const days: DayStatus[] = [];
 	for (let index = 0; index < window.days; index++) {
 		const dayStart = window.start.getTime() + index * DAY_MS;
-		const parts = results
-			.map((result) => result.days[index] as DayStatus)
-			.filter((day) => day.status !== null);
+		const parts = live.map((result) => result.days[index] as DayStatus);
 		let trackedMs = 0;
 		let downtimeMs = 0;
+		let windowMs = 0;
+		const measured: ServiceStatus[] = [];
 		for (const part of parts) {
 			trackedMs += part.trackedMs;
 			downtimeMs += part.downtimeMs;
+			windowMs += part.windowMs;
+			if (part.status !== null) {
+				measured.push(part.status);
+			}
 		}
 		days.push({
 			date: toDateKey(new Date(dayStart)),
-			status:
-				parts.length > 0
-					? worstStatus(parts.map((part) => part.status as ServiceStatus))
-					: null,
+			status: measured.length > 0 ? worstStatus(measured) : null,
 			uptime: ratio(trackedMs, downtimeMs),
 			trackedMs,
 			downtimeMs,
+			windowMs,
 			incidents: dayIncidents(affecting, dayStart, now),
 		});
 	}
 	return { uptime: periodUptime(days, days.length), days };
 }
 
-/** The uptime of the last `count` days, or `null` when these days have no data. */
+/**
+ * The uptime of the last `count` days, or `null` when these days have no data.
+ * The result divides the weighted downtime by the full length of these days.
+ * Time with no data is not downtime.
+ */
 export function periodUptime(
 	days: readonly DayStatus[],
 	count: number,
 ): number | null {
+	let windowMs = 0;
 	let trackedMs = 0;
 	let downtimeMs = 0;
 	for (const day of days.slice(-count)) {
+		windowMs += day.windowMs;
 		trackedMs += day.trackedMs;
 		downtimeMs += day.downtimeMs;
 	}
-	return ratio(trackedMs, downtimeMs);
+	if (trackedMs <= 0) {
+		return null;
+	}
+	return 1 - downtimeMs / windowMs;
 }
 
 /**

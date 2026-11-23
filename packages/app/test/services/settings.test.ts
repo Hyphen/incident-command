@@ -4,6 +4,7 @@ import {
 } from "@/lib/domain/brand-asset";
 import { BRAND_ASSET_KINDS } from "@/lib/domain/types";
 import { ForbiddenError, ValidationError } from "@/lib/errors";
+import { visibleSettings } from "@/lib/services/settings";
 import {
 	GIF_LOGO,
 	ICO_FAVICON,
@@ -14,7 +15,7 @@ import {
 	SVG_SCRIPT,
 	WEBP_LOGO,
 } from "../brand-asset-bytes";
-import { ADMIN, createTestContext, EDITOR } from "../helpers";
+import { ADMIN, agentActor, createTestContext, EDITOR } from "../helpers";
 
 describe("SettingsService", () => {
 	it("returns defaults derived from config", async () => {
@@ -105,6 +106,83 @@ describe("SettingsService", () => {
 		await expect(
 			t.services.settings.getBrandAsset("logo"),
 		).resolves.toBeUndefined();
+	});
+
+	it("keeps general settings and branding apart", async () => {
+		const t = createTestContext();
+		const { settings } = t.services;
+		const general = agentActor(["settings.general.write"]);
+		const branding = agentActor(["settings.branding.write"]);
+		const saved = await settings.update(general, {
+			siteName: "Acme",
+			requireTwoFactor: false,
+		});
+		expect(saved.siteName).toBe("Acme");
+		expect(saved.requireTwoFactor).toBe(false);
+		await expect(
+			settings.update(general, { siteName: "Other", theme: "carbon" }),
+		).rejects.toMatchObject({ permission: "settings.branding.write" });
+		await expect(settings.update(general, {})).rejects.toBeInstanceOf(
+			ValidationError,
+		);
+		expect((await settings.get()).siteName).toBe("Acme");
+		expect((await settings.get()).theme).toBe("default");
+
+		const styled = await settings.update(branding, {
+			theme: "carbon",
+			showPoweredBy: false,
+		});
+		expect(styled.theme).toBe("carbon");
+		expect(styled.showPoweredBy).toBe(false);
+		expect(styled.siteName).toBe("Acme");
+		await expect(
+			settings.update(branding, { uptimeDays: 30 }),
+		).rejects.toMatchObject({ permission: "settings.general.write" });
+		await expect(
+			settings.updateBranding(general, { siteName: "Nope" }, {}),
+		).rejects.toMatchObject({ permission: "settings.branding.write" });
+		await expect(
+			settings.updateBranding(
+				branding,
+				{ siteName: "Nope" },
+				{ logo: { bytes: PNG_LOGO } },
+			),
+		).rejects.toMatchObject({ permission: "settings.general.write" });
+		expect(await settings.getBrandAsset("logo")).toBeUndefined();
+
+		const defaults = settings.defaults();
+		const reader = agentActor(["settings.branding.read"]);
+		expect(visibleSettings(reader, defaults)).toMatchObject({
+			id: "settings",
+			theme: "default",
+		});
+		expect(visibleSettings(reader, defaults)).not.toHaveProperty("siteName");
+		expect(
+			visibleSettings(reader, defaults, {
+				logoUrl: "http://localhost/brand/logo",
+				faviconUrl: "http://localhost/brand/favicon",
+			}),
+		).toMatchObject({
+			logoUrl: "http://localhost/brand/logo",
+			faviconUrl: "http://localhost/brand/favicon",
+		});
+		expect(visibleSettings(general, defaults)).toMatchObject({
+			siteName: defaults.siteName,
+			requireTwoFactor: true,
+		});
+		expect(visibleSettings(general, defaults)).not.toHaveProperty("theme");
+		expect(
+			visibleSettings(general, defaults, {
+				logoUrl: "http://localhost/brand/logo",
+			}),
+		).not.toHaveProperty("logoUrl");
+		const readOnly = agentActor(["settings.general.read"]);
+		expect(visibleSettings(readOnly, defaults)).toHaveProperty("uptimeDays");
+		expect(visibleSettings(readOnly, defaults)).not.toHaveProperty("theme");
+		expect(visibleSettings(agentActor(["status.read"]), defaults)).toEqual({
+			id: "settings",
+			updatedAt: defaults.updatedAt,
+		});
 	});
 
 	it("stores, replaces and removes each uploaded file", async () => {

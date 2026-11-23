@@ -128,6 +128,7 @@ describe("computeUptime", () => {
 			uptime: null,
 			trackedMs: 0,
 			downtimeMs: 0,
+			windowMs: DAY_MS,
 			incidents: [],
 		});
 		expect(result.days[1]?.status).toBe("operational");
@@ -232,12 +233,42 @@ describe("computeUptime", () => {
 	it("exposes the day length constant", () => {
 		expect(DAY_MS).toBe(24 * 60 * 60 * 1000);
 	});
+
+	it("divides a new service's outage by the full window", () => {
+		const long = uptimeWindow(NOW, 90);
+		const createdAt = "2026-11-01T12:00:00.000Z";
+		const result = computeUptime(
+			service({ createdAt, status: "major_outage" }),
+			[change("2026-11-01T18:00:00.000Z", "operational", "major_outage")],
+			[],
+			long,
+		);
+		const windowMs = long.end.getTime() - long.start.getTime();
+		// 6h on the creation day and 12h today.
+		const downMs = 18 * HOUR_MS;
+		expect(result.uptime).toBeCloseTo(1 - downMs / windowMs, 10);
+		expect(result.uptime).toBeGreaterThan(0.9);
+		expect(periodUptime(result.days, 90)).toBe(result.uptime);
+		const before = result.days.find((day) => day.date === "2026-10-31");
+		expect(before).toMatchObject({
+			status: null,
+			uptime: null,
+			trackedMs: 0,
+			downtimeMs: 0,
+			windowMs: DAY_MS,
+		});
+		// The bar uses the 12h with data on that day.
+		const created = result.days.find((day) => day.date === "2026-11-01");
+		expect(created?.status).toBe("major_outage");
+		expect(created?.uptime).toBeCloseTo(0.5, 10);
+		expect(created?.windowMs).toBe(DAY_MS);
+	});
 });
 
 describe("combineUptime", () => {
 	const window = uptimeWindow(NOW, 3);
 
-	it("weights each service by the time it has data", () => {
+	it("gives each service the full window, including a younger service", () => {
 		const api = service();
 		const web = service({
 			id: "c2",
@@ -283,9 +314,15 @@ describe("combineUptime", () => {
 		expect(third?.status).toBe("partial_outage");
 		expect(third?.downtimeMs).toBeCloseTo(3.6 * HOUR_MS, 3);
 		expect(third?.incidents.map((i) => i.id)).toEqual(["global"]);
-		expect(result.uptime).toBeCloseTo(1 - 9.6 / 84, 10);
+		// Each service uses the 60h window. The total is 120h, with 9.6h down.
+		expect(result.uptime).toBeCloseTo(1 - 9.6 / 120, 10);
 		expect(periodUptime(result.days, 1)).toBeCloseTo(1 - 3.6 / 24, 10);
-		expect(periodUptime(result.days, 2)).toBeCloseTo(1 - 9.6 / 60, 10);
+		expect(periodUptime(result.days, 2)).toBeCloseTo(1 - 9.6 / 72, 10);
+		const [apiResult, webResult] = [api, web].map((item) =>
+			computeUptime(item, changes, incidents, window),
+		);
+		expect(apiResult?.uptime).toBeCloseTo(1 - 6 / 60, 10);
+		expect(webResult?.uptime).toBeCloseTo(1 - 3.6 / 60, 10);
 	});
 
 	it("has no data without services", () => {

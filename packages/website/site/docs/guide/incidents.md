@@ -47,7 +47,7 @@ The incident page opens and shows "Incident declared".
 
 Open an incident from **Incidents** or **Overview**. The page has these tabs:
 
-- **Dashboard**: the status of the affected services for each minute, the 5 latest posts, and the drafts for this incident. Editors and admins also see the side card and the delete area.
+- **Dashboard**: The tab shows drafts that wait for review at the top. Then it shows the status of each affected service and the 5 latest posts. The drafts card shows only when a draft waits. Editors and admins also see the side card and the delete area.
 - **Timeline**: each event of the incident, with its author.
 - **Posts**: all the posts, newest first.
 - **Notifications**: the notification log. Only editors and admins see this tab.
@@ -78,7 +78,7 @@ A new impact does not change the status of the services that the incident alread
 
 When a post notifies subscribers, the portal shows the progress:
 
-- Without a queue, a window shows "Notifications complete" and the state of each notification: **Waiting**, **In progress**, **Sent** or **Failed**.
+- Without a queue, a window shows "Notifications complete", the number of successful notifications, and the number of failed notifications.
 - With a queue, the **Dashboard** tab of the incident shows a progress bar and the text "The queue sends the notifications." The bar updates until the queue is done.
 
 The **Notifications** tab keeps the result. See [Read the notification log](/docs/guide/incidents/#read-the-notification-log).
@@ -194,6 +194,10 @@ The portal records each change of a service status. The status page uses these r
 
 - A partial outage counts as 30% downtime.
 - A major outage counts as 100% downtime.
-- Degraded performance and maintenance do not count as downtime.
+- Degraded performance and maintenance count as uptime.
+
+The percentage uses the full window. Time before the service existed is not downtime. A day before the service existed shows "No data" on the bar. The uptime on a bar uses the time with data on that day.
 
 The uptime window is 90 days by default. An admin can change it. See [Settings](/docs/guide/settings/).
+
+A region tab counts only the outages in that region. Overview counts each outage.

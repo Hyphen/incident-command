@@ -1169,6 +1169,19 @@ describe("incident pages", () => {
 		expect(
 			screen.getByRole("link", { name: /^Please review this/ }),
 		).toHaveAttribute("href", `/manage/drafts/${pending.id}`);
+		const draftsHeading = screen.getByRole("heading", { name: "Drafts" });
+		expect(
+			draftsHeading.compareDocumentPosition(
+				screen.getByRole("heading", {
+					name: "Status of the affected services",
+				}),
+			) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+		expect(
+			draftsHeading.compareDocumentPosition(
+				screen.getByRole("heading", { name: "Posts" }),
+			) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
 		expect(screen.queryByText("Drop this.")).not.toBeInTheDocument();
 		dashboard.unmount();
 
@@ -2190,6 +2203,22 @@ describe("admin pages", () => {
 		expect(screen.getByRole("checkbox", { name: /Read status/ })).toBeChecked();
 		expect(
 			screen.getByRole("checkbox", { name: /Notify subscribers/ }),
+		).not.toBeChecked();
+		expect(
+			screen.getByRole("group", { name: "General settings" }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("group", { name: "Branding" })).toBeInTheDocument();
+		expect(
+			screen.getByRole("group", { name: "Notification settings" }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("checkbox", { name: /Read general settings/ }),
+		).not.toBeChecked();
+		expect(
+			screen.getByRole("checkbox", { name: /Change branding/ }),
+		).not.toBeChecked();
+		expect(
+			screen.getByRole("checkbox", { name: /Read notification settings/ }),
 		).not.toBeChecked();
 		created.unmount();
 		const list = render(await AgentsPage(flash()));

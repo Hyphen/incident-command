@@ -5,7 +5,7 @@ import {
 	serviceOnRegion,
 	serviceStatusOnRegion,
 } from "../domain/regions";
-import { impactToStatus, worstStatus } from "../domain/status";
+import { worstStatus } from "../domain/status";
 import type {
 	Incident,
 	Region,
@@ -272,11 +272,11 @@ export class StatusService {
 				onTab(incident),
 		);
 
-		const overall = worstStatus([
-			...views.map((view) => view.status),
-			...activeIncidents.map((incident) => impactToStatus(incident.impact)),
-			...activeMaintenance.map((): ServiceStatus => "under_maintenance"),
-		]);
+		// The banner uses the worst status of the services on this view.
+		// An incident impact does not make the banner worse.
+		// A region view already has the status of each service in that region.
+		// Maintenance shows when a service on this view is under maintenance.
+		const overall = worstStatus(views.map((view) => view.status));
 
 		return {
 			settings,

@@ -163,4 +163,69 @@
 	dialog.ic-dialog::backdrop {
 		background: rgb(0 0 0 / 0.45);
 	}
+
+	/*
+	 * Progress bars. The fill moves to each new width. A sheen crosses a
+	 * busy fill, because the width can stay the same between two polls.
+	 * A bar with no count, and a busy bar at zero, move one segment
+	 * along the track. With reduced motion, nothing moves.
+	 */
+	.ic-progress-fill {
+		position: relative;
+		overflow: hidden;
+	}
+
+	.ic-progress-indeterminate {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 30%;
+		width: 40%;
+		border-radius: 9999px;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.ic-progress-fill {
+			transition:
+				width 400ms ease-out,
+				background-color 400ms ease-out;
+		}
+
+		.ic-progress-busy::after {
+			content: "";
+			position: absolute;
+			inset: 0;
+			background: linear-gradient(
+				90deg,
+				transparent,
+				var(--ic-bg),
+				transparent
+			);
+			opacity: 0.55;
+			translate: -100% 0;
+			animation: ic-progress-sheen 1.4s linear infinite;
+		}
+
+		/* The segment starts and stops outside the track. */
+		.ic-progress-indeterminate {
+			left: 0;
+			animation: ic-progress-slide 1.15s linear infinite;
+		}
+
+		@keyframes ic-progress-sheen {
+			to {
+				translate: 100% 0;
+			}
+		}
+
+		@keyframes ic-progress-slide {
+			from {
+				translate: -100% 0;
+			}
+
+			to {
+				translate: 250% 0;
+			}
+		}
+	}
 }

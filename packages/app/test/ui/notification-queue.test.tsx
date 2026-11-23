@@ -24,6 +24,7 @@ import { ProgressBar } from "@/components/manage/progress-bar";
 import { QueueSettingsCard } from "@/components/manage/queue-settings";
 import { SendButton } from "@/components/manage/send-button";
 import { SendProgressBanner } from "@/components/manage/send-progress-banner";
+import { buttonClass } from "@/components/manage/ui";
 import type {
 	NotificationJobView,
 	NotificationLogEntry,
@@ -409,7 +410,7 @@ describe("send status window", () => {
 		vi.useRealTimers();
 	});
 
-	it("opens before the send returns and shows each row", async () => {
+	it("opens before the send returns and shows the counts", async () => {
 		let resolve: (value: { jobId: string; href: string }) => void = () => {};
 		const action = vi.fn(
 			() =>
@@ -449,22 +450,32 @@ describe("send status window", () => {
 		expect(
 			screen.getByText("The server prepares the notifications."),
 		).toBeInTheDocument();
+		expect(screen.getByRole("progressbar")).not.toHaveAttribute(
+			"aria-valuenow",
+		);
 		const cancel = new Event("cancel", { cancelable: true });
 		dialog?.dispatchEvent(cancel);
 		expect(cancel.defaultPrevented).toBe(true);
 		await act(async () => {
 			resolve({ jobId: "njb_1", href: "/manage/incidents/inc_1" });
 		});
-		expect(await screen.findByText("Failed")).toBeInTheDocument();
-		expect(screen.getByText("Webhook 1")).toBeInTheDocument();
 		expect(
-			screen.getByText("The list shows the first 200 notifications."),
+			await screen.findByText("Some notifications failed."),
 		).toBeInTheDocument();
-		expect(screen.getByText(/Some notifications failed/)).toBeInTheDocument();
-		expect(screen.getByRole("link", { name: "Continue" })).toHaveAttribute(
-			"href",
-			"/manage/incidents/inc_1",
+		expect(screen.getByText("Successful").parentElement).toHaveTextContent(
+			"Successful 0",
 		);
+		expect(screen.getByText("Failed").parentElement).toHaveTextContent(
+			"Failed 1",
+		);
+		expect(screen.queryByText("Webhook 1")).not.toBeInTheDocument();
+		expect(screen.getByRole("progressbar")).toHaveAttribute(
+			"aria-valuenow",
+			"1",
+		);
+		const next = screen.getByRole("link", { name: "Continue" });
+		expect(next).toHaveAttribute("href", "/manage/incidents/inc_1");
+		expect(next).toHaveClass(buttonClass.primary, { exact: true });
 	});
 
 	it("gives a failed send to the page and does not open a location", async () => {
@@ -776,12 +787,23 @@ describe("queue progress banner", () => {
 		await act(async () => {
 			await Promise.resolve();
 		});
-		expect(screen.getByText("Waiting")).toBeInTheDocument();
-		expect(screen.getByText("Email 1")).toBeInTheDocument();
+		expect(screen.getByText("Successful").parentElement).toHaveTextContent(
+			"Successful 0",
+		);
+		expect(screen.getByText("Failed").parentElement).toHaveTextContent(
+			"Failed 0",
+		);
+		expect(screen.queryByText("Email 1")).not.toBeInTheDocument();
 		expect(screen.getByText(/You can leave this page/)).toBeInTheDocument();
 		await act(async () => {
 			await vi.advanceTimersByTimeAsync(1000);
 		});
+		expect(screen.getByText("Successful").parentElement).toHaveTextContent(
+			"Successful 1",
+		);
+		expect(screen.getByText("Failed").parentElement).toHaveTextContent(
+			"Failed 0",
+		);
 		expect(
 			screen.getByText("All notifications were sent."),
 		).toBeInTheDocument();

@@ -27,6 +27,7 @@ import type { Services } from "../services";
 import { authorRef } from "../services/context";
 import { draftPath } from "../services/drafts";
 import { invitePath } from "../services/members";
+import { visibleSettings } from "../services/settings";
 
 export const MCP_SERVER_NAME = "incident-command";
 export const MCP_SERVER_VERSION = "0.1.0";
@@ -66,6 +67,9 @@ const BASE_INSTRUCTIONS = `You are connected to an incident command service that
   Pass regionId to get_status to read one region. Omit it to read Overview, which lists every outage.
   A region tab omits a service that has no region.
   With no regions, the status page is one page.
+- The overall status is the worst status of the services on that view.
+  An incident impact does not make it worse. A region view counts a service only in its regions.
+  Maintenance shows when a service on that view is under maintenance.
 - When a person must review a notification first, use draft_notification and give that person the reviewUrl.
   Nothing is published or sent until the person approves the draft. Check the result with get_notification_draft.
 - Everything you post is public on the status page and may notify subscribers. Write for customers.`;
@@ -79,7 +83,9 @@ function instructionsFor(actor: AgentActor): string {
 	const draft = can(actor, "incidents.publish")
 		? ""
 		: "\n- Use draft_notification. A person approves each draft.";
-	const design = can(actor, "settings.write") ? DESIGN_INSTRUCTIONS : "";
+	const design = can(actor, "settings.branding.write")
+		? DESIGN_INSTRUCTIONS
+		: "";
 	return `${BASE_INSTRUCTIONS}${draft}${design}`;
 }
 
@@ -228,19 +234,18 @@ export function createMcpServer(
 		return `${siteUrl ?? origin}${path}`;
 	}
 
-	/** The settings, with the full URL of the logo and of the favicon when a file is stored. */
+	/** The settings areas this agent can read or change, with brand file URLs. */
 	async function settingsView(settings: Settings) {
 		const logo = publicLogoSrc(settings);
 		const favicon = publicFaviconSrc(settings);
-		return {
-			...settings,
+		return visibleSettings(actor, settings, {
 			...(logo ? { logoUrl: await portalUrl(logo) } : {}),
 			...(favicon ? { faviconUrl: await portalUrl(favicon) } : {}),
-		};
+		});
 	}
 
 	function tool<S extends z.ZodRawShape>(
-		permission: Permission | null,
+		permission: ToolPermission | null,
 		name: string,
 		config: {
 			title: string;
@@ -254,8 +259,8 @@ export function createMcpServer(
 		},
 		handler: ToolHandler<z.infer<z.ZodObject<S>>>,
 	): void {
-		if (permission && !can(actor, permission)) {
-			denied.set(name, permission);
+		if (permission && !allows(actor, permission)) {
+			denied.set(name, firstPermission(permission));
 			return;
 		}
 		server.registerTool(
@@ -333,7 +338,7 @@ export function createMcpServer(
 		{
 			title: "Get status",
 			description:
-				"Current overall status, every visible service with its status and uptime, open incidents and maintenance. Omit regionId to read Overview. Overview lists every outage. A region tab shows only that region.",
+				"Current overall status, every visible service with its status and uptime, open incidents and maintenance. The overall status is the worst status of the services on that view. An incident impact does not make it worse. Omit regionId to read Overview. Overview lists every outage. A region tab shows only that region.",
 			inputSchema: {
 				regionId: z
 					.string()
@@ -1005,12 +1010,17 @@ export function createMcpServer(
 	);
 
 	tool(
-		"settings.read",
+		[
+			"settings.general.read",
+			"settings.general.write",
+			"settings.branding.read",
+			"settings.branding.write",
+		],
 		"get_settings",
 		{
 			title: "Get settings",
 			description:
-				"Status page settings and branding. logoUrl and faviconUrl show when a file is stored.",
+				"Returns the general settings, the branding, or both. The result includes an area when the agent can read or change that area. logoUrl and faviconUrl show when a branding file is stored.",
 			inputSchema: {},
 			readOnly: true,
 		},
@@ -1019,7 +1029,7 @@ export function createMcpServer(
 
 	// The guide holds no settings. Only an agent that can change the design needs it.
 	tool(
-		"settings.write",
+		"settings.branding.write",
 		"get_design_guide",
 		{
 			title: "Get design guide",
@@ -1032,42 +1042,66 @@ export function createMcpServer(
 	);
 
 	tool(
-		"settings.write",
+		["settings.general.write", "settings.branding.write"],
 		"update_settings",
 		{
 			title: "Update settings",
 			description:
-				"Updates status page settings and branding. Pass null or an empty string to clear optional values. customCss replaces the stored stylesheet. Call get_design_guide for the tokens and the selectors that customCss can use. Use upload_brand_asset for the logo and the favicon.",
+				"Changes general settings, branding, or both. General fields need settings.general.write. Branding fields need settings.branding.write. Pass null or an empty string to clear an optional value. customCss replaces the stored stylesheet. Call get_design_guide before a design change. Use upload_brand_asset for the logo and the favicon.",
 			inputSchema: {
-				siteName: z.string().optional(),
-				description: z.string().optional(),
-				siteUrl: z.string().nullable().optional(),
-				supportUrl: z.string().nullable().optional(),
+				siteName: z
+					.string()
+					.optional()
+					.describe(
+						"The name of the status page. Needs settings.general.write.",
+					),
+				description: z
+					.string()
+					.optional()
+					.describe(
+						"Text under the status banner. Needs settings.general.write.",
+					),
+				siteUrl: z
+					.string()
+					.nullable()
+					.optional()
+					.describe("Public URL. Needs settings.general.write."),
+				supportUrl: z
+					.string()
+					.nullable()
+					.optional()
+					.describe("Support link. Needs settings.general.write."),
 				theme: z
 					.string()
 					.optional()
 					.describe(
-						"Theme preset: default, carbon, terminal, ocean, sunset or mono",
+						"Theme preset: default, carbon, terminal, ocean, sunset or mono. Needs settings.branding.write.",
 					),
 				customCss: z
 					.string()
 					.nullable()
 					.optional()
 					.describe(
-						"A stylesheet that each page loads after the theme. It replaces the stored stylesheet.",
+						"A stylesheet that each page loads after the theme. It replaces the stored stylesheet. Needs settings.branding.write.",
 					),
 				showPoweredBy: z
 					.boolean()
 					.optional()
 					.describe(
-						'Set to false to remove "Powered by Incident Command" from the public pages',
+						'Set to false to remove "Powered by Incident Command" from the public pages. Needs settings.branding.write.',
 					),
-				uptimeDays: z.number().int().optional(),
+				uptimeDays: z
+					.number()
+					.int()
+					.optional()
+					.describe(
+						"Days in the uptime bars, from 7 to 365. Needs settings.general.write.",
+					),
 				requireTwoFactor: z
 					.boolean()
 					.optional()
 					.describe(
-						"When true, each member must turn on an authenticator. The value starts as true.",
+						"When true, each member must turn on an authenticator. The value starts as true. Needs settings.general.write.",
 					),
 			},
 		},
@@ -1075,7 +1109,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"settings.write",
+		"settings.branding.write",
 		"upload_brand_asset",
 		{
 			title: "Upload brand asset",
@@ -1102,7 +1136,7 @@ export function createMcpServer(
 	);
 
 	tool(
-		"settings.write",
+		"settings.branding.write",
 		"remove_brand_asset",
 		{
 			title: "Remove brand asset",
@@ -1248,6 +1282,22 @@ function safeTarget(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
+}
+
+/** One permission, or a list where any one permission allows the tool. */
+type ToolPermission = Permission | readonly [Permission, ...Permission[]];
+
+function permissionList(permission: ToolPermission): readonly Permission[] {
+	return typeof permission === "string" ? [permission] : permission;
+}
+
+/** True when the actor has the permission, or any permission in the list. */
+function allows(actor: AgentActor, permission: ToolPermission): boolean {
+	return permissionList(permission).some((item) => can(actor, item));
+}
+
+function firstPermission(permission: ToolPermission): Permission {
+	return typeof permission === "string" ? permission : permission[0];
 }
 
 /** Text for a tool call that the actor is not allowed to make. */

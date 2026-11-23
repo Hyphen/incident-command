@@ -263,7 +263,6 @@ function IncidentBody({
 	regions,
 	canEdit,
 	showForm,
-	pending,
 	reviewed,
 	modal,
 	log,
@@ -275,7 +274,6 @@ function IncidentBody({
 	regions: readonly Region[];
 	canEdit: boolean;
 	showForm: boolean;
-	pending: NotificationDraft[];
 	reviewed: NotificationDraft[];
 	modal: boolean;
 	log: NotificationLog | undefined;
@@ -296,16 +294,6 @@ function IncidentBody({
 					limit={LATEST_POSTS}
 					modal={modal}
 				/>
-			)}
-			{tab === "dashboard" && pending.length > 0 && (
-				<Card title="Drafts" description="These drafts wait for review.">
-					<DraftList
-						items={pending.map((draft) => ({
-							draft,
-							title: draft.content.message,
-						}))}
-					/>
-				</Card>
 			)}
 			{tab === "timeline" && (
 				<Card title="Timeline">
@@ -405,6 +393,16 @@ export default async function ManageIncidentPage({
 			</div>
 			{deleted && <DeletionRecord incident={incident} />}
 			<IncidentTabs id={incident.id} active={tab} notifications={canReadLog} />
+			{tab === "dashboard" && pending.length > 0 && (
+				<Card title="Drafts" description="These drafts wait for review.">
+					<DraftList
+						items={pending.map((draft) => ({
+							draft,
+							title: draft.content.message,
+						}))}
+					/>
+				</Card>
+			)}
 			{tab === "dashboard" && progress && (
 				<SendProgressBanner incidentId={incident.id} initial={progress} />
 			)}
@@ -426,7 +424,6 @@ export default async function ManageIncidentPage({
 					regions={regions}
 					canEdit={canEdit}
 					showForm={showForm}
-					pending={pending}
 					reviewed={reviewed}
 					modal={canEdit && queueProvider === undefined}
 					log={log}

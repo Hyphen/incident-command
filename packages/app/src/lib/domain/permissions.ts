@@ -106,34 +106,48 @@ export const PERMISSIONS = {
 		group: "Subscribers",
 		label: "Manage subscribers",
 	},
-	"settings.read": {
+	"settings.general.read": {
 		role: "admin",
 		agent: true,
-		group: "Settings",
-		label: "Read settings",
+		group: "General settings",
+		label: "Read general settings",
 	},
-	"settings.write": {
+	"settings.general.write": {
 		role: "admin",
 		agent: true,
-		group: "Settings",
-		label: "Change settings",
+		group: "General settings",
+		label: "Change general settings",
+		hint: "Changes the name, the links, the uptime window and the two-factor requirement.",
+	},
+	"settings.branding.read": {
+		role: "admin",
+		agent: true,
+		group: "Branding",
+		label: "Read branding",
+	},
+	"settings.branding.write": {
+		role: "admin",
+		agent: true,
+		group: "Branding",
+		label: "Change branding",
+		hint: "The public status page shows a new design immediately, before a person reviews it.",
 	},
 	"channels.read": {
 		role: "admin",
 		agent: true,
-		group: "Channels",
-		label: "Read notification channels",
+		group: "Notification settings",
+		label: "Read notification settings",
 	},
 	"channels.write": {
 		role: "admin",
 		agent: true,
-		group: "Channels",
-		label: "Change notification channels",
+		group: "Notification settings",
+		label: "Change notification settings",
 	},
 	"channels.providers": {
 		role: "admin",
 		agent: false,
-		group: "Channels",
+		group: "Notification settings",
 		label: "Change notification providers",
 	},
 	"agents.read": {
@@ -202,7 +216,7 @@ export function permissionsInEffect(
 	stored: readonly string[],
 	role: Role,
 ): Permission[] {
-	const selected = new Set(stored);
+	const selected = new Set(normalizePermissions(stored));
 	return permissionsForRole(role).filter((permission) =>
 		selected.has(permission),
 	);

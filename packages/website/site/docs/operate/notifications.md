@@ -55,7 +55,7 @@ Email and text messages need a sender. Set a default sender on the channel, or a
 
 An admin selects one queue in **Manage → Settings → Notifications**, or **No queue**.
 
-- With no queue, the server sends the notifications when a member sends them. A window shows the state of each notification: **Waiting**, **In progress**, **Sent** or **Failed**.
+- With no queue, the server sends the notifications when a member sends them. A window shows the number of successful notifications and the number of failed notifications.
 - With a queue, the server sends the notifications in the background. The **Dashboard** tab of the incident shows a progress bar until the queue is done.
 - The server keeps a record of each send for 30 days. The **Notifications** tab of the incident shows these records. See [Read the notification log](/docs/guide/incidents/#read-the-notification-log).
 - The queue providers are Redis, RabbitMQ and NATS. Select one. Each provider keeps the tasks.

@@ -38,7 +38,7 @@ If you open a page that your role cannot use, the portal opens **Overview**. It 
 **Overview** is the first page after you sign in. It shows these items:
 
 - **Current status**: the overall status of the status page.
-- **Uptime**: the combined uptime of the visible services in the uptime window.
+- **Uptime**: the combined uptime of the visible services in the uptime window. Time before a service existed is not downtime.
 - **Open incidents**: the number of open incidents, and the number of active and scheduled maintenance.
 - **Services affected**: the services that are not operational.
 - **Open incidents and maintenance**: a link to each open incident and each open maintenance.
@@ -78,7 +78,8 @@ The permission names in this table are the same names that agents use. See [Agen
 | Delete services and regions                                    | `services.delete`                        | No     | Yes    | Yes   |
 | Invite members, change roles and remove members                | `members.read`, `members.manage`         | No     | No     | Yes   |
 | Add and remove subscribers                                     | `subscribers.read`, `subscribers.manage` | No     | No     | Yes   |
-| Change the **General** and **Branding** settings               | `settings.read`, `settings.write`        | No     | No     | Yes   |
+| Change the **General** settings                                | `settings.general.read`, `settings.general.write` | No | No | Yes |
+| Change the **Branding** settings                               | `settings.branding.read`, `settings.branding.write` | No | No | Yes |
 | Turn notification channels on and off                          | `channels.read`, `channels.write`        | No     | No     | Yes   |
 | Add, change and remove notification providers                  | `channels.providers`                     | No     | No     | Yes   |
 | See all agents, and add agents and API tokens                  | `agents.read`, `agents.manage`           | No     | No     | Yes   |

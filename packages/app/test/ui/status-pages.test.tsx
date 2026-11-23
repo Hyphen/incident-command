@@ -331,9 +331,10 @@ describe("status page", () => {
 		expect(screen.getAllByText("US only").length).toBeGreaterThan(0);
 		expect(screen.getAllByText("Everywhere").length).toBeGreaterThan(0);
 		expect(screen.getAllByText("Split").length).toBeGreaterThan(0);
+		// The open critical incident does not raise the banner above the services.
 		expect(document.querySelector(".ic-banner")).toHaveAttribute(
 			"data-status",
-			"major_outage",
+			"partial_outage",
 		);
 		overview.unmount();
 

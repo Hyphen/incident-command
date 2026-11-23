@@ -75,6 +75,8 @@ When other regions remain, `delete_region` fails if an open incident has a servi
 | Any update with `serviceStatuses`                              | the status in its entry, for each service in the list    |
 | Update with `serviceIds`                                       | the status of the update, for the added services         |
 
+The status page banner uses these service statuses. The banner shows the worst status of the services on the tab. An incident impact does not make the banner worse. A region tab counts a service only in its regions. The banner shows maintenance when a service on the tab is under maintenance and no service is worse.
+
 ### A different status for each service
 
 `create_incident`, `post_incident_update` and `draft_notification` accept `serviceStatuses`. Use it to give each affected service a different status. Each entry replaces `serviceStatus` and the automatic status for its service only. The other affected services keep `serviceStatus` or the automatic status.
@@ -106,11 +108,15 @@ A new impact on an update does not change a service that the incident already af
 
 ### Uptime
 
-The history records each status change. The uptime bars show this history, by default for 90 days. A partial outage counts as 30% downtime, and a major outage as 100%. Degraded performance and maintenance do not count as downtime.
+The history records each status change. The uptime bars show this history, by default for 90 days. A partial outage counts as 30% downtime, and a major outage as 100%. Degraded performance and maintenance count as uptime.
+
+The percentage uses the full window. Time before the service existed is not downtime. A day before the service existed shows "No data". The uptime on a bar uses the time with data on that day.
+
+A region tab counts only the outages in that region. Overview counts each outage.
 
 ## Design the status page through MCP
 
-An agent with `settings.read` and `settings.write` can do the full design of the status page. It selects a theme, uploads the logo and the favicon, and writes custom CSS.
+An agent with `settings.branding.read` and `settings.branding.write` can do the full design of the status page. It selects a theme, uploads the logo and the favicon, and writes custom CSS. General settings use `settings.general.write`. The two-factor requirement needs that permission.
 
 1. The agent calls `get_design_guide`. The result lists the theme presets, the design tokens, the CSS selectors, the rules, the limits and an example stylesheet.
 2. The agent calls `update_settings` with `theme`.
@@ -155,7 +161,7 @@ A value of `customCss` replaces the stored stylesheet. Thus the agent must call 
 
 To remove "Powered by Incident Command" from the public pages, set `showPoweredBy` to `false`. To show the line again, set it to `true`. Do not hide the line with `customCss`.
 
-The public status page shows the new design without a review by a person. Give `settings.write` only to an agent that you trust with the look of the page.
+The public status page shows the new design before a person reviews it. Give `settings.branding.write` only to an agent that you trust with the look of the page.
 
 ## Example prompts
 

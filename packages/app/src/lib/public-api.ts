@@ -76,7 +76,7 @@ export const publicStatusSchema = z
 		regions: z.array(regionRefSchema),
 		status: z.object({
 			indicator: serviceStatusSchema.describe(
-				"The worst status of the services.",
+				"The worst status of the services on this view. An incident impact does not make it worse.",
 			),
 			description: z.string(),
 		}),
@@ -91,7 +91,7 @@ export const publicStatusSchema = z
 					.number()
 					.nullable()
 					.describe(
-						"The uptime in the uptime window, from 0 to 1, or null when there is no data.",
+						"Uptime over the full window, from 0 to 1, or null when the service has no data. Time before the service existed is not downtime.",
 					),
 			}),
 		),

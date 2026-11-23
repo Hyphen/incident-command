@@ -17,7 +17,7 @@ The tables on this page group the tools by area. In each table, the tools are in
 - A call to a tool that the agent cannot see returns a `forbidden` error. The message names the permission that the agent does not have.
 - Each read tool has the MCP annotation `readOnlyHint`. Each tool whose name starts with `delete`, `remove` or `revoke` has `destructiveHint`.
 
-At each connection, the server also sends instructions to the agent. They explain the incident flow, the service statuses, the regions and the drafts. An agent without `incidents.publish` gets an instruction to use `draft_notification`. An agent with `settings.write` gets the design steps.
+At each connection, the server also sends instructions to the agent. They explain the incident flow, the service statuses, the regions and the drafts. An agent without `incidents.publish` gets an instruction to use `draft_notification`. An agent with `settings.branding.write` gets the design steps.
 
 ## Identity
 
@@ -36,6 +36,8 @@ At each connection, the server also sends instructions to the agent. They explai
 | `get_incident`   | `status.read` | Return one incident or maintenance with its full timeline. Each update has the title and the impact.             |
 
 Pass `regionId` to `get_status` to read one region. Without `regionId`, the tool reads Overview.
+
+The `overall` field is the worst status of the services on that view. An incident impact does not make it worse. A region view counts a service only in its regions. Maintenance shows when a service on that view is under maintenance.
 
 ## Services and regions
 
@@ -98,13 +100,13 @@ A new invite for the same email replaces the old link.
 
 ## Settings and design
 
-| Tool                 | Permission       | What it does                                                                                                        |
-| -------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `get_settings`       | `settings.read`  | Return the settings and the branding, with `logoUrl` and `faviconUrl` when a stored file exists.                    |
-| `get_design_guide`   | `settings.write` | Return the theme presets, design tokens, CSS selectors, rules, limits and an example stylesheet.                    |
-| `update_settings`    | `settings.write` | Change the name, description, URLs, theme, custom CSS, uptime window, "Powered by" line and two-factor requirement. |
-| `upload_brand_asset` | `settings.write` | Store the logo or the favicon. It replaces the stored file.                                                         |
-| `remove_brand_asset` | `settings.write` | Remove the stored logo or favicon.                                                                                  |
+| Tool                 | Permission                                                                 | What it does                                                                                                                         |
+| -------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `get_settings`       | `settings.general.read`, `settings.general.write`, `settings.branding.read` or `settings.branding.write` | Return the areas that the agent can read or change. `logoUrl` and `faviconUrl` show when a branding file is stored.                  |
+| `get_design_guide`   | `settings.branding.write`                                                  | Return the theme presets, design tokens, CSS selectors, rules, limits and an example stylesheet.                                     |
+| `update_settings`    | `settings.general.write` or `settings.branding.write`                      | Change general fields, branding fields, or both. Each field needs the write permission for its area. A missing permission saves nothing. |
+| `upload_brand_asset` | `settings.branding.write`                                                  | Store the logo or the favicon. It replaces the stored file.                                                                          |
+| `remove_brand_asset` | `settings.branding.write`                                                  | Remove the stored logo or favicon.                                                                                                   |
 
 The uptime window (`uptimeDays`) is 7 to 365 days. See [Design the status page through MCP](/docs/agents/workflows/#design-the-status-page-through-mcp).
 
