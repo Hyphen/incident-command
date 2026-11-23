@@ -38,7 +38,7 @@ export class DevelopmentService {
 	 * Services, regions, members, subscribers, agents and settings stay.
 	 */
 	async clearIncidents(actor: Actor): Promise<void> {
-		requirePermission(actor, "settings.write");
+		requirePermission(actor, "settings.general.write");
 		if (!this.enabled) {
 			throw new ForbiddenError(DEVELOPMENT_MODE_REQUIRED);
 		}

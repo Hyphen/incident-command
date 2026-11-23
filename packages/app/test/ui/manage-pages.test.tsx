@@ -2071,6 +2071,22 @@ describe("admin pages", () => {
 		expect(
 			screen.getByRole("checkbox", { name: /Notify subscribers/ }),
 		).not.toBeChecked();
+		expect(
+			screen.getByRole("group", { name: "General settings" }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("group", { name: "Branding" })).toBeInTheDocument();
+		expect(
+			screen.getByRole("group", { name: "Notification settings" }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("checkbox", { name: /Read general settings/ }),
+		).not.toBeChecked();
+		expect(
+			screen.getByRole("checkbox", { name: /Change branding/ }),
+		).not.toBeChecked();
+		expect(
+			screen.getByRole("checkbox", { name: /Read notification settings/ }),
+		).not.toBeChecked();
 		created.unmount();
 		const list = render(await AgentsPage(flash()));
 		expect(screen.getByText(/No permissions/)).toBeInTheDocument();
