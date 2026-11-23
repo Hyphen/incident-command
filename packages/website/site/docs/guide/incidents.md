@@ -100,7 +100,9 @@ The log has one record for each post that notified subscribers. The newest recor
 
 The list shows the first 200 notifications. An admin sees a masked address, for example `j***@example.com`. An editor sees the channel and a number, for example "Email 1".
 
-A post has no record when the author did not notify subscribers, or when no subscriber can receive the notification. The portal keeps each record for 30 days. The log shows the newest 50 records. A deleted incident keeps its log.
+A post has no record when the author did not notify subscribers, or when no subscriber can receive the notification. The portal keeps each record for 30 days. A deleted incident keeps its log.
+
+The log shows 100 records on each page. Select **Next page** to see older records. Type a title, a status, or an author in **Search**. Select **Search**.
 
 ## Resolve an incident
 

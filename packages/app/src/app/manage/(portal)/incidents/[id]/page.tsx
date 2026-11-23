@@ -61,6 +61,8 @@ export const metadata: Metadata = { title: "Incident" };
 interface IncidentQuery extends FlashParams {
 	tab?: string;
 	post?: string;
+	page?: string;
+	q?: string;
 }
 
 interface Props {
@@ -280,7 +282,7 @@ function IncidentBody({
 }) {
 	return (
 		<div className="space-y-6">
-			{log && <NotificationLogCard log={log} />}
+			{log && <NotificationLogCard incidentId={incident.id} log={log} />}
 			{tab === "dashboard" && (
 				<PostsCard
 					incident={incident}
@@ -329,6 +331,11 @@ export default async function ManageIncidentPage({
 	}
 	const canReadLog = can(actor, "notifications.send");
 	const tab = incidentTab(query.tab, canReadLog);
+	let logPage = Math.floor(Number(query.page));
+	if (!(logPage >= 1)) {
+		logPage = 1;
+	}
+	const logQuery = (query.q ?? "").trim();
 	const deleted = isDeletedIncident(incident);
 	const canEdit = hasRole(member.role, "editor") && !deleted;
 	const [catalog, regions, timeline, pending, reviewed, log] =
@@ -339,7 +346,10 @@ export default async function ManageIncidentPage({
 			services.drafts.list({ pending: true, incidentId: incident.id }),
 			services.drafts.list({ pending: false, incidentId: incident.id }),
 			tab === "notifications"
-				? services.notificationJobs.incidentLog(actor, incident)
+				? services.notificationJobs.incidentLog(actor, incident, {
+						page: logPage,
+						query: logQuery,
+					})
 				: undefined,
 		]);
 	const affected = incident.serviceIds.map((id) => {

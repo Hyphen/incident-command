@@ -653,31 +653,113 @@ describe("status components", () => {
 });
 
 describe("NotificationLogCard", () => {
-	it("shows a missing post and the limit note", () => {
-		render(
+	it("shows a missing post and the page controls", () => {
+		const entry = {
+			id: "njb_1",
+			updateId: "upd_missing",
+			state: "done" as const,
+			total: 1,
+			sent: 1,
+			failed: 0,
+			createdAt: "2026-11-02T12:00:00.000Z",
+		};
+		const middle = render(
 			<NotificationLogCard
+				incidentId="inc_1"
 				log={{
-					truncated: true,
-					entries: [
-						{
-							id: "njb_1",
-							updateId: "upd_missing",
-							state: "done",
-							total: 1,
-							sent: 1,
-							failed: 0,
-							createdAt: "2026-11-02T12:00:00.000Z",
-						},
-					],
+					page: 2,
+					pageSize: 100,
+					total: 250,
+					query: "api",
+					entries: [entry],
 				}}
 			/>,
 		);
 		expect(
 			screen.getByText("The portal cannot find the post of this record."),
 		).toBeInTheDocument();
-		expect(
-			screen.getByText("The log shows the newest 50 records."),
-		).toBeInTheDocument();
+		const form = screen.getByRole("button", { name: "Search" }).closest("form");
+		expect(form).toHaveAttribute("action", "/manage/incidents/inc_1");
+		expect(form?.querySelector('input[name="tab"]')).toHaveValue(
+			"notifications",
+		);
 		expect(screen.queryByText(/· /)).not.toBeInTheDocument();
+		expect(screen.getByLabelText("Search")).toHaveValue("api");
+		expect(
+			screen.getByRole("link", { name: "Clear the search" }),
+		).toHaveAttribute("href", "/manage/incidents/inc_1?tab=notifications");
+		expect(screen.getByText("Page 2 of 3.")).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "Previous page" })).toHaveAttribute(
+			"href",
+			"/manage/incidents/inc_1?tab=notifications&q=api",
+		);
+		expect(screen.getByRole("link", { name: "Next page" })).toHaveAttribute(
+			"href",
+			"/manage/incidents/inc_1?tab=notifications&q=api&page=3",
+		);
+		middle.unmount();
+
+		const first = render(
+			<NotificationLogCard
+				incidentId="inc_1"
+				log={{
+					page: 1,
+					pageSize: 100,
+					total: 250,
+					query: "",
+					entries: [entry],
+				}}
+			/>,
+		);
+		expect(
+			screen.queryByRole("link", { name: "Previous page" }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("link", { name: "Clear the search" }),
+		).not.toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "Next page" })).toHaveAttribute(
+			"href",
+			"/manage/incidents/inc_1?tab=notifications&page=2",
+		);
+		first.unmount();
+
+		const last = render(
+			<NotificationLogCard
+				incidentId="inc_1"
+				log={{
+					page: 3,
+					pageSize: 100,
+					total: 250,
+					query: "api",
+					entries: [entry],
+				}}
+			/>,
+		);
+		expect(
+			screen.queryByRole("link", { name: "Next page" }),
+		).not.toBeInTheDocument();
+		expect(screen.getByText("Page 3 of 3.")).toBeInTheDocument();
+		last.unmount();
+
+		render(
+			<NotificationLogCard
+				incidentId="inc_1"
+				log={{
+					page: 2,
+					pageSize: 100,
+					total: 0,
+					query: "nope",
+					entries: [],
+				}}
+			/>,
+		);
+		expect(
+			screen.getByText("No record matches the search."),
+		).toBeInTheDocument();
+		expect(screen.queryByText(/^Page /)).not.toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "Previous page" })).toHaveAttribute(
+			"href",
+			"/manage/incidents/inc_1?tab=notifications&q=nope",
+		);
 	});
 });

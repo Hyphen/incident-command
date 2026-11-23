@@ -287,8 +287,14 @@ export interface NotificationLogEntry {
 /** The notification log of one incident. The newest record is first. */
 export interface NotificationLog {
 	entries: NotificationLogEntry[];
-	/** True when the incident has more sends than the log shows. */
-	truncated: boolean;
+	/** The page number. The first page is 1. */
+	page: number;
+	/** The number of records on one page. */
+	pageSize: number;
+	/** The number of records that match the search. */
+	total: number;
+	/** The search text. Empty when the reader did not search. */
+	query: string;
 }
 
 /** The queue choice, without the connection URI. */

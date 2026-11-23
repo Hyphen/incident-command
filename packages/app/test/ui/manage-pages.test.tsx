@@ -1057,7 +1057,54 @@ describe("incident pages", () => {
 				"Notifications complete: 1 of 1. Sent: 0. Failed: 1.",
 			),
 		).toBeInTheDocument();
+		expect(
+			within(card).queryByRole("link", { name: "Next page" }),
+		).not.toBeInTheDocument();
 		filled.unmount();
+
+		const missed = render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "notifications", q: "zzzz" }),
+			}),
+		);
+		expect(
+			screen.getByText("No record matches the search."),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByText("Some notifications failed."),
+		).not.toBeInTheDocument();
+		expect(screen.getByLabelText("Search")).toHaveValue("zzzz");
+		missed.unmount();
+
+		const found = render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "notifications", q: "  API  " }),
+			}),
+		);
+		expect(screen.getByText("Some notifications failed.")).toBeInTheDocument();
+		expect(screen.getByLabelText("Search")).toHaveValue("API");
+		expect(
+			screen.getByRole("link", { name: "Clear the search" }),
+		).toHaveAttribute(
+			"href",
+			`/manage/incidents/${incident.id}?tab=notifications`,
+		);
+		found.unmount();
+
+		const later = render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ tab: "notifications", page: "2" }),
+			}),
+		);
+		expect(screen.getByText("This page has no records.")).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "Previous page" })).toHaveAttribute(
+			"href",
+			`/manage/incidents/${incident.id}?tab=notifications`,
+		);
+		later.unmount();
 
 		await services.incidents.delete(actor, incident.id, {
 			reason: "Duplicate report",

@@ -1,5 +1,6 @@
 import { createId } from "../crypto";
 import { can } from "../domain/permissions";
+import { EVENT_STATUS_LABELS } from "../domain/status";
 import type {
 	Actor,
 	DeliveryFailure,
@@ -33,8 +34,10 @@ import type { SettingsService } from "./settings";
 
 const BATCH = 20;
 const DETAIL_LIMIT = 200;
-/** The notification log shows this many sends. */
-const LOG_LIMIT = 50;
+/** The notification log shows this many records on one page. */
+const LOG_PAGE_SIZE = 100;
+/** The notification log keeps this many characters of a search. */
+const LOG_QUERY_LIMIT = 200;
 const RECOVER_INTERVAL_MS = 10_000;
 const DIRECT_STALE_MS = 2 * 60 * 1000;
 const DURABLE_STALE_MS = 15 * 60 * 1000;
@@ -375,25 +378,51 @@ export class NotificationJobService {
 	}
 
 	/**
-	 * The sends of one incident, newest first.
+	 * One page of the sends of one incident, newest first.
 	 * The result has no delivery rows.
+	 * A search matches the title, the status, or the author of the post.
 	 */
 	async incidentLog(
 		actor: Actor,
 		incident: Incident,
+		options: { page?: number; query?: string } = {},
 	): Promise<NotificationLog> {
 		requirePermission(actor, "notifications.send");
 		await this.recover();
 		await this.prune();
+		const query = (options.query ?? "").trim().slice(0, LOG_QUERY_LIMIT);
+		const requested = options.page;
+		const page =
+			requested !== undefined && Number.isFinite(requested) && requested >= 1
+				? Math.floor(requested)
+				: 1;
 		const jobs = await this.ctx.store.find("notification_jobs", {
 			where: [{ field: "incidentId", op: "eq", value: incident.id }],
 			sort: [{ field: "createdAt", direction: "desc" }],
-			limit: LOG_LIMIT + 1,
 		});
-		const truncated = jobs.length > LOG_LIMIT;
-		const shown = truncated ? jobs.slice(0, LOG_LIMIT) : jobs;
 		const posts = new Map(
 			incident.updates.map((update) => [update.id, update]),
+		);
+		const needle = query.toLowerCase();
+		const matched = query
+			? jobs.filter((job) => {
+					const update = posts.get(job.updateId);
+					if (!update) {
+						return false;
+					}
+					const haystack = [
+						EVENT_STATUS_LABELS[update.status],
+						update.title,
+						update.author.name,
+					]
+						.join("\n")
+						.toLowerCase();
+					return haystack.includes(needle);
+				})
+			: jobs;
+		const shown = matched.slice(
+			(page - 1) * LOG_PAGE_SIZE,
+			page * LOG_PAGE_SIZE,
 		);
 		const entries: NotificationLogEntry[] = [];
 		for (const job of shown) {
@@ -419,7 +448,13 @@ export class NotificationJobService {
 					: {}),
 			});
 		}
-		return { entries, truncated };
+		return {
+			entries,
+			page,
+			pageSize: LOG_PAGE_SIZE,
+			total: matched.length,
+			query,
+		};
 	}
 
 	/**
