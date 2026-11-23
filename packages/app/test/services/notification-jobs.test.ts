@@ -1303,7 +1303,12 @@ describe("NotificationJobService", () => {
 		const firstId = created.updates[0]?.id;
 		const quietId = quiet.updates.at(-1)?.id;
 		const latestId = latest.updates.at(-1)?.id;
-		expect(log.truncated).toBe(false);
+		expect(log).toMatchObject({
+			page: 1,
+			pageSize: 100,
+			total: 2,
+			query: "",
+		});
 		expect(log.entries.map((entry) => entry.updateId)).toEqual([
 			latestId,
 			firstId,
@@ -1432,10 +1437,10 @@ describe("NotificationJobService", () => {
 		).toMatchObject({ state: "failed", error: "interrupted" });
 	});
 
-	it("keeps the newest 50 records and reports more", async () => {
+	it("returns 100 records on a page, newest first", async () => {
 		const created = await incident(t);
 		const base = t.clock.now().getTime();
-		for (let index = 0; index < 51; index += 1) {
+		for (let index = 0; index < 101; index += 1) {
 			const at = new Date(base + index * 1000).toISOString();
 			await t.store.insert(
 				"notification_jobs",
@@ -1449,21 +1454,128 @@ describe("NotificationJobService", () => {
 					failed: 0,
 					createdAt: at,
 					finishedAt: at,
-					...(index === 50 ? { fallback: "enqueue" } : {}),
+					...(index === 100 ? { fallback: "enqueue" } : {}),
 				}),
 			);
 		}
-		const log = await t.services.notificationJobs.incidentLog(ADMIN, created);
-		expect(log.truncated).toBe(true);
-		expect(log.entries).toHaveLength(50);
-		expect(log.entries[0]).toMatchObject({
-			id: "njb_50",
+		const first = await t.services.notificationJobs.incidentLog(
+			ADMIN,
+			created,
+			{ page: 1.9 },
+		);
+		expect(first.page).toBe(1);
+		expect(first.pageSize).toBe(100);
+		expect(first.total).toBe(101);
+		expect(first.entries).toHaveLength(100);
+		expect(first.entries[0]).toMatchObject({
+			id: "njb_100",
 			fallback: "enqueue",
 		});
-		expect(log.entries[0]?.post).toBeUndefined();
-		expect(log.entries[1]?.fallback).toBeUndefined();
-		expect(log.entries.at(-1)?.id).toBe("njb_1");
-		expect(log.entries.some((entry) => entry.id === "njb_0")).toBe(false);
+		expect(first.entries[0]?.post).toBeUndefined();
+		expect(first.entries[1]?.fallback).toBeUndefined();
+		expect(first.entries.at(-1)?.id).toBe("njb_1");
+		expect(first.entries.some((entry) => entry.id === "njb_0")).toBe(false);
+		const second = await t.services.notificationJobs.incidentLog(
+			ADMIN,
+			created,
+			{ page: 2 },
+		);
+		expect(second.entries.map((entry) => entry.id)).toEqual(["njb_0"]);
+		expect(second.total).toBe(101);
+		const past = await t.services.notificationJobs.incidentLog(ADMIN, created, {
+			page: 3,
+		});
+		expect(past.entries).toEqual([]);
+		expect(past.page).toBe(3);
+		expect(past.total).toBe(101);
+		const invalid = await t.services.notificationJobs.incidentLog(
+			ADMIN,
+			created,
+			{ page: 0 },
+		);
+		expect(invalid.page).toBe(1);
+		expect(invalid.entries[0]?.id).toBe("njb_100");
+		const missing = await t.services.notificationJobs.incidentLog(
+			ADMIN,
+			created,
+			{ page: Number.NaN },
+		);
+		expect(missing.page).toBe(1);
+		expect(missing.entries).toHaveLength(100);
+	});
+
+	it("finds a record by the title, the status, or the author", async () => {
+		await webhook(t);
+		const created = await t.services.incidents.create(ADMIN, {
+			title: "API errors",
+			message: "Looking",
+			notify: true,
+		});
+		t.clock.advance(MINUTE);
+		const resolved = await t.services.incidents.postUpdate(EDITOR, created.id, {
+			title: "Database delay",
+			status: "resolved",
+			message: "The database is well.",
+			notify: true,
+		});
+		t.clock.advance(MINUTE);
+		await t.store.insert(
+			"notification_jobs",
+			jobDocument(t, {
+				id: "njb_missing",
+				incidentId: created.id,
+				updateId: "upd_missing",
+				state: "done",
+				sent: 1,
+			}),
+		);
+		const byTitle = await t.services.notificationJobs.incidentLog(
+			ADMIN,
+			resolved,
+			{ query: "  database  " },
+		);
+		expect(byTitle.query).toBe("database");
+		expect(byTitle.total).toBe(1);
+		expect(byTitle.page).toBe(1);
+		expect(byTitle.entries[0]?.post?.title).toBe("Database delay");
+		const byStatus = await t.services.notificationJobs.incidentLog(
+			ADMIN,
+			resolved,
+			{ query: "INVESTIGATING" },
+		);
+		expect(byStatus.entries.map((entry) => entry.post?.title)).toEqual([
+			"API errors",
+		]);
+		const byAuthor = await t.services.notificationJobs.incidentLog(
+			ADMIN,
+			resolved,
+			{ query: "ed editor" },
+		);
+		expect(byAuthor.entries[0]?.post?.author.name).toBe("Ed Editor");
+		const none = await t.services.notificationJobs.incidentLog(
+			ADMIN,
+			resolved,
+			{ query: "nobody", page: 4 },
+		);
+		expect(none.total).toBe(0);
+		expect(none.entries).toEqual([]);
+		expect(none.page).toBe(4);
+		const blank = await t.services.notificationJobs.incidentLog(
+			ADMIN,
+			resolved,
+			{ query: "   ", page: 0 },
+		);
+		expect(blank.query).toBe("");
+		expect(blank.page).toBe(1);
+		expect(blank.total).toBe(3);
+		const long = await t.services.notificationJobs.incidentLog(
+			ADMIN,
+			resolved,
+			{ query: `${"a".repeat(200)}ZZZ` },
+		);
+		expect(long.query).toHaveLength(200);
+		expect(long.query.endsWith("Z")).toBe(false);
+		expect(long.total).toBe(0);
 	});
 
 	it("does not list a send that is older than 30 days", async () => {

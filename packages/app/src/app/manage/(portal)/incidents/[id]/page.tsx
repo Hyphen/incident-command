@@ -61,6 +61,8 @@ export const metadata: Metadata = { title: "Incident" };
 interface IncidentQuery extends FlashParams {
 	tab?: string;
 	post?: string;
+	page?: string;
+	q?: string | string[];
 }
 
 interface Props {
@@ -70,6 +72,12 @@ interface Props {
 
 /** The number of posts on the dashboard. The posts tab shows every post. */
 const LATEST_POSTS = 5;
+
+/** The first text of a query key. A repeated key arrives as an array. */
+function queryText(value: string | string[] | undefined): string {
+	const first = Array.isArray(value) ? value[0] : value;
+	return (first ?? "").trim();
+}
 
 /** The path of an incident page. Set formOpen to open the post form. */
 function incidentHref(id: string, tab: IncidentTab, formOpen = false): string {
@@ -280,7 +288,7 @@ function IncidentBody({
 }) {
 	return (
 		<div className="space-y-6">
-			{log && <NotificationLogCard log={log} />}
+			{log && <NotificationLogCard incidentId={incident.id} log={log} />}
 			{tab === "dashboard" && (
 				<PostsCard
 					incident={incident}
@@ -329,6 +337,11 @@ export default async function ManageIncidentPage({
 	}
 	const canReadLog = can(actor, "notifications.send");
 	const tab = incidentTab(query.tab, canReadLog);
+	let logPage = Math.floor(Number(query.page));
+	if (!(logPage >= 1)) {
+		logPage = 1;
+	}
+	const logQuery = queryText(query.q);
 	const deleted = isDeletedIncident(incident);
 	const canEdit = hasRole(member.role, "editor") && !deleted;
 	const [catalog, regions, timeline, pending, reviewed, log] =
@@ -339,7 +352,10 @@ export default async function ManageIncidentPage({
 			services.drafts.list({ pending: true, incidentId: incident.id }),
 			services.drafts.list({ pending: false, incidentId: incident.id }),
 			tab === "notifications"
-				? services.notificationJobs.incidentLog(actor, incident)
+				? services.notificationJobs.incidentLog(actor, incident, {
+						page: logPage,
+						query: logQuery,
+					})
 				: undefined,
 		]);
 	const affected = incident.serviceIds.map((id) => {
