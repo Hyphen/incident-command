@@ -62,7 +62,7 @@ interface IncidentQuery extends FlashParams {
 	tab?: string;
 	post?: string;
 	page?: string;
-	q?: string;
+	q?: string | string[];
 }
 
 interface Props {
@@ -72,6 +72,12 @@ interface Props {
 
 /** The number of posts on the dashboard. The posts tab shows every post. */
 const LATEST_POSTS = 5;
+
+/** The first text of a query key. A repeated key arrives as an array. */
+function queryText(value: string | string[] | undefined): string {
+	const first = Array.isArray(value) ? value[0] : value;
+	return (first ?? "").trim();
+}
 
 /** The path of an incident page. Set formOpen to open the post form. */
 function incidentHref(id: string, tab: IncidentTab, formOpen = false): string {
@@ -335,7 +341,7 @@ export default async function ManageIncidentPage({
 	if (!(logPage >= 1)) {
 		logPage = 1;
 	}
-	const logQuery = (query.q ?? "").trim();
+	const logQuery = queryText(query.q);
 	const deleted = isDeletedIncident(incident);
 	const canEdit = hasRole(member.role, "editor") && !deleted;
 	const [catalog, regions, timeline, pending, reviewed, log] =

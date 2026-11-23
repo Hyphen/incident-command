@@ -1029,6 +1029,19 @@ describe("incident pages", () => {
 		).not.toBeInTheDocument();
 		empty.unmount();
 
+		const repeatedOnDashboard = render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({ q: ["api", "database"] }),
+			}),
+		);
+		expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		expect(screen.getByText("Looking")).toBeInTheDocument();
+		repeatedOnDashboard.unmount();
+
 		await services.subscribers.addWebhook(SYSTEM_ACTOR, {
 			url: "https://hooks.example.com/bad",
 		});
@@ -1092,6 +1105,19 @@ describe("incident pages", () => {
 			`/manage/incidents/${incident.id}?tab=notifications`,
 		);
 		found.unmount();
+
+		const repeated = render(
+			await IncidentPage({
+				params: params({ id: incident.id }),
+				searchParams: params({
+					tab: "notifications",
+					q: ["  API  ", "zzzz"],
+				}),
+			}),
+		);
+		expect(screen.getByText("Some notifications failed.")).toBeInTheDocument();
+		expect(screen.getByLabelText("Search")).toHaveValue("API");
+		repeated.unmount();
 
 		const later = render(
 			await IncidentPage({
